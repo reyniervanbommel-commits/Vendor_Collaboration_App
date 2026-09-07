@@ -1,14 +1,14 @@
 /**
  * Matrix row order and chart-visibility merge for the RCCP dashboard.
- * Ordered → received → remaining → capacity → overcapacity (warning last).
+ * Ordered → remaining → received → capacity → overcapacity (warning last).
  */
 
 function matrixRowRank(row) {
   if (row?.isWarning) return 90;
   if (row?.isOvercapacity) return 50;
   if (row?.isCapacity) return 40;
-  if (row?.isOpen) return 30;
-  if (row?.isDelivered) return 20;
+  if (row?.isDelivered) return 30;
+  if (row?.isOpen) return 20;
   if (row?.isOrdered) return 10;
   return 10;
 }

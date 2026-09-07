@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react';
 import { Card, Text, makeStyles, mergeClasses, tokens, shorthands } from '@fluentui/react-components';
 import { KPI_STYLE_KEYS, resolveKpiPieColors } from '../../utils/kpiCardStyles';
-import { KPI_FORMULAS } from './rccpKpiFormulas';
+import { buildKpiFormulaText } from './rccpKpiFormulas';
 import KpiFormulaFold from './KpiFormulaFold';
 import KpiPctPie from './KpiPctPie';
 import { kpiPiePercent } from './kpiPctPieUtils';
@@ -97,9 +97,9 @@ export function formatItems(value) {
   return `${formatQty(value)} items`;
 }
 
-function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, clickable, onActivate }) {
+function KpiCard({ kpiKey, label, qty, hash, aside, pct, detail, selected, clickable, onActivate, config }) {
   const styles = useStyles();
-  const formula = KPI_FORMULAS[kpiKey] || '';
+  const formula = buildKpiFormulaText(kpiKey, config);
   const handleClick = useCallback(() => {
     if (clickable) onActivate(kpiKey);
   }, [clickable, kpiKey, onActivate]);

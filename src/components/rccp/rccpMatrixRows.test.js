@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mergeChartVisibleKeys, sortRccpMatrixRows } from './rccpMatrixRows';
 
 describe('sortRccpMatrixRows', () => {
-  it('orders ordered, received, remaining, capacity, overcapacity', () => {
+  it('orders ordered, remaining, received, capacity, overcapacity', () => {
     const rows = [
       { measureKey: '__overcapacity__', isOvercapacity: true },
       { measureKey: '__capacity__', isCapacity: true },
@@ -12,8 +12,8 @@ describe('sortRccpMatrixRows', () => {
     ];
     expect(sortRccpMatrixRows(rows).map((row) => row.measureKey)).toEqual([
       'ordered',
-      'delivered',
       'open',
+      'delivered',
       '__capacity__',
       '__overcapacity__',
     ]);

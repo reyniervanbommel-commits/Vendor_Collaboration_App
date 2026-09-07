@@ -26,11 +26,11 @@ export default function ResetPasswordPage() {
     setLoading(true);
     try {
       const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token, password: pw }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Password not accepted. Please try a different password.');
       navigate('/login');
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Password not accepted. Please try a different password.');
     } finally {
       setLoading(false);
     }

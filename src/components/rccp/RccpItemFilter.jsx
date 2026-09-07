@@ -43,14 +43,21 @@ const useStyles = makeStyles({
 
 const LISTBOX_POSITIONING = { matchTargetSize: false };
 
+// Fixed pixel widths (not fr/minmax) so every row's independent grid computes
+// identical column widths — using fr per row caused column drift because
+// each Option renders its own grid container sized by that row's own content.
+const ITEM_COLUMN_WIDTH = 160;
+const EXTRA_COLUMN_WIDTH = 130;
+
 function gridTemplate(extraCount) {
-  if (extraCount <= 0) return 'minmax(140px, 1fr)';
-  return `minmax(140px, 1.3fr) repeat(${extraCount}, minmax(90px, 1fr))`;
+  if (extraCount <= 0) return `${ITEM_COLUMN_WIDTH}px`;
+  return `${ITEM_COLUMN_WIDTH}px repeat(${extraCount}, ${EXTRA_COLUMN_WIDTH}px)`;
 }
 
 function cellText(value) {
-  if (value === null || value === undefined || value === '') return '—';
-  return String(value);
+  if (value === null || value === undefined) return '—';
+  const trimmed = String(value).trim();
+  return trimmed === '' ? '—' : trimmed;
 }
 
 /**
@@ -165,7 +172,7 @@ export default function RccpItemFilter({
             <Option key={item} value={item} text={item}>
               {hasExtra ? (
                 <div className={styles.row} style={{ gridTemplateColumns: template }}>
-                  <span className={styles.cell}>{item}</span>
+                  <span className={styles.cell}>{cellText(item)}</span>
                   {extraColumns.map((column) => (
                     <span key={column.key} className={styles.cell}>{cellText(rowValues[column.key])}</span>
                   ))}

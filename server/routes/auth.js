@@ -187,7 +187,9 @@ router.post('/reset-password', async (req, res, next) => {
     const user = await authService.resetPassword(token, password);
     res.json({ success: true, user });
   } catch (err) {
-    if (err.message.includes('invalid')) return res.status(400).json({ error: err.message });
+    if (err.message.includes('invalid') || err.message.includes('Password must be')) {
+      return res.status(400).json({ error: err.message });
+    }
     next(err);
   }
 });

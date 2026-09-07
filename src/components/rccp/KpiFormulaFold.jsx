@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useContext, useState } from 'react';
 import {
   Popover,
   PopoverSurface,
@@ -13,6 +13,7 @@ import { brandColor, interaction } from '../../styles/brandTokens';
 import { KPI_STYLE_KEYS } from '../../utils/kpiCardStyles';
 import KpiCardStyleFields from './KpiCardStyleFields';
 import { useKpiCardStyle } from './useKpiCardStyles';
+import { AuthContext } from '../../context/AuthContext';
 
 const HIT_SIZE = '32px';
 const FOLD_SIZE = '10px';
@@ -123,8 +124,12 @@ const useStyles = makeStyles({
 function KpiFormulaFold({ formula, kpiKey }) {
   const styles = useStyles();
   const [open, setOpen] = useState(false);
+  // Alleen employee/admin mogen de kaart-kleur en -opacity aanpassen; suppliers zien enkel de formule.
+  const auth = useContext(AuthContext);
+  const userRole = auth?.user?.role;
+  const canEditCardStyle = userRole === 'employee' || userRole === 'admin';
   const formulaId = `kpi-formula-${kpiKey}`;
-  const showStyle = KPI_STYLE_KEYS.includes(kpiKey);
+  const showStyle = KPI_STYLE_KEYS.includes(kpiKey) && canEditCardStyle;
   const { style, updateStyle } = useKpiCardStyle(kpiKey);
   const stopCardClick = useCallback((event) => {
     event.stopPropagation();

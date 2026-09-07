@@ -77,7 +77,14 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey }) {
     return <Text className={styles.hint}>KPI columns are not configured yet.</Text>;
   }
 
-  return <RccpKpiCards kpis={kpis} selectedKey={selectedKey} onSelect={handleSelect} />;
+  return (
+    <RccpKpiCards
+      kpis={kpis}
+      selectedKey={selectedKey}
+      onSelect={handleSelect}
+      config={payload?.config}
+    />
+  );
 }
 
 export default memo(PoBoardKpiStrip);

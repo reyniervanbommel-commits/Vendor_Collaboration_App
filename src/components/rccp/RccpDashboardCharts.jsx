@@ -46,6 +46,7 @@ function RccpDashboardCharts({
         selectedKey={selectedKey || ''}
         onSelect={onSelect}
         clickableKeys={RCCP_CLICKABLE_KPI_KEYS}
+        config={analysis.config}
       />
       <RccpChartMatrixPanel
         chart={filteredChart}

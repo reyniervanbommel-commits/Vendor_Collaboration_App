@@ -25,14 +25,35 @@ describe('KpiFormulaFold', () => {
     expect(onParentClick).not.toHaveBeenCalled();
   });
 
-  it('shows color settings on percentage KPI cards', () => {
+  it('shows color settings on percentage KPI cards for an employee', () => {
     renderWithFluent(
       <KpiFormulaFold formula="delivered / ordered × 100" kpiKey="delivered" />,
+      { authUser: { role: 'employee' } },
     );
     fireEvent.click(screen.getByRole('button', { name: 'Card settings' }));
     expect(screen.getByLabelText('Which value gets the color')).toBeTruthy();
     expect(screen.getByText('This value')).toBeTruthy();
     expect(screen.getByText('Other value')).toBeTruthy();
+    expect(screen.getByText('Formula')).toBeTruthy();
+  });
+
+  it('shows color settings on percentage KPI cards for an admin', () => {
+    renderWithFluent(
+      <KpiFormulaFold formula="delivered / ordered × 100" kpiKey="delivered" />,
+      { authUser: { role: 'admin' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Card settings' }));
+    expect(screen.getByLabelText('Which value gets the color')).toBeTruthy();
+  });
+
+  it('hides color settings for a supplier (vendor) and only shows the formula', () => {
+    renderWithFluent(
+      <KpiFormulaFold formula="delivered / ordered × 100" kpiKey="delivered" />,
+      { authUser: { role: 'supplier' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'View formula' }));
+    expect(screen.queryByLabelText('Which value gets the color')).toBeNull();
+    expect(screen.queryByLabelText('KPI card color')).toBeNull();
     expect(screen.getByText('Formula')).toBeTruthy();
   });
 

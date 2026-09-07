@@ -13,7 +13,7 @@ const useStyles = makeStyles({
   },
 });
 
-function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
+function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config }) {
   const styles = useStyles();
   const handleActivate = useCallback((key) => {
     onSelect?.(key);
@@ -35,6 +35,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'ordered'}
         clickable={clickableSet.has('ordered')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="delivered"
@@ -45,6 +46,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'delivered'}
         clickable={clickableSet.has('delivered')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="open"
@@ -56,6 +58,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'open'}
         clickable={clickableSet.has('open')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="lateDelivery"
@@ -67,6 +70,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'lateDelivery'}
         clickable={clickableSet.has('lateDelivery')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="onTime"
@@ -78,6 +82,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'onTime'}
         clickable={clickableSet.has('onTime')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="openLate"
@@ -89,6 +94,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'openLate'}
         clickable={clickableSet.has('openLate')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="lateItems"
@@ -99,6 +105,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'lateItems'}
         clickable={clickableSet.has('lateItems')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="unconfirmed"
@@ -110,6 +117,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'unconfirmed'}
         clickable={clickableSet.has('unconfirmed')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="capacityShortfall"
@@ -119,6 +127,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'capacityShortfall'}
         clickable={clickableSet.has('capacityShortfall')}
         onActivate={handleActivate}
+        config={config}
       />
       <KpiCard
         kpiKey="overloadedWeeks"
@@ -128,6 +137,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
         selected={selectedKey === 'overloadedWeeks'}
         clickable={clickableSet.has('overloadedWeeks')}
         onActivate={handleActivate}
+        config={config}
       />
     </div>
     </KpiCardStyleProvider>
@@ -135,3 +145,4 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys }) {
 }
 
 export default memo(RccpKpiCards);
+
