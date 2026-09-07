@@ -5,7 +5,8 @@ import StatusCell from './StatusCell';
 import PurchaseOrderWriteBackCell from './PurchaseOrderWriteBackCell';
 import PurchaseOrderProductImageCell from './PurchaseOrderProductImageCell';
 import PurchaseOrderLinkedHeaderValue from './PurchaseOrderLinkedHeaderValue';
-import { formatCellValue, isDateLikeCellValue } from '../../utils/purchaseOrderFormat';
+import PurchaseOrderLinkedValueCell from './PurchaseOrderLinkedValueCell';
+import { formatCellValue, getJoinedDateValuePreview, isDateLikeCellValue } from '../../utils/purchaseOrderFormat';
 import {
   isDatePeriodColumn,
   normalizeDatePeriodDisplayMode,
@@ -178,6 +179,28 @@ function PurchaseOrderHeaderCellContent({
       && columnType !== 'date'
       && columnType !== 'datetime'
       && columnType !== 'date-time';
+    if (isPushedIsoDate) {
+      // Meerdere gepushte regel-datums: toon de eerste datum met een "+N"-badge,
+      // net als de "+N"-badge op de Image-kolom (PurchaseOrderLinkedValueCell).
+      const joinedPreview = getJoinedDateValuePreview(rawValue);
+      if (joinedPreview) {
+        const joinedValueNode = (
+          <PurchaseOrderLinkedValueCell
+            firstValue={joinedPreview.firstValue}
+            additionalCount={joinedPreview.additionalCount}
+            allValuesLabel={joinedPreview.allValuesLabel}
+            isConditionalFormat={isConditionalFormat}
+          />
+        );
+        const wrappedJoinedValueNode = isChangedCell && !cellBackgroundColor
+          ? <span className={styles.changedCell}>{joinedValueNode}</span>
+          : joinedValueNode;
+        return order.removedInD365
+          ? <span className={styles.removedText}>{wrappedJoinedValueNode}</span>
+          : wrappedJoinedValueNode;
+      }
+    }
+
     if (!isPushedIsoDate) {
       return (
         <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>

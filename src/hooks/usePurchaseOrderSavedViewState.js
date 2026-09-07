@@ -122,6 +122,13 @@ export function usePurchaseOrderSavedViewState({
     }).catch(() => {});
   }, []);
 
+  // Wist de sessie-snapshot van de actieve view meteen (synchroon), zodat een filter die de
+  // gebruiker net heeft gewist niet alsnog terugkomt via de sessie-overlay bij een snelle
+  // view/tab-switch die vlak daarna volgt (#PO-filter-sticky).
+  const clearActiveViewFilterSession = useCallback(() => {
+    tableSession.clear(activeViewId);
+  }, [tableSession, activeViewId]);
+
   const handleResetView = useCallback(() => {
     tableSession.clear(activeViewId);
     boardView.clearAllFilters();
@@ -273,6 +280,7 @@ export function usePurchaseOrderSavedViewState({
     stickyColumnKeys,
     setStickyColumnKeys,
     viewTabs,
+    clearActiveViewFilterSession,
   }), [
     savedViews,
     activeViewId,
@@ -290,5 +298,6 @@ export function usePurchaseOrderSavedViewState({
     allOrdersShowHistoryIndicators,
     stickyColumnKeys,
     viewTabs,
+    clearActiveViewFilterSession,
   ]);
 }

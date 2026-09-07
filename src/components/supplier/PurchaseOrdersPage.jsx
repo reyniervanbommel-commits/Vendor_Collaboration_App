@@ -83,7 +83,7 @@ export default function PurchaseOrdersPage() {
     reloadAfterRefresh();
     hiddenRows.reload();
   };
-  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs, clearActiveViewFilterSession } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -93,6 +93,22 @@ export default function PurchaseOrdersPage() {
     columns: visibleHeaderColumns,
     datePeriodDisplayModes,
   });
+  // Een kolomfilter wissen (los van "Reset view") moet de niet-opgeslagen sessie-snapshot
+  // meteen meewissen — anders komt de gewiste filter terug bij een snelle view/tab-switch
+  // (sessionStorage-overlay in usePurchaseOrderTableSession, #PO-filter-sticky).
+  const clearColumnFilterAndSession = useCallback((columnKey) => {
+    boardView.clearColumnFilter(columnKey);
+    clearActiveViewFilterSession();
+  }, [boardView, clearActiveViewFilterSession]);
+  const clearAllFiltersAndSession = useCallback(() => {
+    boardView.clearAllFilters();
+    clearActiveViewFilterSession();
+  }, [boardView, clearActiveViewFilterSession]);
+  const boardViewForContent = useMemo(() => ({
+    ...boardView,
+    clearColumnFilter: clearColumnFilterAndSession,
+    clearAllFilters: clearAllFiltersAndSession,
+  }), [boardView, clearColumnFilterAndSession, clearAllFiltersAndSession]);
   const [editingColumnKey, setEditingColumnKey] = useState('');
   const handleEditingDone = useCallback(() => setEditingColumnKey(''), []);
   const {
@@ -189,7 +205,7 @@ export default function PurchaseOrdersPage() {
   );
   const tableContext = useMemo(() => ({
     pageModel,
-    boardView,
+    boardView: boardViewForContent,
     bulkEdit,
     isAdmin,
     isStaff,
@@ -205,7 +221,7 @@ export default function PurchaseOrdersPage() {
     stickyColumns: { keys: stickyColumnKeys, onChange: setStickyColumnKeys },
     showHistoryIndicators,
   }), [
-    boardView,
+    boardViewForContent,
     bulkEdit,
     editingColumnKey,
     handleAddColumnRightOf,

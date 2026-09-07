@@ -74,6 +74,25 @@ function formatJoinedIsoDateValues(value) {
   return parts.map((part) => tryFormatAsDdMmYyyy(part) || part).join(', ');
 }
 
+/**
+ * Push-to-header kolommen slaan meerdere regel-datums op als één komma-gescheiden string.
+ * Geeft de eerste geformatteerde datum plus het aantal overige unieke datums terug, zodat de
+ * cel dezelfde eerste-waarde + "+N"-badge kan tonen als de Image-kolom (PurchaseOrderLinkedValueCell).
+ * Retourneert null wanneer de waarde geen komma-gescheiden ISO-datumlijst is.
+ */
+export function getJoinedDateValuePreview(value) {
+  if (typeof value !== 'string') return null;
+  const parts = value.split(',').map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2 || !parts.every(looksLikeIsoDateString)) return null;
+  const formattedParts = parts.map((part) => tryFormatAsDdMmYyyy(part) || part);
+  const uniqueParts = [...new Set(formattedParts)];
+  return {
+    firstValue: uniqueParts[0],
+    additionalCount: Math.max(uniqueParts.length - 1, 0),
+    allValuesLabel: uniqueParts.join(', '),
+  };
+}
+
 /** True for Date objects and ISO date/datetime strings, including comma-separated lists. */
 export function isDateLikeCellValue(value) {
   if (value instanceof Date) return !Number.isNaN(value.getTime());
