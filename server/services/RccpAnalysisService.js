@@ -568,6 +568,13 @@ async function boardKpis({ supplierAccount = null } = {}) {
     configured: Boolean(
       String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
     ),
+    // Meegeven zodat de client de KPI-formuletekst kan opbouwen met de labels
+    // die de gebruiker in de RCCP-instellingen (Quantities-tab) heeft gekozen.
+    config: {
+      openMeasureKey: config.openMeasureKey,
+      deliveredMeasureKey: config.deliveredMeasureKey,
+      quantityMeasures: config.quantityMeasures,
+    },
   };
   rememberBoardKpis(cacheKey, payload);
   return payload;

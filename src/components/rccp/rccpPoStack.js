@@ -171,7 +171,7 @@ export function poSegmentStroke(_segment, highlighted) {
 }
 
 /**
- * Quantity (ordered) against the axis, remaining (open) grouped at the top.
+ * Remaining (open) against the axis, quantity (ordered) grouped at the top.
  * Remaining stays visible when quantity is toggled off.
  */
 export function visibleAboveSegments(segments, { openVisible, orderedVisible } = {}) {
@@ -184,7 +184,7 @@ export function visibleAboveSegments(segments, { openVisible, orderedVisible } =
       if (orderedVisible) ordered.push(segment);
     }
   }
-  return [...ordered, ...remaining];
+  return [...remaining, ...ordered];
 }
 
 /**

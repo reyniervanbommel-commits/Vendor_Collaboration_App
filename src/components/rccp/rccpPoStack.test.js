@@ -203,17 +203,17 @@ describe('rccpPoStack', () => {
     }
   });
 
-  it('groups remaining segments together at the top of the week bar', () => {
+  it('groups remaining segments together against the axis', () => {
     expect(visibleAboveSegments([
       { itemNumber: 'SKU-A', qty: 4, status: 'ordered' },
       { itemNumber: 'SKU-A', qty: 6, status: 'open' },
       { itemNumber: 'SKU-B', qty: 3, status: 'ordered' },
       { itemNumber: 'SKU-B', qty: 2, status: 'open' },
     ], { openVisible: true, orderedVisible: true }).map((seg) => `${seg.itemNumber}:${seg.status}`)).toEqual([
-      'SKU-A:ordered',
-      'SKU-B:ordered',
       'SKU-A:open',
       'SKU-B:open',
+      'SKU-A:ordered',
+      'SKU-B:ordered',
     ]);
   });
 

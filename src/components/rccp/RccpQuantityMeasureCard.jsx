@@ -46,7 +46,7 @@ const useStyles = makeStyles({
 });
 
 function RccpQuantityMeasureCard({
-  measure, index, numberCols, slotTitle, showChartType, onUpdate,
+  measure, index, numberCols, slotTitle, showChartType, showColor = true, onUpdate,
 }) {
   const styles = useStyles();
   const matched = matchRccpColumn(numberCols, measure.columnKey);
@@ -130,18 +130,20 @@ function RccpQuantityMeasureCard({
             </Field>
           </div>
         )}
-        <div className={styles.colorSlot}>
-          <Field label="Color">
-            <div className={styles.colorField}>
-              <ColorPalettePicker
-                layout="popover"
-                selectedColor={measure.color || SELECTABLE_STATUS_COLORS[0]}
-                onSelect={handleColor}
-                ariaLabel={`${slotTitle} color`}
-              />
-            </div>
-          </Field>
-        </div>
+        {showColor && (
+          <div className={styles.colorSlot}>
+            <Field label="Color">
+              <div className={styles.colorField}>
+                <ColorPalettePicker
+                  layout="popover"
+                  selectedColor={measure.color || SELECTABLE_STATUS_COLORS[0]}
+                  onSelect={handleColor}
+                  ariaLabel={`${slotTitle} color`}
+                />
+              </div>
+            </Field>
+          </div>
+        )}
         <Switch
           checked={measure.showInChart !== false}
           onChange={handleInChart}

@@ -52,7 +52,8 @@ function RccpQuantityMeasuresEditor({
     <div className={styles.root}>
       {!hideIntro && (
         <Text className={styles.hint}>
-          Each slot maps one numeric column. Open and Received drive the chart boxes; Ordered is a matrix row.
+          Each slot maps one numeric column. Open and Received drive the chart boxes (open in
+          full color, already-received in a faded received color); Ordered is a matrix row only.
         </Text>
       )}
       {!numberCols.length && (
@@ -68,6 +69,7 @@ function RccpQuantityMeasuresEditor({
           numberCols={numberCols}
           slotTitle={SLOTS[index].title}
           showChartType={index === 2}
+          showColor={index !== 2}
           onUpdate={updateMeasure}
         />
       ))}
