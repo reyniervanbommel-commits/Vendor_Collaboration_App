@@ -28,7 +28,8 @@ function mapRemarkRows(rows, actor) {
         createdAt: iso(row.created_at),
         deletedAt: iso(row.deleted_at),
         reactions: [],
-        canDelete: !isDeleted && Boolean(
+        // Suppliers mogen nooit remarks verwijderen, ook niet hun eigen (server blokkeert dit ook in deleteRemark).
+        canDelete: !isDeleted && !actor?.isSupplier && Boolean(
           actor?.isAdmin || Number(row.created_by) === Number(actor?.id)
         ),
       });

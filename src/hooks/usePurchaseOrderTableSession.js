@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   applyPoTableSessionOverlay,
   clearPoTableSession,
@@ -42,7 +42,10 @@ export function usePurchaseOrderTableSession({ boardView, activeViewId }) {
     clearPoTableSession(viewId);
   }, []);
 
-  useEffect(() => {
+  // useLayoutEffect (i.p.v. useEffect): schrijft de snapshot weg vóór de browser de volgende
+  // klik/navigatie kan verwerken. Zo kan een filter-wis niet "verliezen" van een snelle
+  // tab/view-switch die daarna sessionStorage voor dezelfde view overschrijft (#PO-filter-sticky).
+  useLayoutEffect(() => {
     if (skipPersistRef.current) return;
     if (suppressNextPersistRef.current) {
       suppressNextPersistRef.current = false;

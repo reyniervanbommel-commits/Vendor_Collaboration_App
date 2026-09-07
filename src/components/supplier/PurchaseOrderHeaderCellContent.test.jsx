@@ -108,6 +108,27 @@ describe('PurchaseOrderHeaderCellContent', () => {
     expect(screen.queryByDisplayValue(/2026-08-25T00:00:00/)).toBeNull();
   });
 
+  // Meerdere gepushte regel-datums: eerste datum + "+N"-badge, zelfde patroon als de
+  // "+N"-badge op de Image-kolom, ook zonder linkedLineValueMap-koppeling.
+  it('shows the first pushed date with a "+N" badge when multiple unique dates are pushed', () => {
+    renderHeaderCell({
+      order: {
+        dataAreaId: 'nl01',
+        orderNumber: 'PO-1',
+        values: { receiptDateValues: '2026-05-07T00:00:00.000Z, 2026-04-21T00:00:00.000Z' },
+      },
+      column: {
+        key: 'receiptDateValues',
+        label: 'Receipt date Values',
+        dataType: 'text',
+        source: 'custom',
+      },
+    });
+
+    expect(screen.getByText('07/05/2026')).toBeTruthy();
+    expect(screen.getByLabelText('1 additional unique values')).toBeTruthy();
+  });
+
   it('renders a write-back input when the pushed line column is writable', () => {
     renderHeaderCell({
       order: {

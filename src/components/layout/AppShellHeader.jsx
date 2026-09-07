@@ -84,7 +84,7 @@ const useStyles = makeStyles({
     userSelect: 'none',
   },
   vendorName: {
-    color: tokens.colorNeutralForeground2,
+    color: tokens.colorNeutralForeground1,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -132,7 +132,7 @@ export default function AppShellHeader({
         {isSupplier && vendorLabel && (
           <>
             <Text size={400} className={styles.vendorDivider} aria-hidden="true">—</Text>
-            <Text size={400} weight="medium" className={styles.vendorName}>
+            <Text size={500} weight="semibold" className={styles.vendorName}>
               {vendorLabel}
             </Text>
           </>

@@ -241,6 +241,26 @@ describe('usePurchaseOrderSavedViewState session snapshot', () => {
     expect(readPoTableSession(7)).toBeNull();
   });
 
+  it('clearActiveViewFilterSession wist het sessie-snapshot van de actieve view direct (zonder reset/save)', () => {
+    savePoTableSession(7, sessionSnapshot);
+    const boardView = createBoardView();
+    const { result } = renderSavedViewState(boardView);
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: { columns: {}, table: {} },
+      });
+    });
+    expect(readPoTableSession(7)).not.toBeNull();
+
+    act(() => {
+      result.current.clearActiveViewFilterSession();
+    });
+
+    expect(readPoTableSession(7)).toBeNull();
+  });
+
   it('wist het sessie-snapshot van de nieuwe view na save-as-new', async () => {
     savePoTableSession(8, sessionSnapshot);
     const { result } = renderSavedViewState();
