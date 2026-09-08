@@ -136,12 +136,15 @@ export function usePurchaseOrderSavedViewState({
     boardView.clearGrouping();
     boardView.clearGroupSummaries();
     boardView.columnSums?.clearColumnSums?.();
+    // "All orders" is een neutrale weergave: geen conditional formatting die van een
+    // andere (opgeslagen) view is blijven hangen. In-memory only, niet persistent.
+    applyColumnLayout({ headerColumnFormatRules: {}, lineColumnFormatRules: {} });
     setShowHistoryIndicators(allOrdersShowHistoryIndicators);
     setActiveViewId(null);
     savedViewStateRef.current = null;
     setSavedStateFingerprint(null);
     viewTabs.resetTabs();
-  }, [boardView, allOrdersShowHistoryIndicators, tableSession, activeViewId, viewTabs]);
+  }, [applyColumnLayout, boardView, allOrdersShowHistoryIndicators, tableSession, activeViewId, viewTabs]);
 
   const handleSaveAsNew = useCallback(async ({ name, scope, isDefault, vendorAccount }) => {
     const currentState = {
@@ -198,13 +201,14 @@ export function usePurchaseOrderSavedViewState({
     await savedViews.deleteView(view.id);
     tableSession.clear(view.id);
     if (view.id === activeViewId) {
+      applyColumnLayout({ headerColumnFormatRules: {}, lineColumnFormatRules: {} });
       setShowHistoryIndicators(allOrdersShowHistoryIndicators);
       setActiveViewId(null);
       savedViewStateRef.current = null;
       setSavedStateFingerprint(null);
       viewTabs.resetTabs();
     }
-  }, [savedViews, activeViewId, allOrdersShowHistoryIndicators, tableSession, viewTabs]);
+  }, [savedViews, activeViewId, allOrdersShowHistoryIndicators, applyColumnLayout, tableSession, viewTabs]);
 
   const handleToggleShowHistory = useCallback(async (view, enabled) => {
     const nextEnabled = Boolean(enabled);
@@ -257,10 +261,13 @@ export function usePurchaseOrderSavedViewState({
     if (defaultView) {
       applyViewState(defaultView);
     } else {
+      // Start op "All orders": geen conditional formatting uit een eerder
+      // bezochte view laten doorschemeren. In-memory only, niet persistent.
+      applyColumnLayout({ headerColumnFormatRules: {}, lineColumnFormatRules: {} });
       tableSession.restore(null);
     }
     tableSession.enablePersist();
-  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState, isSupplier, tableSession]);
+  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState, applyColumnLayout, isSupplier, tableSession]);
 
   return useMemo(() => ({
     savedViews,
