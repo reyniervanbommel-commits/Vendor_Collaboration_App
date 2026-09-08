@@ -326,7 +326,8 @@ async function renameColumn(columnId, label, userId) {
   if (!cleanLabel) throw Object.assign(new Error('Label is required'), { status: 400 });
   const existing = await getColumnById(columnId);
   if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
-  if (existing.source !== 'custom') throw Object.assign(new Error('Source columns cannot be renamed'), { status: 400 });
+  // Zowel custom- als D365-bronkolommen mogen een eigen label krijgen — alleen het weergavelabel
+  // wijzigt, de onderliggende source/key/mapping (source_field) blijft ongewijzigd.
   if (existing.dataType === 'remarks') {
     throw Object.assign(new Error('The Remarks column has a fixed name'), { status: 400 });
   }
