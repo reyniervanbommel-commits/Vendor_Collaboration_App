@@ -33,6 +33,9 @@ function mapColumnRow(row) {
     level: row.scope === 'detail' ? 'line' : 'header',
     key: row.key,
     label: row.label,
+    // Label zoals het was bij aanmaken (D365-veld of custom), blijft staan na een rename.
+    // Alleen tonen als afwijkend van het huidige label (zie columnOriginMeta.js in de UI).
+    originalLabel: row.original_label || row.label,
     source: row.source,
     sourceField: row.source_field || null,
     dataType: row.data_type,
@@ -51,7 +54,7 @@ function mapColumnRow(row) {
 }
 
 const COLUMN_SELECT = `
-  SELECT id, table_id, scope, [key], label, source, source_field, data_type, options_json,
+  SELECT id, table_id, scope, [key], label, original_label, source, source_field, data_type, options_json,
          writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order,
          visible_at_delete, formula_expr
   FROM dbo.tb_columns

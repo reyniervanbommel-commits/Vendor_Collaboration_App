@@ -28,6 +28,9 @@ function disableWriteBack(columns) {
   return columns.map((c) => (c && c.writableToD365 ? { ...c, writableToD365: false } : c));
 }
 
+// Stabiele referentie zodat de "All orders"-override geen onnodige re-renders triggert.
+const EMPTY_FORMAT_RULES = Object.freeze({});
+
 const useStyles = makeStyles({
   contentInset: {
     paddingLeft: '24px',
@@ -118,14 +121,20 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
     pageModel.lineColumnWidths,
     tableContext.stickyColumns,
   ]);
+  // "All orders" (geen actieve saved view, activeViewId === null) is een neutrale weergave:
+  // conditional formatting is een board-brede instelling en mag hier niet doorschemeren.
+  // Dit is puur een render-override — de onderliggende state in usePurchaseOrdersPage blijft
+  // intact, dus de opgeslagen view waar de regel bij hoort raakt de formatting niet kwijt.
+  const isAllOrdersView = tableContext.activeViewId == null;
   const formatting = useMemo(() => ({
     headerColumnWidths: pageModel.headerColumnWidths,
     lineColumnWidths: pageModel.lineColumnWidths,
     headerColumnTextStyles: pageModel.headerColumnTextStyles,
-    headerColumnFormatRules: pageModel.headerColumnFormatRules,
+    headerColumnFormatRules: isAllOrdersView ? EMPTY_FORMAT_RULES : pageModel.headerColumnFormatRules,
     lineColumnTextStyles: pageModel.lineColumnTextStyles,
-    lineColumnFormatRules: pageModel.lineColumnFormatRules,
+    lineColumnFormatRules: isAllOrdersView ? EMPTY_FORMAT_RULES : pageModel.lineColumnFormatRules,
   }), [
+    isAllOrdersView,
     pageModel.headerColumnFormatRules,
     pageModel.headerColumnTextStyles,
     pageModel.headerColumnWidths,

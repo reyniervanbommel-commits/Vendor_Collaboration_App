@@ -27,6 +27,17 @@ function nativeFieldLabel(column) {
   return trimText(column?.label || column?.d365Field || column?.key);
 }
 
+/**
+ * Als de kolom hernoemd is (huidig label != originalLabel), toon de oorspronkelijke naam erbij —
+ * zo weet de gebruiker altijd waar de kolom origineel vandaan kwam, ook na een rename.
+ */
+function renameSuffix(column) {
+  const original = trimText(column?.originalLabel);
+  const current = trimText(column?.label);
+  if (!original || !current || original === current) return '';
+  return ` (originally "${original}")`;
+}
+
 function lookupDatasetLabel(column) {
   return trimText(column?.lookup?.targetTableLabel);
 }
@@ -63,9 +74,13 @@ export function getColumnOriginMeta(column) {
     };
   }
   if (column?.level === 'line') {
-    return { key: 'lines', groupLabel: 'Lines', fieldLabel: nativeFieldLabel(column) };
+    return { key: 'lines', groupLabel: 'Lines', fieldLabel: `${nativeFieldLabel(column)}${renameSuffix(column)}` };
   }
-  return { key: 'purchase-orders', groupLabel: 'Purchase orders', fieldLabel: nativeFieldLabel(column) };
+  return {
+    key: 'purchase-orders',
+    groupLabel: 'Purchase orders',
+    fieldLabel: `${nativeFieldLabel(column)}${renameSuffix(column)}`,
+  };
 }
 
 /**
