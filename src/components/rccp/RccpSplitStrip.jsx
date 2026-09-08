@@ -141,7 +141,7 @@ function RccpSplitStrip({
 
   return (
     <div className={styles.root}>
-      {loading && !analysis && <Spinner size="tiny" label="Loading RCCP…" />}
+      {loading && !analysis && <Spinner size="tiny" label="Loading PERF…" />}
       {error && <Text className={styles.error}>{error}</Text>}
 
       {analysis && !error && (

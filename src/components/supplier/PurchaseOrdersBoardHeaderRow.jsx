@@ -126,7 +126,7 @@ export default function PurchaseOrdersBoardHeaderRow({
             width={headerColumnWidths[column.key]}
             minWidth={isSystemColumn ? PRODUCT_IMAGE_MIN_COLUMN_WIDTH : undefined}
             getScale={getPoTableZoom}
-            className={[styles.headerCell, hasActiveFilter ? styles.headerCellFiltered : '', headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
+            className={[styles.headerCell, hasActiveFilter ? styles.headerCellFiltered : '', hasActiveConditionalFormatting ? styles.headerCellConditionalFormatting : '', headerColumnDrag.canDrag ? styles.dragDropCell : '', headerColumnDrag.draggingKey === column.key ? styles.dragSourceCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'before' ? styles.dropBeforeCell : '', headerColumnDrag.dropTargetKey === column.key && headerColumnDrag.dropTargetPosition === 'after' ? styles.dropAfterCell : ''].filter(Boolean).join(' ')}
             onResizeEnd={onSaveHeaderColumnWidth}
             cellStyle={stickyHeaderStyle}
             {...headerColumnDrag.getCellDragProps(column.key)}
@@ -145,7 +145,6 @@ export default function PurchaseOrdersBoardHeaderRow({
                     showActionsMenu={false}
                     autoEdit={editingColumnKey === column.key}
                     onEditingDone={onEditingDone}
-                    showConditionalFormattingIndicator={hasActiveConditionalFormatting}
                     showWriteBackIcon={Boolean(linkedLineValueByHeaderKey[column.key]?.writableToD365)}
                   />
                 )}

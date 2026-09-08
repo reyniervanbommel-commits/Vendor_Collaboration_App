@@ -278,6 +278,55 @@ describe('buildPoSegments', () => {
     expect(byWeek.get(plannedWeek.key)?.segmentsAbove.find((s) => s.status === 'open')?.qty).toBe(8);
   });
 
+  it('does not double count ordered+open when open is a header-only measure but ordered is line-level', () => {
+    // Regressie voor WSPO-0425331: openMeasureKey is een master-formule (bv. "OVER"),
+    // orderedMeasureKey is een detail-veld ("Aantal"). Alle 50 stuks staan nog open (niets
+    // ontvangen), dus de 'ordered' (filled) balk moet 0 zijn — niet nogmaals 50 naast de
+    // 50 van 'open' (dat zou "Aantal" = ordered + open = 100 tonen i.p.v. 50).
+    const scopedConfig = {
+      ...baseConfig,
+      vendorColumnKey: 'master:vendorAccount',
+      openMeasureKey: 'master:openQty',
+      orderedMeasureKey: 'orderedQty',
+    };
+    const twoLines = row({
+      values: { openQty: 50 },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: planned, confirmedDeliveryDate: planned, orderedQty: 25, itemNumber: 'SKU-1' } },
+        { detailKey: '2', values: { requestedDeliveryDate: planned, confirmedDeliveryDate: planned, orderedQty: 25, itemNumber: 'SKU-1' } },
+      ],
+    });
+    const byWeek = buildPoSegments([twoLines], scopedConfig, window, { now: nowCurrent });
+    const above = byWeek.get(plannedWeek.key).segmentsAbove;
+    const ordered = above.filter((s) => s.status === 'ordered').reduce((sum, s) => sum + s.qty, 0);
+    const open = above.filter((s) => s.status === 'open').reduce((sum, s) => sum + s.qty, 0);
+    expect(open).toBe(50);
+    expect(ordered).toBe(0);
+  });
+
+  it('still avoids double counting when line quantities are uneven (e.g. 20/30 split)', () => {
+    const scopedConfig = {
+      ...baseConfig,
+      vendorColumnKey: 'master:vendorAccount',
+      openMeasureKey: 'master:openQty',
+      orderedMeasureKey: 'orderedQty',
+    };
+    const unevenLines = row({
+      values: { openQty: 50 },
+      details: [
+        { detailKey: '1', values: { requestedDeliveryDate: planned, confirmedDeliveryDate: planned, orderedQty: 20, itemNumber: 'SKU-1' } },
+        { detailKey: '2', values: { requestedDeliveryDate: planned, confirmedDeliveryDate: planned, orderedQty: 30, itemNumber: 'SKU-1' } },
+      ],
+    });
+    const byWeek = buildPoSegments([unevenLines], scopedConfig, window, { now: nowCurrent });
+    const above = byWeek.get(plannedWeek.key).segmentsAbove;
+    const ordered = above.filter((s) => s.status === 'ordered').reduce((sum, s) => sum + s.qty, 0);
+    const open = above.filter((s) => s.status === 'open').reduce((sum, s) => sum + s.qty, 0);
+    expect(open).toBe(50);
+    expect(ordered).toBe(0);
+    expect(open + ordered).toBe(50);
+  });
+
   it('places open on confirmed week when that date is real', () => {
     const requested = '2026-09-14T00:00:00.000Z';
     const confirmed = '2026-09-28T00:00:00.000Z';

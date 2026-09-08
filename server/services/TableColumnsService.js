@@ -114,12 +114,29 @@ async function assertDatePeriodSourceColumn(pool, {
   }
 }
 
+// tb_columns heeft een AFTER INSERT-trigger (trg_tb_columns_original_label, migratie 048).
+// SQL Server staat dan geen "OUTPUT ... " zonder INTO toe op DML tegen die tabel — vandaar
+// OUTPUT INTO een table-variabele, gevolgd door een losse SELECT om het resultaat terug te geven.
+const COLUMN_OUTPUT_DECLARE = `
+  DECLARE @columnOutput TABLE (
+    id BIGINT, table_id BIGINT, scope NVARCHAR(16), [key] NVARCHAR(64), label NVARCHAR(128),
+    original_label NVARCHAR(128) NULL, source NVARCHAR(16), source_field NVARCHAR(128) NULL,
+    data_type NVARCHAR(16), options_json NVARCHAR(MAX) NULL, writable BIT,
+    write_mechanism NVARCHAR(16) NULL, is_default_visible BIT, filterable BIT, sortable BIT,
+    is_active BIT, sort_order INT, visible_at_delete BIT, formula_expr NVARCHAR(MAX) NULL
+  );
+`;
+
 const COLUMN_OUTPUT = `
-  OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label, INSERTED.source,
+  OUTPUT INSERTED.id, INSERTED.table_id, INSERTED.scope, INSERTED.[key], INSERTED.label,
+         INSERTED.original_label, INSERTED.source,
          INSERTED.source_field, INSERTED.data_type, INSERTED.options_json, INSERTED.writable,
          INSERTED.write_mechanism, INSERTED.is_default_visible, INSERTED.filterable, INSERTED.sortable,
          INSERTED.is_active, INSERTED.sort_order, INSERTED.visible_at_delete, INSERTED.formula_expr
+  INTO @columnOutput
 `;
+
+const COLUMN_OUTPUT_SELECT = `SELECT * FROM @columnOutput;`;
 
 const WRITE_MECHANISMS = ['patch', 'action', 'sql'];
 
@@ -310,13 +327,15 @@ async function createColumn({ tableKey, scope, label, dataType, options = null, 
     .input('formulaExpr', sql.NVarChar(sql.MAX), normalizedFormula.expression)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       INSERT INTO dbo.tb_columns
         (table_id, scope, [key], label, source, data_type, options_json, formula_expr, writable, is_active, sort_order, created_by, updated_by)
       ${COLUMN_OUTPUT}
       VALUES
         (@tableId, @scope, @key, @label, 'custom', @dataType, @options, @formulaExpr, 0, 1,
          (SELECT ISNULL(MAX(sort_order), 0) + 10 FROM dbo.tb_columns WHERE table_id = @tableId AND scope = @scope),
-         @userId, @userId)
+         @userId, @userId);
+      ${COLUMN_OUTPUT_SELECT}
     `);
   return mapColumnRow(result.recordset[0]);
 }
@@ -338,10 +357,12 @@ async function renameColumn(columnId, label, userId) {
     .input('label', sql.NVarChar(128), cleanLabel)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET label = @label, updated_by = @userId, updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -471,13 +492,15 @@ async function updateColumn(columnId, { label, options, statusReassignments }, u
     .input('options', sql.NVarChar(sql.MAX), optionsJson)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET label = @label,
           options_json = @options,
           updated_by = @userId,
           updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -527,6 +550,7 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
     .input('formulaExpr', sql.NVarChar(sql.MAX), normalizedFormula.expression)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET label = @label,
           data_type = @dataType,
@@ -537,7 +561,8 @@ async function updateFormulaColumn(columnId, { label, dataType, formulaExpr }, u
           updated_by = @userId,
           updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -587,6 +612,7 @@ async function updateImageColumn(columnId, { label, dataType, options }, userId)
     .input('options', sql.NVarChar(sql.MAX), JSON.stringify(normalizedImageOptions))
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET label = @label,
           data_type = 'image',
@@ -597,7 +623,8 @@ async function updateImageColumn(columnId, { label, dataType, options }, userId)
           updated_by = @userId,
           updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -656,10 +683,12 @@ async function setColumnVisibility(columnId, visible, userId) {
     .input('active', sql.Bit, visible ? 1 : 0)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET is_active = @active, updated_by = @userId, updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -675,10 +704,12 @@ async function setVisibleAtDelete(columnId, flag, userId) {
     .input('flag', sql.Bit, flag ? 1 : 0)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET visible_at_delete = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);
@@ -729,10 +760,12 @@ async function setWriteBackConfig(columnId, config, userId, tableKey = null) {
     .input('mechanism', sql.NVarChar(16), mechanism)
     .input('userId', sql.Int, userId || null)
     .query(`
+      ${COLUMN_OUTPUT_DECLARE}
       UPDATE dbo.tb_columns
       SET writable = @writable, write_mechanism = @mechanism, updated_by = @userId, updated_at = SYSUTCDATETIME()
       ${COLUMN_OUTPUT}
-      WHERE id = @id
+      WHERE id = @id;
+      ${COLUMN_OUTPUT_SELECT}
     `);
   if (!result.recordset.length) throw Object.assign(new Error('Column not found'), { status: 404 });
   return mapColumnRow(result.recordset[0]);

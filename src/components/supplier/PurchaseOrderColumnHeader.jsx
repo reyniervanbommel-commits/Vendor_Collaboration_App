@@ -5,21 +5,13 @@ import {
 } from '@fluentui/react-components';
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import D365LogoIcon from './D365LogoIcon';
-import { MoreVerticalRegular, PaintBrushRegular } from '@fluentui/react-icons';
+import { MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
   labelWrap: { display: 'inline-flex', alignItems: 'center', minWidth: 0, maxWidth: '100%', flex: 1, ...shorthands.gap('4px') },
   labelText: { minWidth: 0, maxWidth: '100%', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
-  conditionalFormattingIndicator: {
-    color: tokens.colorPaletteDarkOrangeForeground2,
-    fontSize: tokens.fontSizeBase300,
-    width: '16px',
-    minWidth: '16px',
-    lineHeight: 1,
-    flexShrink: 0,
-  },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
 });
 
@@ -32,7 +24,6 @@ export default function PurchaseOrderColumnHeader({
   showActionsMenu = true,
   autoEdit = false,
   onEditingDone,
-  showConditionalFormattingIndicator = false,
   showWriteBackIcon = false,
 }) {
   const styles = useStyles();
@@ -88,11 +79,6 @@ export default function PurchaseOrderColumnHeader({
       {showD365WriteBackIcon ? (
         <span aria-label="Write-back to D365 enabled">
           <D365LogoIcon alt="" />
-        </span>
-      ) : null}
-      {showConditionalFormattingIndicator ? (
-        <span aria-label="Conditional formatting active">
-          <PaintBrushRegular className={styles.conditionalFormattingIndicator} />
         </span>
       ) : null}
       <span className={styles.labelText}>{column.label}</span>

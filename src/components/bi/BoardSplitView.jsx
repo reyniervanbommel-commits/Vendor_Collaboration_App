@@ -212,7 +212,7 @@ export default function BoardSplitView({
           onTabSelect={handleTabSelect}
         >
           {/* BI/Charts-tab verborgen op verzoek */}
-          <Tab value="rccp">RCCP</Tab>
+          <Tab value="rccp">PERF</Tab>
           <Tab value="kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
@@ -251,7 +251,7 @@ export default function BoardSplitView({
         </div>
         <div hidden={!showRccpPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
           {showRccpPane ? (
-            <Suspense fallback={<Spinner size="tiny" label="Loading RCCP…" />}>
+            <Suspense fallback={<Spinner size="tiny" label="Loading PERF…" />}>
               {rccpVendorReady ? (
                 <RccpSplitStrip
                   vendorAccount={vendorAccount}
@@ -267,7 +267,7 @@ export default function BoardSplitView({
                   onAnalysisChange={handleRccpAnalysisChange}
                 />
               ) : (
-                <Spinner size="tiny" label="Loading RCCP…" />
+                <Spinner size="tiny" label="Loading PERF…" />
               )}
             </Suspense>
           ) : null}

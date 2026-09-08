@@ -153,7 +153,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navItems = useMemo(
     () => [
       { id: 'po', label: 'Master plan purchase orders', icon: Table24Regular, path: '/' },
-      { id: 'rccp', label: 'RCCP', icon: RccpNavIcon, path: '/rccp' },
+      { id: 'rccp', label: 'Performance & Planning', icon: RccpNavIcon, path: '/rccp' },
       // BI-nav-item verborgen op verzoek (pagina + route blijven bestaan, alleen niet in de nav).
       { type: 'divider' },
       { id: 'admin', label: 'Settings', icon: Settings24Regular, path: '/admin' },

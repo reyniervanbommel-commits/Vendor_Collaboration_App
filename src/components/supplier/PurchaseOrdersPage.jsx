@@ -207,6 +207,9 @@ export default function PurchaseOrdersPage() {
     pageModel,
     boardView: boardViewForContent,
     bulkEdit,
+    // "All orders" (geen actieve saved view) toont bewust geen conditional formatting —
+    // die instelling is board-breed en zou anders uit een andere view blijven doorschemeren.
+    activeViewId,
     isAdmin,
     isStaff,
     handleAddColumnRightOf,
@@ -221,6 +224,7 @@ export default function PurchaseOrdersPage() {
     stickyColumns: { keys: stickyColumnKeys, onChange: setStickyColumnKeys },
     showHistoryIndicators,
   }), [
+    activeViewId,
     boardViewForContent,
     bulkEdit,
     editingColumnKey,

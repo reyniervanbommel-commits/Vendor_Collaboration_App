@@ -185,6 +185,17 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
     const lineOpen = Boolean(openKey && !headerOnlyOpen);
     const lineDelivered = Boolean(deliveredKey && !headerOnlyDelivered);
     const lineOrdered = Boolean(orderedKey && !headerOnlyOrdered);
+    // Mismatch: open staat op headerniveau (bv. een master-formule als "OVER") maar ordered op
+    // regelniveau ("Aantal"). Het open-aandeel wordt pas na de regel-loop via spreadHeaderQty
+    // toegevoegd, dus per regel is er niets om orderedQty tegen af te zetten. Zonder correctie
+    // telt de 'ordered'-balk daardoor de volledige regelhoeveelheid, en komt het open-aandeel er
+    // via de header-spread nog eens bovenop — "Aantal" = ordered (volledig) + open (nogmaals).
+    // Fix: 'ordered' per regel hier op 0 zetten en pas na de loop, op headerniveau, het verschil
+    // (totale regelhoeveelheid − header-open) over dezelfde slots verdelen — net als bij een
+    // volledig header-only ordered-measure. Zo ontstaat geen scheve verdeling door ongelijke
+    // regelaantallen.
+    const orderedMismatchesHeaderOpen = lineOrdered && headerOnlyOpen;
+    let totalOrderedQtyForHeaderOpen = 0;
 
     const processLine = (lineValues) => {
       const status = pickValue(lineValues, 'status') ?? masterStatus;
@@ -209,7 +220,10 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
       const orderedQty = lineOrdered
         ? resolveLineMeasureQty(lineValues, masterValues, orderedKey, share)
         : 0;
-      const orderedFilled = Math.max(0, orderedQty - openQty);
+      if (orderedMismatchesHeaderOpen) totalOrderedQtyForHeaderOpen += orderedQty;
+      const orderedFilled = orderedMismatchesHeaderOpen
+        ? 0
+        : Math.max(0, orderedQty - openQty);
 
       if (plannedDate) {
         const plannedYear = getIsoWeekYear(plannedDate);
@@ -273,6 +287,10 @@ function buildPoSegments(rows, config, window, { now, vendorAccount, planningDat
       const orderedTotal = toNumber(pickConfiguredValue(masterValues, orderedKey));
       const openTotal = headerOnlyOpen ? toNumber(pickConfiguredValue(masterValues, openKey)) : 0;
       spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', Math.max(0, orderedTotal - openTotal), false, dataAreaId, poNumber);
+    } else if (orderedMismatchesHeaderOpen) {
+      const openTotal = toNumber(pickConfiguredValue(masterValues, openKey));
+      const orderedFilledTotal = Math.max(0, totalOrderedQtyForHeaderOpen - openTotal);
+      spreadHeaderQty(above, plannedSlots, masterValues, 'ordered', orderedFilledTotal, false, dataAreaId, poNumber);
     }
     if (headerOnlyDelivered) {
       const deliveredTotal = toNumber(pickConfiguredValue(masterValues, deliveredKey));

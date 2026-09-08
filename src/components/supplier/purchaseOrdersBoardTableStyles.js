@@ -74,6 +74,13 @@ export const usePurchaseOrdersBoardTableStyles = makeStyles({
   headerCellFiltered: {
     boxShadow: `inset 0 -3px 0 0 ${SUBITEM_CONNECTOR_COLOR}`,
   },
+  // Gestreepte lijn onderaan de kolomkop: geeft aan dat er conditional formatting op de kolom zit.
+  headerCellConditionalFormatting: {
+    backgroundImage: `repeating-linear-gradient(to right, ${SUBITEM_CONNECTOR_COLOR} 0, ${SUBITEM_CONNECTOR_COLOR} 6px, transparent 6px, transparent 9px)`,
+    backgroundPosition: 'bottom',
+    backgroundSize: '100% 3px',
+    backgroundRepeat: 'repeat-x',
+  },
   dragDropCell: { cursor: 'grab' },
   dragSourceCell: { opacity: 0.6 },
   dropBeforeCell: { '::before': { content: '""', position: 'absolute', left: '-2px', top: '-1px', bottom: '-1px', width: '4px', backgroundColor: tokens.colorStrokeFocus2, zIndex: 6 } },

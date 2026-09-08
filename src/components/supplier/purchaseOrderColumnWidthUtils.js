@@ -3,7 +3,7 @@ import {
   resolveProductImageColumnWidth,
 } from '../../utils/purchaseOrderProductImageColumn';
 
-export const DEFAULT_HEADER_COLUMN_WIDTH = 120;
+export const DEFAULT_HEADER_COLUMN_WIDTH = 160;
 export const DEFAULT_LINE_COLUMN_WIDTH = 160;
 export const MIN_COLUMN_WIDTH = 80;
 export const MAX_COLUMN_WIDTH = 1000;
