@@ -232,6 +232,8 @@ function PurchaseOrderColumnFilterMenu({
           aria-label={`Sort, filter and add column for ${column.label}`}
           data-column-menu-trigger="true"
           data-column-menu-trigger-active={filterActive ? 'true' : undefined}
+          data-tour="po-column-menu-trigger"
+          data-column-type={column.dataType || undefined}
           draggable={false}
           onDragStart={(event) => event.preventDefault()}
           onMouseDown={(event) => event.stopPropagation()}

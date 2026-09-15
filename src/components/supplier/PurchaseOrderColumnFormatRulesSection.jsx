@@ -138,16 +138,17 @@ export default function PurchaseOrderColumnFormatRulesSection({
         appearance="subtle"
         icon={<SettingsRegular />}
         onClick={openRulesDialog}
+        data-tour="format-rules-manage"
       >
         Manage formatting rules
       </Button>
 
       <Dialog open={isRulesDialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogSurface className={styles.rulesDialogSurface}>
+        <DialogSurface className={styles.rulesDialogSurface} data-tour="format-rules-dialog">
           <DialogBody>
             <DialogTitle>Conditional formatting</DialogTitle>
             <DialogContent className={styles.rulesDialogBody}>
-              <Field label="Target" className={styles.targetField}>
+              <Field label="Target" className={styles.targetField} data-tour="format-rules-target">
                 <Dropdown
                   value={RULE_TARGET_LABELS[formatTarget]}
                   selectedOptions={[formatTarget]}
@@ -227,11 +228,12 @@ export default function PurchaseOrderColumnFormatRulesSection({
                 size="small"
                 appearance="primary"
                 onClick={addFormatRule}
+                data-tour="format-rules-add"
               >
                 + Add rule
               </Button>
             </DialogContent>
-            <DialogActions>
+            <DialogActions data-tour="format-rules-done">
               <Button appearance="primary" onClick={closeRulesDialog}>
                 Done
               </Button>

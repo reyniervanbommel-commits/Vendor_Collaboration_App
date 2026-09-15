@@ -207,6 +207,7 @@ function RccpIsoWeekRangePicker({
           appearance="outline"
           icon={<CalendarWeekStart24Regular />}
           aria-label={`Period ${label}`}
+          data-tour="rccp-week-picker"
         >
           {label}
         </Button>
@@ -255,6 +256,7 @@ function RccpIsoWeekRangePicker({
               disabled={!canShowDataWeeks}
               title={canShowDataWeeks ? undefined : 'No weeks with data for this vendor'}
               onClick={handleShowDataWeeks}
+              data-tour="rccp-show-data-weeks"
             >
               Show weeks with data
             </Button>

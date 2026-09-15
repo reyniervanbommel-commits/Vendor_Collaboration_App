@@ -102,6 +102,27 @@ drawer anatomy manually: header (editable name + close), scrollable body, and it
 (`tabIndex=-1`, `aria-label`, focus restore). New multi-field editors should still prefer `Drawer`
 (see `RccpSettingsFlyout.jsx`); use this inline pattern only when simultaneous editing + preview is required.
 
+### Product tours & guides (onboarding)
+
+Golden reference: `src/components/onboarding/` (engine) + `tours.js` (content).
+
+- **Anchors:** point steps at `data-tour="…"` attributes, never at CSS classes or visible text. When you rename
+  or move an anchored element, keep its `data-tour` — `tours.test.js` fails when a tour points at an anchor
+  that no longer exists.
+- **Layers:** tour overlay `z-index` 3100, tour card 3200 (`tourLayers` in `src/styles/motionTokens.js`) —
+  above the avatar menu (3000) and Fluent portals.
+- **Interaction:** guides never change data themselves; steps inside dialogs end with “Save or Cancel —
+  nothing changes until you do”. Action steps wait for the user's own click.
+- **New feature?** Add or update a step/guide in `tours.js` and bump that tour's `version` so users are
+  offered it again.
+
+### Motion
+
+- Use `motion` tokens from `src/styles/motionTokens.js` (`durationFast` 160 / `durationNormal` 240 /
+  `durationSlow` 420 ms, `easeOut`) instead of ad-hoc values.
+- Every animation needs a `prefers-reduced-motion: reduce` fallback (see `reducedMotion` in
+  `src/components/onboarding/onboardingMotion.js`).
+
 ---
 
 ## 5. Fluent UI pitfalls (blockers)

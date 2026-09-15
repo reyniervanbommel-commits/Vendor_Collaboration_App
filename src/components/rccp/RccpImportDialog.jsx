@@ -26,7 +26,7 @@ export default function RccpImportDialog({ readOnly, onImported }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'rccp-capacity-template.xlsx';
+    a.download = 'performance-planning-capacity-template.xlsx';
     a.click();
     URL.revokeObjectURL(url);
   }, []);
@@ -78,7 +78,7 @@ export default function RccpImportDialog({ readOnly, onImported }) {
       <Dialog open={open} onOpenChange={(_, data) => setOpen(data.open)}>
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Import RCCP capacity</DialogTitle>
+            <DialogTitle>Import Performance & Planning capacity</DialogTitle>
             <DialogContent className={styles.body}>
               <Button
                 appearance="subtle"

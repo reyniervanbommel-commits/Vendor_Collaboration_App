@@ -112,6 +112,7 @@ export function FilterMenuSubPane({
       className={mergeClasses(styles.subPane, flyout.alignLeft && styles.subPaneAlignLeft)}
       style={{ top: `${flyout.top}px` }}
       data-flyout-side={flyout.alignLeft ? 'left' : 'right'}
+      data-tour={activeSubmenu === 'add' ? 'col-type-list' : undefined}
     >
       {content}
     </div>

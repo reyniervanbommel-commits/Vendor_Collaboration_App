@@ -39,7 +39,7 @@ export default function PurchaseOrderNewTabDialog({ open, onOpenChange, onSubmit
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
-      <DialogSurface>
+      <DialogSurface data-tour="new-tab-dialog">
         <DialogBody>
           <DialogTitle>New tab</DialogTitle>
           <DialogContent>

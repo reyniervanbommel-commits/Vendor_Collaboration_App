@@ -27,6 +27,7 @@ const {
   vendorCanSeeView,
 } = require('../utils/viewTabs');
 const { normalizeKpiCardStyles } = require('../utils/kpiCardStyles');
+const { ONBOARDING_BOARD_KEY, normalizeOnboarding, mergeOnboarding } = require('../utils/onboardingSettings');
 const FORMAT_RULE_OPERATORS = new Set(['=', '<>', '>', '<', '>=', '<=', 'contains']);
 const VIEW_ACTIVITY_FILTERS = new Set(['all', 'new', 'changed', 'removed']);
 
@@ -201,9 +202,9 @@ function normalizeLastVendorAccount(value) {
   return value.trim().slice(0, 64);
 }
 
-function normalizeBoardSettings(rawSettings) {
+function normalizeBoardSettings(rawSettings, boardKey) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
-  return {
+  const settings = {
     biSplitPane: normalizeBiSplitPane(input.biSplitPane),
     isoWindow: normalizeIsoWindow(input.isoWindow),
     lastVendorAccount: normalizeLastVendorAccount(input.lastVendorAccount),
@@ -226,6 +227,9 @@ function normalizeBoardSettings(rawSettings) {
     viewTabSelection: normalizeViewTabSelection(input.viewTabSelection),
     kpiCardStyles: normalizeKpiCardStyles(input.kpiCardStyles),
   };
+  // Onboarding-voortgang hoort alleen bij de eigen board key; andere boards dragen de sleutel niet.
+  if (boardKey === ONBOARDING_BOARD_KEY) settings.onboarding = normalizeOnboarding(input.onboarding);
+  return settings;
 }
 
 // --- Saved views (opgeslagen filter/sort/grouping + kolomlayout per board) ---
@@ -409,7 +413,7 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
       lineTotalHeaderLinks: sharedLinks.lineTotalHeaderLinks,
       lineValueHeaderLinks: sharedLinks.lineValueHeaderLinks,
     };
-    return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings) });
+    return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings, boardKey) });
   } catch (err) {
     return next(err);
   }
@@ -449,7 +453,11 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
           ? req.body.settings.viewTabSelection
           : {}),
       },
-    });
+      // Onboarding is deep-gemerged: een PATCH met één tour mag de andere tours niet wissen.
+      onboarding: req.body?.settings?.onboarding !== undefined
+        ? mergeOnboarding(existing.onboarding, req.body.settings.onboarding)
+        : existing.onboarding,
+    }, boardKey);
     await pool.request()
       .input('userId', sql.Int, req.user.id)
       .input('boardKey', sql.NVarChar(64), boardKey)

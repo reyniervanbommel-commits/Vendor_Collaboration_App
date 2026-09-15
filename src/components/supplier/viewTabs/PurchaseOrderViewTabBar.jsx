@@ -111,7 +111,7 @@ export default function PurchaseOrderViewTabBar({
   if (!hasExtraViewTabs(extraTabs)) return null;
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-tour="po-view-tab-bar">
       <PurchaseOrderViewTabBarScroller
         overflow={overflow}
         isDragging={isDragging}

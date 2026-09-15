@@ -178,7 +178,7 @@ export default function PurchaseOrderFormulaColumnDialog({
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
-      <DialogSurface>
+      <DialogSurface data-tour="formula-dialog">
         <DialogBody>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogContent>
@@ -187,7 +187,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                 New column will appear to the right of: {sourceLabel || '-'} {sourceKey ? `(${sourceKey})` : ''}
               </Text>
 
-              <Field label="Name" required>
+              <Field label="Name" required data-tour="formula-name">
                 <Input
                   value={label}
                   onChange={(_, data) => setLabel(data.value)}
@@ -195,7 +195,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                 />
               </Field>
 
-              <Field label="Result type" required>
+              <Field label="Result type" required data-tour="formula-result-type">
                 <Dropdown
                   value={DATA_TYPE_LABELS[resultType]}
                   selectedOptions={[resultType]}
@@ -209,7 +209,12 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </Dropdown>
               </Field>
 
-              <Field label="Formula" required hint="Example: IF((a)>(b);'Too late';(a)+(b)). Also see Today and Round below.">
+              <Field
+                label="Formula"
+                required
+                hint="Example: IF((a)>(b);'Too late';(a)+(b)). Also see Today and Round below."
+                data-tour="formula-expression"
+              >
                 <Textarea
                   value={formulaExpr}
                   onChange={(_, data) => {
@@ -225,6 +230,7 @@ export default function PurchaseOrderFormulaColumnDialog({
                     appearance="secondary"
                     onClick={() => validateFormula({ formulaExpr, ownColumnKey: initialValue?.key, dataType: resultType })}
                     disabled={saving || formulaValidation.status === 'checking'}
+                    data-tour="formula-check"
                   >
                     {formulaValidation.status === 'checking' ? 'Checking...' : 'Check formula'}
                   </Button>
@@ -234,11 +240,13 @@ export default function PurchaseOrderFormulaColumnDialog({
                 </div>
               </Field>
 
-              <PurchaseOrderFormulaHelpPanel
-                referenceColumns={referenceColumns}
-                onInsertReference={insertReference}
-                onInsertFunction={insertFunctionSnippet}
-              />
+              <div data-tour="formula-help">
+                <PurchaseOrderFormulaHelpPanel
+                  referenceColumns={referenceColumns}
+                  onInsertReference={insertReference}
+                  onInsertFunction={insertFunctionSnippet}
+                />
+              </div>
 
               <PurchaseOrderColumnFormatRulesSection
                 formatTarget={formatTarget}
@@ -256,7 +264,7 @@ export default function PurchaseOrderFormulaColumnDialog({
               {error ? <Field validationState="error" validationMessage={error} /> : null}
             </div>
           </DialogContent>
-          <DialogActions>
+          <DialogActions data-tour="formula-actions">
             <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel
             </Button>

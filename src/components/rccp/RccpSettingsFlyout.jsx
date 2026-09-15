@@ -71,7 +71,13 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
       {!settings.loading && settings.config && (
         <DrawerFooter>
           <div className={styles.footer}>
-            <Button appearance="primary" icon={<Save24Regular />} onClick={handleSave} disabled={settings.saving}>
+            <Button
+              appearance="primary"
+              icon={<Save24Regular />}
+              onClick={handleSave}
+              disabled={settings.saving}
+              data-tour="rccp-settings-save"
+            >
               Save settings
             </Button>
             {settings.saving && <Spinner size="tiny" />}

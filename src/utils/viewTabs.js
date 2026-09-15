@@ -48,8 +48,12 @@ export function splitExtraFilters(liveFilters, baseFilters) {
   const live = liveFilters && typeof liveFilters === 'object' ? liveFilters : {};
   const base = baseFilters && typeof baseFilters === 'object' ? baseFilters : {};
   const extra = {};
-  Object.keys(live).forEach((key) => {
-    if (!filtersEqual(live[key], base[key])) extra[key] = cloneFilter(live[key]);
+  const keys = new Set([...Object.keys(live), ...Object.keys(base)]);
+  keys.forEach((key) => {
+    if (filtersEqual(live[key], base[key])) return;
+    // Key present in base but cleared on this tab: store an explicit null so the
+    // merge doesn't fall back to the base filter when switching tabs back in.
+    extra[key] = live[key] ? cloneFilter(live[key]) : null;
   });
   return extra;
 }

@@ -32,7 +32,7 @@ function RccpDashboardCharts({
     [visibility, highlight],
   );
 
-  if (loading) return <Spinner label="Loading RCCP dashboard..." />;
+  if (loading) return <Spinner label="Loading Performance & Planning dashboard..." />;
   if (error) return <Text className={styles.error}>{error}</Text>;
   if (!analysis) return null;
 

@@ -51,7 +51,7 @@ function PurchaseOrderCellContextMenu({ context, actions }) {
       onOpenChange={handleOpenChange}
       positioning={{ target: context.target }}
     >
-      <MenuPopover>
+      <MenuPopover data-tour="cell-context-menu">
         <MenuList>
           <MenuItem icon={<ChatRegular />} onClick={handleOpenRemarks}>Remarks</MenuItem>
           {showValueActions ? (

@@ -150,6 +150,7 @@ function PurchaseOrdersTableControls({
               icon={<TextBulletList20Regular />}
               title="Table options"
               aria-label="Table options"
+              data-tour="po-table-options"
             />
           </MenuTrigger>
           <MenuPopover>
@@ -200,6 +201,7 @@ function PurchaseOrdersTableControls({
             title={filterButtonLabel}
             aria-label={filterButtonLabel}
             onClick={openFlyout}
+            data-tour="po-active-filters"
           />
         ) : null}
       </div>

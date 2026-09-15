@@ -93,7 +93,7 @@ export default function PurchaseOrderDatePeriodColumnDialog({
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(Boolean(data.open))}>
-      <DialogSurface>
+      <DialogSurface data-tour="date-period-dialog">
         <DialogBody>
           <DialogTitle>Date W/M column</DialogTitle>
           <DialogContent>
@@ -102,10 +102,10 @@ export default function PurchaseOrderDatePeriodColumnDialog({
                 Shows week numbers or month names derived from an existing date column.
                 Switch display mode later from the column menu (saved per view).
               </Text>
-              <Field label="Column label" required>
+              <Field label="Column label" required data-tour="date-period-label">
                 <Input value={label} onChange={(_, data) => setLabel(data.value)} />
               </Field>
-              <Field label="Source date column" required>
+              <Field label="Source date column" required data-tour="date-period-source">
                 <Dropdown
                   placeholder="Select a date column"
                   value={sourceOptions.find((entry) => entry.key === sourceColumnKey)?.label || ''}
@@ -126,7 +126,7 @@ export default function PurchaseOrderDatePeriodColumnDialog({
               {error ? <Text role="alert">{error}</Text> : null}
             </div>
           </DialogContent>
-          <DialogActions>
+          <DialogActions data-tour="date-period-actions">
             <Button appearance="secondary" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel
             </Button>

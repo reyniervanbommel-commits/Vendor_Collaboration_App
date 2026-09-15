@@ -68,7 +68,7 @@ function AdminSettingsSidebar({ userRole, activeTab, onSelect }) {
   const sections = getVisibleSettingsSections(userRole);
 
   return (
-    <aside className={styles.sidebar}>
+    <aside className={styles.sidebar} data-tour="settings-sidebar">
       {sections.map((section) => (
         <React.Fragment key={section.id}>
           <Text as="h2" className={styles.sectionHeading}>{section.heading}</Text>

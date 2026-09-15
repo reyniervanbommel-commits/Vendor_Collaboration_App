@@ -24,6 +24,7 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackg
       aria-label={`Open remarks for purchase order ${orderNumber}`}
       title={title}
       onClick={handleOpen}
+      data-tour="remarks-latest-cell"
     >
       <div className={`remarks-latest-preview${isEmpty ? ' remarks-latest-preview--empty' : ''}`}>
         {preview}

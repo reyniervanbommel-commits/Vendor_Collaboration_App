@@ -65,6 +65,7 @@ function SplitPaneResizeHandle({ height, onResize }) {
       aria-valuenow={height}
       tabIndex={0}
       title="Drag to resize"
+      data-tour="board-split-resize"
       onPointerDown={handlePointerDown}
       onKeyDown={handleKeyDown}
     />

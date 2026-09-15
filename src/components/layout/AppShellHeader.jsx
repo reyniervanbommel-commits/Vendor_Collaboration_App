@@ -9,7 +9,9 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import {
+  Lightbulb24Regular,
   Navigation24Regular,
+  QuestionCircle24Regular,
   Settings24Regular,
   WeatherMoon24Regular,
   WeatherSunny24Regular,
@@ -105,6 +107,8 @@ export default function AppShellHeader({
   canAccessAdmin,
   onNavigateAdmin,
   onLogout,
+  onStartTour,
+  onOpenGuides,
   endSlot = null,
 }) {
   const styles = useStyles();
@@ -132,7 +136,7 @@ export default function AppShellHeader({
         {isSupplier && vendorLabel && (
           <>
             <Text size={400} className={styles.vendorDivider} aria-hidden="true">—</Text>
-            <Text size={500} weight="semibold" className={styles.vendorName}>
+            <Text size={500} weight="semibold" className={styles.vendorName} data-tour="header-vendor">
               {vendorLabel}
             </Text>
           </>
@@ -143,6 +147,15 @@ export default function AppShellHeader({
 
       <div className={styles.headerRight}>
         {endSlot}
+        {onOpenGuides ? (
+          <Button
+            appearance="subtle"
+            icon={<QuestionCircle24Regular />}
+            onClick={onOpenGuides}
+            aria-label="Guides and tours"
+            data-tour="header-guides"
+          />
+        ) : null}
         <Button
           appearance="subtle"
           icon={isDarkMode ? <WeatherSunny24Regular /> : <WeatherMoon24Regular />}
@@ -188,6 +201,26 @@ export default function AppShellHeader({
                         Settings
                       </Button>
                     )}
+                    {onStartTour ? (
+                      <Button
+                        appearance="subtle"
+                        icon={<Lightbulb24Regular />}
+                        className={styles.menuButton}
+                        onClick={onStartTour}
+                      >
+                        Take the tour
+                      </Button>
+                    ) : null}
+                    {onOpenGuides ? (
+                      <Button
+                        appearance="subtle"
+                        icon={<QuestionCircle24Regular />}
+                        className={styles.menuButton}
+                        onClick={onOpenGuides}
+                      >
+                        Guides
+                      </Button>
+                    ) : null}
                     <Button
                       appearance="subtle"
                       className={styles.menuButton}

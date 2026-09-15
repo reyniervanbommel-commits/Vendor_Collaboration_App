@@ -15,7 +15,7 @@ function RccpPageHeader({ activeTab, onTabSelect }) {
   return (
     <div className={styles.row}>
       <Text size={700} weight="semibold">Performance & Planning</Text>
-      <TabList size="small" selectedValue={activeTab} onTabSelect={onTabSelect}>
+      <TabList size="small" selectedValue={activeTab} onTabSelect={onTabSelect} data-tour="rccp-tabs">
         <Tab value="dashboard">Dashboard</Tab>
         <Tab value="capacity-planning">Capacity planning</Tab>
       </TabList>

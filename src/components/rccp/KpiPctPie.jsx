@@ -2,6 +2,7 @@ import React from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import { arcSlicePath, kpiPiePercent, pieBisectorAngle, pieSliceOffset } from './kpiPctPieUtils';
 import { KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT } from '../../utils/kpiCardStyles';
+import { useAnimatedPercent } from './useAnimatedPercent';
 
 /** Gray tones used for the uncolored slice — these must always render at the bottom. */
 const GRAY_TONES = [KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT];
@@ -12,6 +13,9 @@ const POP_SHADOW = 'drop-shadow(0 2px 2px rgba(0, 0, 0, 0.3))';
 /** Gray slice gets a smaller radius so it visually sits behind the colored slice. */
 const GRAY_RADIUS = 46;
 const FULL_RADIUS = 50;
+/** White divider stroke drawn between the 2 slices. */
+const DIVIDER_COLOR = tokens.colorNeutralBackground1;
+const DIVIDER_WIDTH = 2.5;
 
 const useStyles = makeStyles({
   root: {
@@ -41,8 +45,9 @@ const useStyles = makeStyles({
  */
 function KpiPctPie({ percent, fillColor, restColor, elevated }) {
   const styles = useStyles();
-  const share = kpiPiePercent(percent);
-  if (share === null) return null;
+  const rawShare = kpiPiePercent(percent);
+  const share = useAnimatedPercent(rawShare);
+  if (share === null || share === undefined) return null;
 
   const valueAngle = pieBisectorAngle(0, share);
   const otherAngle = pieBisectorAngle(share, 100);
@@ -75,10 +80,17 @@ function KpiPctPie({ percent, fillColor, restColor, elevated }) {
               key={key}
               d={path}
               fill={color}
-              style={offset ? {
-                transform: `translate(${offset.x}px, ${offset.y}px)`,
-                filter: POP_SHADOW,
-              } : undefined}
+              stroke={DIVIDER_COLOR}
+              strokeWidth={DIVIDER_WIDTH}
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+              style={{
+                transition: 'transform 200ms ease, d 200ms ease',
+                ...(offset ? {
+                  transform: `translate(${offset.x}px, ${offset.y}px)`,
+                  filter: POP_SHADOW,
+                } : {}),
+              }}
             />
           );
         })}
