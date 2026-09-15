@@ -38,6 +38,7 @@ function isStackRow(row) {
 export function useRccpChartSeriesData({
   orderedRows, visibleKeys, chart, chartSecondary = null, planningDateModes = null,
   compact = false, chartHeight, chartWidth, weekBoundaryCoordinates, chartRangeBands, periodHeaders,
+  confirmedColor = null,
 }) {
   const openRow = useMemo(() => orderedRows.find((row) => row.isOpen), [orderedRows]);
   const deliveredRow = useMemo(() => orderedRows.find((row) => row.isDelivered), [orderedRows]);
@@ -49,6 +50,10 @@ export function useRccpChartSeriesData({
   const openColor = useMemo(
     () => getRgbHex(openRow?.color) || receivedColor,
     [openRow, receivedColor],
+  );
+  const resolvedConfirmedColor = useMemo(
+    () => getRgbHex(confirmedColor) || RCCP_OUTLINE_STROKE_COLOR,
+    [confirmedColor],
   );
   const openVisible = Boolean(openRow && visibleKeys[openRow.measureKey]);
   const deliveredVisible = Boolean(deliveredRow && visibleKeys[deliveredRow.measureKey]);
@@ -65,9 +70,9 @@ export function useRccpChartSeriesData({
   const dual = isRccpDualPlanningDate(planningDateModes);
   const primaryMode = primaryRccpPlanningDateMode(planningDateModes);
   const secondaryMode = secondaryRccpPlanningDateMode(planningDateModes);
-  // Confirmed load wordt als omtrek getekend, requested als gevulde balk.
-  const outlinePrimary = primaryMode === RCCP_PLANNING_DATE_CONFIRMED;
-  const outlineSecondary = secondaryMode === RCCP_PLANNING_DATE_CONFIRMED;
+  // Confirmed load krijgt zijn eigen kleur (instellingen); requested houdt de open-kleur.
+  const colorAbove = primaryMode === RCCP_PLANNING_DATE_CONFIRMED ? resolvedConfirmedColor : openColor;
+  const colorAboveAlt = secondaryMode === RCCP_PLANNING_DATE_CONFIRMED ? resolvedConfirmedColor : openColor;
   const barLayout = useMemo(() => rccpLoadDateBarLayout(dual), [dual]);
   const secondaryByKey = useMemo(
     () => new Map((dual ? chartSecondary || [] : []).map((point) => [point.key, point])),
@@ -89,7 +94,8 @@ export function useRccpChartSeriesData({
       __stackAbove: segmentsAbove.reduce((sum, seg) => sum + seg.qty, 0),
       __stackAboveAlt: segmentsAboveAlt.reduce((sum, seg) => sum + seg.qty, 0),
       __stackBelow: -segmentsBelow.reduce((sum, seg) => sum + seg.qty, 0),
-      __openColor: openColor,
+      __openColor: colorAbove,
+      __openColorAlt: colorAboveAlt,
       __receivedColor: receivedColor,
       __barWidthAbove: barLayout.barSize,
       // Onder de as staat maar één reeks (received): die houdt altijd een vaste breedte van
@@ -97,12 +103,10 @@ export function useRccpChartSeriesData({
       __barWidthBelow: RCCP_PO_BAR_SIZE_BELOW,
       __barOffsetAbove: barLayout.primaryOffset,
       __barOffsetAboveAlt: barLayout.secondaryOffset,
-      __outlineAbove: outlinePrimary,
-      __outlineAboveAlt: outlineSecondary,
     };
   }), [
     chart, secondaryByKey, openVisible, deliveredVisible, orderedVisible,
-    openColor, receivedColor, barLayout, outlinePrimary, outlineSecondary,
+    colorAbove, colorAboveAlt, receivedColor, barLayout,
   ]);
   const todayMarker = useMemo(() => todayBand(periodHeaders), [periodHeaders]);
   const autoYDomain = useMemo(
@@ -155,18 +159,14 @@ export function useRccpChartSeriesData({
       items.push({
         key: 'load-primary',
         label: stack.primaryLabel,
-        color: openColor,
-        outline: outlinePrimary,
-        outlineColor: RCCP_OUTLINE_STROKE_COLOR,
+        color: colorAbove,
       });
     }
     if (dual && (openVisible || orderedVisible) && openRow) {
       items.push({
         key: 'load-secondary',
         label: stack.secondaryLabel,
-        color: openColor,
-        outline: outlineSecondary,
-        outlineColor: RCCP_OUTLINE_STROKE_COLOR,
+        color: colorAboveAlt,
       });
     }
     if (deliveredVisible && deliveredRow) {
@@ -184,7 +184,7 @@ export function useRccpChartSeriesData({
     return items;
   }, [
     openVisible, orderedVisible, deliveredVisible, dual, openRow, deliveredRow,
-    openColor, receivedColor, outlinePrimary, outlineSecondary, activeRows, stack,
+    colorAbove, colorAboveAlt, receivedColor, activeRows, stack,
   ]);
 
   const yAxis = useMemo(() => ({

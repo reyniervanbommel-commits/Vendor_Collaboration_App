@@ -981,8 +981,11 @@ export function usePurchaseOrdersPage() {
     lineColumnTextStyles: effectiveLineColumnTextStyles,
     lineColumnFormatRules: effectiveLineColumnFormatRules,
     lineTotalColumns: effectiveLineTotalColumns,
-    lineTotalHeaderLinks: effectiveLineTotalHeaderLinks,
-    lineValueHeaderLinks: effectiveLineValueHeaderLinks,
+    // lineTotalHeaderLinks/lineValueHeaderLinks bewust NIET meenemen in de saved-view-snapshot:
+    // push-total/push-values koppelingen zijn een gedeelde, board-brede instelling (zie
+    // 2026-09-02-header-push-line-writeback-design.md), geen per-view voorkeur. Een oude
+    // snapshot (opgeslagen vóór een nieuwe koppeling) zou anders bij view-switch de actuele,
+    // board-brede koppelingen overschrijven met een verouderde subset (#286).
     collapsedHeaderColumnKeys: effectiveCollapsedHeaderColumnKeys,
     collapsedLineColumnKeys: effectiveCollapsedLineColumnKeys,
     productImageColumnVisible,
@@ -1042,12 +1045,9 @@ export function usePurchaseOrdersPage() {
     if (Array.isArray(layout.lineTotalColumns)) {
       setLineTotalColumns(normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys));
     }
-    if (Array.isArray(layout.lineTotalHeaderLinks)) {
-      setLineTotalHeaderLinks(normalizeLineTotalLinks(layout.lineTotalHeaderLinks, defaultLineKeys));
-    }
-    if (Array.isArray(layout.lineValueHeaderLinks)) {
-      setLineValueHeaderLinks(normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys));
-    }
+    // lineTotalHeaderLinks/lineValueHeaderLinks NIET vanuit een saved-view-layout overnemen:
+    // dit is een gedeelde, board-brede instelling die al via loadBoardSettings() correct is
+    // geladen. Een (mogelijk verouderde) saved-view-snapshot zou die anders overschrijven (#286).
     if (layout.datePeriodDisplayModes && typeof layout.datePeriodDisplayModes === 'object') {
       setDatePeriodDisplayModes(layout.datePeriodDisplayModes);
     }
@@ -1092,12 +1092,8 @@ export function usePurchaseOrdersPage() {
       ...(Array.isArray(layout.lineTotalColumns)
         ? { lineTotalColumns: normalizeSelectedColumns(layout.lineTotalColumns, defaultLineKeys) }
         : {}),
-      ...(Array.isArray(layout.lineTotalHeaderLinks)
-        ? { lineTotalHeaderLinks: normalizeLineTotalLinks(layout.lineTotalHeaderLinks, defaultLineKeys) }
-        : {}),
-      ...(Array.isArray(layout.lineValueHeaderLinks)
-        ? { lineValueHeaderLinks: normalizeLineTotalLinks(layout.lineValueHeaderLinks, defaultLineKeys) }
-        : {}),
+      // lineTotalHeaderLinks/lineValueHeaderLinks bewust niet in de ref-snapshot: zie toelichting
+      // hierboven bij applyColumnLayout (#286).
       ...(Array.isArray(layout.collapsedHeaderColumnKeys)
         ? { collapsedHeaderColumnKeys: normalizeCollapsedColumnKeys(layout.collapsedHeaderColumnKeys, defaultHeaderKeys) }
         : {}),

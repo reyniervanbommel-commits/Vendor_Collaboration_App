@@ -61,6 +61,7 @@ function RccpDashboardCharts({
         interactive={interactive}
         visibility={chartVisibility}
         matrixColorFill={analysis.config?.matrixColorFill !== false}
+        confirmedColor={analysis.config?.confirmedColor}
       />
       {kpis?.totalOrdered === 0 && (
         <RccpDiagnosticsCard

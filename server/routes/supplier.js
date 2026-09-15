@@ -396,24 +396,19 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
       }
     }
 
-    // Vendors hebben zelf geen line-total-links; die staan bij staff. Zonder deze merge
-    // blijven gekoppelde header-kolommen leeg op de vendor-pagina.
-    if (!isStaffUser(req.user)) {
-      const sharedLinks = await loadRuntimeHeaderLinks(pool, req.user.id, boardKey, {
-        includeStaffLinks: true,
-      });
-      parsedSettings = {
-        ...(parsedSettings && typeof parsedSettings === 'object' ? parsedSettings : {}),
-        lineTotalHeaderLinks: sharedLinks.lineTotalHeaderLinks,
-        lineValueHeaderLinks: sharedLinks.lineValueHeaderLinks,
-      };
-      return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings) });
-    }
-
-    if (!result.recordset.length) {
-      return res.json({ boardKey, settings: null });
-    }
-
+    // Push-total/push-values koppelingen zijn een gedeelde, board-brede instelling (niet
+    // persoonlijk per gebruiker) — zie 2026-09-02-header-push-line-writeback-design.md.
+    // Zowel vendors als staff moeten daarom de samengevoegde staff-links krijgen; anders
+    // toont het bord een kolom als "los" (bewerkbaar) zodra een ándere staff-gebruiker de
+    // koppeling heeft aangemaakt, terwijl de Data model-pagina 'm wel als gekoppeld laat zien.
+    const sharedLinks = await loadRuntimeHeaderLinks(pool, req.user.id, boardKey, {
+      includeStaffLinks: true,
+    });
+    parsedSettings = {
+      ...(parsedSettings && typeof parsedSettings === 'object' ? parsedSettings : {}),
+      lineTotalHeaderLinks: sharedLinks.lineTotalHeaderLinks,
+      lineValueHeaderLinks: sharedLinks.lineValueHeaderLinks,
+    };
     return res.json({ boardKey, settings: normalizeBoardSettings(parsedSettings) });
   } catch (err) {
     return next(err);

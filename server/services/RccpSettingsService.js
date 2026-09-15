@@ -118,6 +118,7 @@ function defaultConfig() {
     showCapacityLine: true,
     showWarningLine: true,
     matrixColorFill: true,
+    confirmedColor: '#8A8886',
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     itemPickerColumnKeys: [],
@@ -234,6 +235,9 @@ function validateConfig(raw) {
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
   const matrixColorFill = raw.matrixColorFill !== false;
+  const confirmedColor = isHexColor(raw.confirmedColor)
+    ? String(raw.confirmedColor).toLowerCase()
+    : base.confirmedColor;
 
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
@@ -269,6 +273,7 @@ function validateConfig(raw) {
       showCapacityLine,
       showWarningLine,
       matrixColorFill,
+      confirmedColor,
       chartWeekRanges,
       excludedStatuses,
       itemPickerColumnKeys,

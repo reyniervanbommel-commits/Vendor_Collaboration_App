@@ -53,11 +53,11 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
             />
           )}
         >
-          RCCP settings
+          Settings
         </DrawerHeaderTitle>
       </DrawerHeader>
       <DrawerBody>
-        {settings.loading ? <Spinner label="Loading RCCP settings..." /> : (
+        {settings.loading ? <Spinner label="Loading settings..." /> : (
           <RccpSettingsForm
             variant="flyout"
             config={settings.config}

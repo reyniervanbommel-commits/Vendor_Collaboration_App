@@ -32,7 +32,7 @@ describe('RccpSplitToolbar', () => {
     expect(getByRole('radio', { name: 'Month' })).toBeTruthy();
     expect(getByRole('checkbox', { name: 'Requested' })).toBeTruthy();
     expect(getByRole('checkbox', { name: 'Confirmed' })).toBeTruthy();
-    expect(getByRole('button', { name: 'Open RCCP page' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Open PERF page' })).toBeTruthy();
     expect(getByRole('group', { name: 'RCCP controls' }).textContent).toContain('Vendor: V000356');
   });
 

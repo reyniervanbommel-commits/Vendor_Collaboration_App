@@ -40,7 +40,7 @@ function RccpSettingsForm({
   return (
     <div className={styles.root}>
       {!isFlyout && (
-        <Text size={600} weight="semibold">RCCP settings</Text>
+        <Text size={600} weight="semibold">Settings</Text>
       )}
       <TabList selectedValue={tab} onTabSelect={handleTab} size={isFlyout ? 'small' : 'medium'}>
         {TABS.map((entry) => (

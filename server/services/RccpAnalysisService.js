@@ -526,6 +526,7 @@ function boardKpiCacheKey(supplierAccount, revision, config, now) {
     config.deliveredMeasureKey || '',
     config.dateColumnKey || '',
     config.receiptDateColumnKey || '',
+    config.confirmedDateColumnKey || '',
     config.vendorColumnKey || '',
     (config.excludedStatuses || []).join(','),
     getIsoWeekYear(now),

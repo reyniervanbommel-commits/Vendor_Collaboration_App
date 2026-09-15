@@ -49,7 +49,7 @@ describe('RccpSplitStrip', () => {
       </MemoryRouter>,
     );
     expect(container.textContent).toContain('chart-matrix');
-    expect(container.textContent).not.toContain('Open RCCP page');
+    expect(container.textContent).not.toContain('Open PERF page');
     expect(container.textContent).not.toContain('Vendor: V000583');
     expect(container.textContent).not.toContain('item-filter');
     expect(queryByRole('tab', { name: 'Week' })).toBeNull();

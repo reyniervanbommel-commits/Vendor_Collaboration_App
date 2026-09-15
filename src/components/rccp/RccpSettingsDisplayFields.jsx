@@ -2,6 +2,7 @@ import React, { memo, useCallback } from 'react';
 import { Field, Input, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import RccpItemPickerColumnsEditor from './RccpItemPickerColumnsEditor';
 import { rccpFieldLabel, RccpInfoLabel, RccpHoverHint } from './rccpFieldLabel';
+import ColorPalettePicker from '../shared/ColorPalettePicker';
 
 const useStyles = makeStyles({
   stack: {
@@ -94,6 +95,28 @@ function ChartOverlaySwitches({ config, onUpdateField }) {
   );
 }
 
+function ConfirmedColorField({ config, onUpdateField }) {
+  const handleChange = useCallback(
+    (color) => onUpdateField('confirmedColor', color),
+    [onUpdateField],
+  );
+  return (
+    <Field
+      label={rccpFieldLabel(
+        'Confirmed bar color',
+        'Fill color for the confirmed load-date bars in the chart, instead of the outlined bar.',
+      )}
+    >
+      <ColorPalettePicker
+        layout="popover"
+        selectedColor={config.confirmedColor || '#8A8886'}
+        onSelect={handleChange}
+        ariaLabel="Confirmed bar color"
+      />
+    </Field>
+  );
+}
+
 function MatrixColorFillSwitch({ config, onUpdateField }) {
   const styles = useStyles();
   const handleChange = useCallback(
@@ -139,6 +162,7 @@ function RccpSettingsDisplayFields({
           </RccpInfoLabel>
         </Text>
         <ChartOverlaySwitches config={config} onUpdateField={onUpdateField} />
+        <ConfirmedColorField config={config} onUpdateField={onUpdateField} />
       </div>
       <div className={styles.group}>
         <Text weight="semibold" className={styles.groupTitle}>

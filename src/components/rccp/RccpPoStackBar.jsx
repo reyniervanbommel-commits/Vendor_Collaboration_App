@@ -4,28 +4,27 @@ import {
   poSegmentStroke,
   stackRectLayout,
   weekBarBox,
-  RCCP_OUTLINE_STROKE_COLOR,
   RCCP_OUTLINE_STROKE_WIDTH,
 } from './rccpPoStack';
 import { groupStackLayoutByStatus, poStackSegmentFill } from './rccpPoStackFill';
 
 export const RccpSegmentHoverContext = createContext(null);
 
-/** Segment list, bar width, x-offset and fill style for one stack. */
+/** Segment list, bar width, x-offset and open-color for one stack. */
 function stackShape(payload, side, overlay) {
   if (side === 'below') {
     return {
       segments: payload?.segmentsBelow || [],
       barWidth: Number(payload?.__barWidthBelow),
       offset: 0,
-      outline: false,
+      openColor: payload?.__openColor,
     };
   }
   return {
     segments: (overlay ? payload?.segmentsAboveAlt : payload?.segmentsAbove) || [],
     barWidth: Number(payload?.__barWidthAbove),
     offset: Number(overlay ? payload?.__barOffsetAboveAlt : payload?.__barOffsetAbove) || 0,
-    outline: Boolean(overlay ? payload?.__outlineAboveAlt : payload?.__outlineAbove),
+    openColor: overlay ? payload?.__openColorAlt : payload?.__openColor,
   };
 }
 
@@ -34,23 +33,20 @@ function RccpPoStackBar({
 }) {
   const hover = useContext(RccpSegmentHoverContext);
   const highlightItem = hover?.highlightItem || '';
-  const { segments, barWidth, offset, outline } = stackShape(payload, side, overlay);
+  const { segments, barWidth, offset, openColor } = stackShape(payload, side, overlay);
   const layout = stackRectLayout(segments, y, height, side);
   const box = weekBarBox(index, barWidth, offset);
   if (!box.width || !layout.length) return null;
-  const outerTop = Math.min(...layout.map((part) => part.y));
-  const outerBottom = Math.max(...layout.map((part) => part.y + part.height));
-  const outerHeight = Math.max(0, outerBottom - outerTop);
   const statusGroups = groupStackLayoutByStatus(layout);
   return (
     <g>
       {/* Eén vlak per status-band: losse vakjes per item laten anders witte naden zien.
-          Boven de as krijgt "open" de volle kleur en "ordered" (al ontvangen deel van
-          dezelfde order) de received-kleur op 30% opacity; onder de as is het altijd
-          received op volle opacity. */}
-      {outline ? null : statusGroups.map((group, groupIndex) => {
+          Boven de as krijgt "open" de volle kleur (requested- of confirmed-kleur, per
+          instellingen) en "ordered" (al ontvangen deel van dezelfde order) de received-kleur
+          op 30% opacity; onder de as is het altijd received op volle opacity. */}
+      {statusGroups.map((group, groupIndex) => {
         const { fill, opacity } = poStackSegmentFill(group.status, {
-          openColor: payload.__openColor,
+          openColor,
           receivedColor: payload.__receivedColor,
           side,
         });
@@ -79,23 +75,11 @@ function RccpPoStackBar({
           highlighted={isReceivedPairHighlight(segment, highlightItem)}
         />
       ))}
-      {/* Rand per status-band, in de eigen kleur — of één grijze rand om de hele staaf voor
-          confirmed (outline). Het vervaagde "al ontvangen"-deel krijgt geen rand: anders
-          tekent de open-kleur een lijn rondom dat stuk. */}
-      {outline ? (
-        <rect
-          x={box.x}
-          y={outerTop}
-          width={box.width}
-          height={outerHeight}
-          fill="none"
-          stroke={RCCP_OUTLINE_STROKE_COLOR}
-          strokeWidth={RCCP_OUTLINE_STROKE_WIDTH}
-          pointerEvents="none"
-        />
-      ) : statusGroups.map((group, groupIndex) => {
+      {/* Rand per status-band, in de eigen kleur. Het vervaagde "al ontvangen"-deel krijgt
+          geen rand: anders tekent de open-kleur een lijn rondom dat stuk. */}
+      {statusGroups.map((group, groupIndex) => {
         const { fill, opacity } = poStackSegmentFill(group.status, {
-          openColor: payload.__openColor,
+          openColor,
           receivedColor: payload.__receivedColor,
           side,
         });
