@@ -363,6 +363,7 @@ export default function PurchaseOrdersSubitemsTable({
         onCorrect={onCorrect}
         onUpdateStatusOptions={onUpdateStatusOptions}
         isAdmin={isAdmin}
+        isStaff={isStaff}
         subCellClassName={styles.subCell}
         subCellContentClassName={styles.subCellContent}
         noRowsCellClassName={styles.noRowsCell}

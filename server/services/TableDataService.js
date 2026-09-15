@@ -4224,7 +4224,9 @@ async function markViewed(userId, tableKey, { supplierAccount = null } = {}) {
 // ---------------------------------------------------------------------------
 // saveCustomValue — instant SQL-write van een app-native kolomwaarde
 // ---------------------------------------------------------------------------
-async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, detailKey, value }, userId) {
+async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, detailKey, value }, user) {
+  // Backwards compat: sommige interne callers gaven tot dusver een kaal userId door.
+  const userId = (user && typeof user === 'object') ? user.id : user;
   const table = await getTableByKey(tableKey);
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
@@ -4233,6 +4235,11 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   }
   assertNotPavWritable(tableKey, column);
   assertCustomColumnWritable(column);
+  // Vendors mogen alleen bewerken op kolommen die de admin expliciet als vendor-editable heeft
+  // aangemerkt (Data model). Rij-scope wordt al vóór deze aanroep afgedwongen (assertSupplierPurchaseOrderRow).
+  if (String(user?.role || '') === ROLES.SUPPLIER && !column.vendorEditable) {
+    throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
+  }
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
@@ -4595,7 +4602,9 @@ async function listHiddenInFilterRows(tableKey) {
 // LET OP: writeBackField is nog PO-entiteit-gebonden (PurchaseOrderHeaders/Lines). Voor de purchase-orders-
 // tabel klopt de mapping 1-op-1 (partitionKey=dataAreaId, recordKey=orderNumber, detailKey=lineNumber).
 // TODO(#177): generieke PATCH via de SourceProvider zodra andere schrijfbare tabellen nodig zijn.
-async function correctField({ tableKey, columnId, partitionKey, recordKey, detailKey, value, basedOnValue }, userId) {
+async function correctField({ tableKey, columnId, partitionKey, recordKey, detailKey, value, basedOnValue }, user) {
+  // Backwards compat: sommige interne callers gaven tot dusver een kaal userId door.
+  const userId = (user && typeof user === 'object') ? user.id : user;
   const table = await getTableByKey(tableKey);
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
@@ -4605,6 +4614,11 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   assertNotPavWritable(tableKey, column);
   if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
     throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
+  }
+  // Vendors mogen alleen naar D365 terugschrijven op kolommen die de admin expliciet als
+  // vendor-editable heeft aangemerkt (Data model). Rij-scope is al afgedwongen vóór deze aanroep.
+  if (String(user?.role || '') === ROLES.SUPPLIER && !column.vendorEditable) {
+    throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
   }
 
   const part = String(partitionKey || '').trim();
@@ -4764,7 +4778,8 @@ async function correctAllDetailFields(
   deps = {},
 ) {
   const role = String(user?.role || '');
-  if (role !== ROLES.ADMIN && role !== ROLES.EMPLOYEE) {
+  const isStaffUser = role === ROLES.ADMIN || role === ROLES.EMPLOYEE;
+  if (!isStaffUser && role !== ROLES.SUPPLIER) {
     throw Object.assign(new Error('Access denied — insufficient permissions'), { status: 403 });
   }
 
@@ -4783,6 +4798,11 @@ async function correctAllDetailFields(
     }
     if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
       throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
+    }
+    // Vendors mogen deze header-fan-out alleen op kolommen die de admin expliciet als
+    // vendor-editable heeft aangemerkt (Data model). Rij-scope is al afgedwongen vóór deze aanroep.
+    if (!isStaffUser && !column.vendorEditable) {
+      throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
     }
     if (column.scope !== 'detail') {
       throw Object.assign(new Error('Header write-back requires a writable line column'), { status: 400 });

@@ -25,7 +25,9 @@ export function usePurchaseOrderColumnMenuFlags({
   const isRemarksColumn = column?.dataType === 'remarks';
   const isImageColumn = column?.dataType === 'image';
   const staffMenu = isStaff !== false;
-  const canToggleWriteback = Boolean(staffMenu && isAdmin && typeof onToggleWriteback === 'function' && column.d365Field && column.writeBackAllowed !== false);
+  // Write-back naar D365 is uitsluitend instelbaar via Admin > Data model.
+  // De sync-toggle is bewust verwijderd uit de PO Table-kolomheader (ook voor admins).
+  const canToggleWriteback = false;
   const showWritebackLocked = Boolean(staffMenu && column.source === 'd365' && column.d365Field && column.writeBackAllowed === false);
   const canRenameColumn = Boolean(staffMenu && !isRemarksColumn && !isImageColumn && column?.id && typeof onRenameColumn === 'function');
   const canRemoveColumn = Boolean(staffMenu && column.source === 'custom' && typeof onRemoveColumn === 'function');

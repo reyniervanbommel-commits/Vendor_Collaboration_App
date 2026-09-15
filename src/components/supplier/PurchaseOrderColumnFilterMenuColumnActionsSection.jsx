@@ -15,7 +15,6 @@ import {
 } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterSubmenuButton from './PurchaseOrderColumnFilterSubmenuButton';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
-import D365LogoIcon from './D365LogoIcon';
 import { menuLabel } from './purchaseOrderColumnFilterMenuMainPaneUtils';
 import { getStickyColumnMenuText } from './purchaseOrderColumnFilterMenuConstants';
 import { useViewTabsActions } from './viewTabs/ViewTabsDialogsProvider';
@@ -30,9 +29,6 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
   handleHideColumn,
   canSetColumnTextStyle,
   canSetColumnFormatRules,
-  canToggleWriteback,
-  handleToggleWriteback,
-  writable,
   canConfigureDatePeriodDisplay,
   datePeriodDisplayMode,
   onSelectDatePeriodDisplayMode,
@@ -139,14 +135,6 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
         <>
           <Text className={styles.sectionTitle}>Column</Text>
           <div className={styles.sectionBlock}>
-            {canToggleWriteback ? (
-              <PurchaseOrderColumnFilterMenuButton className={styles.sortButton} appearance="subtle" size="small" closeSubmenu={closeSubmenu} onClick={handleToggleWriteback}>
-                <span className={styles.d365SyncLabel}>
-                  <D365LogoIcon size="small" alt="" />
-                  {writable ? 'Disable sync' : 'Enable sync'}
-                </span>
-              </PurchaseOrderColumnFilterMenuButton>
-            ) : null}
             {canHideColumn ? (
               <PurchaseOrderColumnFilterMenuButton
                 className={styles.sortButton}

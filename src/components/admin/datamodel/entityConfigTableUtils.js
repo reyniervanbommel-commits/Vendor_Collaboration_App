@@ -25,6 +25,12 @@ export const BULK_TOGGLE_CONFIG = [
     isEligible: (column) => column.writeBackAllowed,
     isEnabled: (column) => column.writableToD365,
   },
+  {
+    key: 'vendorEditable',
+    label: 'Editable by vendor',
+    isEligible: (column) => column.vendorEditableAllowed,
+    isEnabled: (column) => column.vendorEditable,
+  },
 ];
 
 export function display(value) {

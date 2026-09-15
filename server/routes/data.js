@@ -439,6 +439,18 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
   }
 });
 
+// PATCH /api/data/:tableKey/columns/:id/vendor-editable — mag een vendor deze kolom bewerken? (admin-only)
+router.patch('/:tableKey/columns/:id/vendor-editable', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
+    const column = await columnsService.setVendorEditable(columnId, Boolean(req.body?.editable), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
 router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
   try {
@@ -462,9 +474,14 @@ router.put('/:tableKey/value', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const saved = await dataService.saveCustomValue(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value },
-      req.user.id,
+      req.user,
     );
     return res.json({ success: true, ...saved });
   } catch (err) {
@@ -538,9 +555,14 @@ router.post('/:tableKey/correct', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const result = await dataService.correctField(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
-      req.user.id,
+      req.user,
     );
     return res.json(result);
   } catch (err) {
@@ -556,6 +578,11 @@ router.post('/:tableKey/correct-all-details', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, value } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const result = await dataService.correctAllDetailFields(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, value },
       req.user,

@@ -73,6 +73,7 @@ export default function EntityConfigTable({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
+  onToggleVendorEditable,
   onDeleteColumn,
   onExportExcel,
   onSetColumnToggleState,
@@ -192,6 +193,12 @@ export default function EntityConfigTable({
                 action={bulkActionByKey.writeback}
                 className={styles.headerCell}
               />
+              <EntityConfigBulkToggleHeader
+                label="Editable by vendor"
+                info={DATA_MODEL_INFO.vendorEditable}
+                action={bulkActionByKey.vendorEditable}
+                className={styles.headerCell}
+              />
               <TableHeaderCell className={styles.headerCell}>Delete custom column</TableHeaderCell>
             </TableRow>
           </TableHeader>
@@ -212,13 +219,14 @@ export default function EntityConfigTable({
                   onToggleVisibility={onToggleVisibility}
                   onToggleVisibleAtDelete={onToggleVisibleAtDelete}
                   onToggleWriteback={onToggleWriteback}
+                  onToggleVendorEditable={onToggleVendorEditable}
                   onDeleteColumn={onDeleteColumn}
                 />
               );
             })}
             {!filteredColumns.length ? (
               <TableRow>
-                <TableCell className={styles.valueCell} colSpan={9}>No columns match the active filter</TableCell>
+                <TableCell className={styles.valueCell} colSpan={10}>No columns match the active filter</TableCell>
               </TableRow>
             ) : null}
           </TableBody>

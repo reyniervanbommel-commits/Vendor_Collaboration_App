@@ -9,6 +9,7 @@ export const DATA_MODEL_INFO = {
   visibleInTable: 'Shows this column on the purchase-order board. Hidden columns stay in the data model and can be turned on later.',
   visibleAtDelete: 'Keeps this column visible in the hidden-rows panel after a user removes a row from the board. The row is only hidden in the app, not deleted in D365.',
   writeBack: 'Allows edits in the app to be written back to this D365 field. Only source columns that D365 accepts for update can be enabled.',
+  vendorEditable: 'Allows a vendor (supplier) to edit this column on the purchase-order board. Off by default. Key and system columns cannot be made vendor-editable.',
   pavBoardColumns: 'Choose which attribute names appear as extra columns on purchase-order lines. New names stay off until you turn them on. Each cell shows the first non-empty of Attribute value, Text value, Integer value, Decimal value, Boolean value, Date time value, Currency value. Values join the PO line by Product number = ItemNumber (same key as Items).',
   retention: 'Orders that first matched this filter stay on the board after they fall out of it, for example when status changes from Backorder to Invoiced. They are fetched again from D365 on every refresh and show as changed, not removed. New D365 orders that match the filter still appear as new. The retention cap is set on the OData tab under Cache sync.',
   externalLinks: 'Excel or CSV files linked here become read-only lookup columns on a main table. They enrich the board; they are not written back to D365.',

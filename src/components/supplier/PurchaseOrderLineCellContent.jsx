@@ -20,6 +20,7 @@ export function renderLineCellContent({
   onCorrect,
   onUpdateStatusOptions,
   isAdmin = false,
+  isStaff = true,
   styles,
   cellBackgroundColor = '',
   isConditionalFormat = false,
@@ -70,6 +71,19 @@ export function renderLineCellContent({
     );
   }
   if (column.source === 'custom') {
+    // Vendors mogen een custom kolom alleen bewerken als de admin dat expliciet heeft aangezet
+    // (Data model > Editable by vendor). Staff kan custom kolommen altijd bewerken.
+    const canEditCustomColumn = isStaff || column.vendorEditable === true;
+    if (!canEditCustomColumn) {
+      return (
+        <span className={showLineBadge ? styles.statusWrap : undefined}>
+          <span style={isConditionalFormat ? { color: FORMATTED_CELL_TEXT_COLOR } : undefined}>
+            {formatCellValue(rawValue, column.dataType, column)}
+          </span>
+          {showLineBadge ? lineBadge : null}
+        </span>
+      );
+    }
     if (isStatusColumn(column)) {
       return (
         <span className={showLineBadge ? styles.statusWrap : undefined}>
