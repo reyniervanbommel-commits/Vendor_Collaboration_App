@@ -88,7 +88,7 @@ export default function AdminGeneralTableZoomSettings() {
     <div className={styles.panel}>
       <Field
         label="Scale"
-        hint="75% to 110%, in steps of 5%. Default 85%. Applies to the purchase orders table, charts, RCCP and KPIs for your account only."
+        hint="75% to 110%, in steps of 5%. Default 85%. Applies to the purchase orders table, charts, Performance & Planning and KPIs for your account only."
       >
         <PurchaseOrderTableZoomControl
           value={zoom}

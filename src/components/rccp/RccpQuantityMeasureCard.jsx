@@ -94,7 +94,7 @@ function RccpQuantityMeasureCard({
         <Field
           label="Column"
           validationState={isUnavailable ? 'warning' : 'none'}
-          validationMessage={isUnavailable ? 'This column has no value in RCCP. Pick another one.' : undefined}
+          validationMessage={isUnavailable ? 'This column has no value in Performance & Planning. Pick another one.' : undefined}
         >
           <RccpNarrowDropdown
             selectedValue={selectedValue}

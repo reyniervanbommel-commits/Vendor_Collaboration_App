@@ -33,7 +33,7 @@ describe('RccpSplitToolbar', () => {
     expect(getByRole('checkbox', { name: 'Requested' })).toBeTruthy();
     expect(getByRole('checkbox', { name: 'Confirmed' })).toBeTruthy();
     expect(getByRole('button', { name: 'Open PERF page' })).toBeTruthy();
-    expect(getByRole('group', { name: 'RCCP controls' }).textContent).toContain('Vendor: V000356');
+    expect(getByRole('group', { name: 'Performance & Planning controls' }).textContent).toContain('Vendor: V000356');
   });
 
   it('enables Show weeks with data when the filtered vendor has load', () => {

@@ -50,7 +50,7 @@ function RccpSplitToolbar({
   const vendorLabel = vendorAccount ? `Vendor: ${vendorAccount}` : 'All vendors';
 
   return (
-    <div className={styles.root} role="group" aria-label="RCCP controls">
+    <div className={styles.root} role="group" aria-label="Performance & Planning controls">
       <Divider vertical className={styles.divider} />
       <div className={styles.cluster}>
         <Text className={styles.vendor}>{vendorLabel}</Text>

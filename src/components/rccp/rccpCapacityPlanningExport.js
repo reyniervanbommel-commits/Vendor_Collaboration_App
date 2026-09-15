@@ -15,14 +15,14 @@ export function capacityPlanningRowsToSheetData(rows) {
   return [headers, ...body];
 }
 
-export function exportCapacityPlanningToExcel(rows, fileName = 'rccp-capacity-planning.xlsx') {
+export function exportCapacityPlanningToExcel(rows, fileName = 'performance-planning-capacity-planning.xlsx') {
   const worksheet = XLSX.utils.aoa_to_sheet(capacityPlanningRowsToSheetData(rows));
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'RCCP Capacity');
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Performance & Planning Capacity');
   XLSX.writeFile(workbook, fileName);
 }
 
 export function buildCapacityPlanningExportFileName(date = new Date()) {
   const stamp = date.toISOString().slice(0, 10);
-  return `rccp-capacity-planning-${stamp}.xlsx`;
+  return `performance-planning-capacity-planning-${stamp}.xlsx`;
 }

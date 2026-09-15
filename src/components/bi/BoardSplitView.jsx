@@ -212,7 +212,7 @@ export default function BoardSplitView({
           onTabSelect={handleTabSelect}
         >
           {/* BI/Charts-tab verborgen op verzoek */}
-          <Tab value="rccp">PERF</Tab>
+          <Tab value="rccp">Performance & Planning</Tab>
           <Tab value="kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
