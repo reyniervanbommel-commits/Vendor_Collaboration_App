@@ -3571,8 +3571,13 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
       listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
     ])),
+    // Push-total/push-values koppelingen zijn een gedeelde, board-brede instelling (zie
+    // 2026-09-02-header-push-line-writeback-design.md), geen persoonlijke voorkeur per staff-lid.
+    // Daarom altijd staff-links meenemen, ook voor staff zelf — anders toont het bord een kolom
+    // als "los" (bewerkbaar) zodra een ándere staff-gebruiker de koppeling heeft aangemaakt,
+    // terwijl de Data model-pagina (die altijd merget) 'm wel als gekoppeld laat zien.
     time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key, {
-      includeStaffLinks: supplierAccount != null,
+      includeStaffLinks: true,
     })),
     syncStatePromise,
     viewedPromise,

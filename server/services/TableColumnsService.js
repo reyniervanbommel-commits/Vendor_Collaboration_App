@@ -62,7 +62,10 @@ async function uniqueKeyForScope(pool, tableId, scope, desiredKey) {
 }
 
 async function resolveLinkedLineColumn(pool, tableId, headerColumnKey, userId, boardKey) {
-  const links = await loadRuntimeHeaderLinks(pool, userId, boardKey);
+  // Zelfde reden als in TableDataService.tb_links: de koppeling is board-breed voor staff,
+  // geen persoonlijke instelling — anders faalt de header-write-back voor staff die de
+  // koppeling niet zelf heeft aangemaakt.
+  const links = await loadRuntimeHeaderLinks(pool, userId, boardKey, { includeStaffLinks: true });
   const link = (links.lineValueHeaderLinks || [])
     .find((entry) => String(entry?.headerColumnKey || '').trim() === String(headerColumnKey || '').trim());
   const lineColumnKey = String(link?.lineColumnKey || '').trim();

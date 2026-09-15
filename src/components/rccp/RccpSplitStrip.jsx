@@ -160,6 +160,7 @@ function RccpSplitStrip({
             onChartHeightChange={handleChartHeightChange}
             itemFocus={itemFocus}
             matrixColorFill={analysis.config?.matrixColorFill !== false}
+            confirmedColor={analysis.config?.confirmedColor}
           />
         </div>
       )}

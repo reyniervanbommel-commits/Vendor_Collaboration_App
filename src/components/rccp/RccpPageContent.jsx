@@ -190,6 +190,10 @@ export default function RccpPageContent() {
 
   const handleOpenSettings = useCallback(() => setSettingsOpen(true), []);
   const handleCloseSettings = useCallback(() => setSettingsOpen(false), []);
+  // Ná het opslaan van RCCP-instellingen moet de analyse (incl. kpis/kpisAll) opnieuw worden
+  // opgehaald — anders blijven de KPI-kaarten de waarden van vóór de wijziging tonen (zie
+  // RccpSettingsFlyout.handleSave, dat alleen onSaved?.() aanroept).
+  const handleSettingsSaved = useCallback(() => reload(), [reload]);
   const handleCapacityChanged = useCallback(() => reload(), [reload]);
   const handleImportCompleted = useCallback(() => {
     setActiveTab('capacity-planning');
@@ -306,6 +310,7 @@ export default function RccpPageContent() {
         <RccpSettingsFlyout
           open={settingsOpen}
           onClose={handleCloseSettings}
+          onSaved={handleSettingsSaved}
           readOnly={readOnly}
         />
       )}

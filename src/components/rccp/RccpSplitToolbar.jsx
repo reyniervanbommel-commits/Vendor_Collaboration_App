@@ -75,7 +75,7 @@ function RccpSplitToolbar({
           icon={<ArrowRightRegular />}
           iconPosition="after"
         >
-          Open RCCP page
+          Open PERF page
         </Button>
       </div>
     </div>

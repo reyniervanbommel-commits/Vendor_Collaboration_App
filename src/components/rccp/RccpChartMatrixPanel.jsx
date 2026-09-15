@@ -63,6 +63,7 @@ function RccpChartMatrixPanel({
   visibility = null,
   itemFocus = null,
   matrixColorFill = true,
+  confirmedColor = null,
 }) {
   const styles = useStyles();
   const {
@@ -77,7 +78,7 @@ function RccpChartMatrixPanel({
     plot, stack, legendItems, seriesSignature, todayMarker, yAxis,
   } = useRccpChartSeriesData({
     orderedRows, visibleKeys, chart, chartSecondary, planningDateModes, compact, chartHeight,
-    chartWidth, weekBoundaryCoordinates, chartRangeBands, periodHeaders,
+    chartWidth, weekBoundaryCoordinates, chartRangeBands, periodHeaders, confirmedColor,
   });
 
   const flashSignature = useMemo(
