@@ -14,7 +14,6 @@ const DYNAMIC_ANCHORS = {
   'nav-': 'nav-${item.id}',
   'col-type-': 'col-type-${type.key}',
   'col-submenu-': 'col-submenu-${name}',
-  'rccp-settings-tab-': 'rccp-settings-tab-${entry.value}',
 };
 
 function readAppSource(dir) {

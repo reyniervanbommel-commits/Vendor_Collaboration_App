@@ -29,7 +29,7 @@ export default function PurchaseOrderViewTabMenuSection({
       <MenuDivider />
       <MenuGroup>
         <MenuGroupHeader>Tabs</MenuGroupHeader>
-        <MenuItem icon={<TabAddRegular />} onClick={openNewTab} data-tour="view-menu-new-tab">Tab</MenuItem>
+        <MenuItem icon={<TabAddRegular />} onClick={openNewTab}>Tab</MenuItem>
         <MenuItem icon={<TabAddRegular />} onClick={handleOpenCreateTabs}>Tabs from column…</MenuItem>
         {groups.length > 0 ? (
           <Menu>

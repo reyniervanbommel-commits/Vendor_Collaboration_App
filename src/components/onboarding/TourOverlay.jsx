@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Portal } from '@fluentui/react-components';
+import { setVirtualParent } from '@fluentui/react-utilities';
 import { findVisibleElement, useTourAnchor } from '../../hooks/useTourAnchor';
 import { prefersReducedMotion } from '../../styles/motionTokens';
 import { padRect, stepIndexById } from '../../utils/tourSteps';
@@ -163,6 +164,16 @@ export default function TourOverlay({ tour, stepIndex, direction, onGoTo, onFini
 
   const handleDimPointerDown = useCallback(() => setNudgeKey((key) => key + 1), []);
   const lastCardRef = useRef(null);
+  const layerRef = useRef(null);
+
+  // Fluent closes a menu/popover on any click "outside" it — including a click on the tour card, which
+  // would also unmount a dialog opened from that popover (e.g. the formatting rules). Making the tour
+  // layer a virtual child of the spotlighted element lets Fluent treat card clicks as inside.
+  useEffect(() => {
+    const layer = layerRef.current;
+    setVirtualParent(layer, anchor.element || undefined);
+    return () => setVirtualParent(layer, undefined);
+  }, [anchor.element]);
 
   if (!step) return null;
 
@@ -190,18 +201,25 @@ export default function TourOverlay({ tour, stepIndex, direction, onGoTo, onFini
 
   return (
     <Portal mountNode={{ className: portalStyles.mountNode }}>
-      <TourSpotlight hole={card ? card.hole : hole} viewport={viewport} reduced={reduced} onDimPointerDown={handleDimPointerDown} />
-      {card ? (
-        <TourCard
-          {...card}
+      <div ref={layerRef}>
+        <TourSpotlight
+          hole={card ? card.hole : hole}
           viewport={viewport}
-          nudgeKey={nudgeKey}
-          onNext={goNext}
-          onBack={goBack}
-          onClose={onExit}
-          onResume={resume}
+          reduced={reduced}
+          onDimPointerDown={handleDimPointerDown}
         />
-      ) : null}
+        {card ? (
+          <TourCard
+            {...card}
+            viewport={viewport}
+            nudgeKey={nudgeKey}
+            onNext={goNext}
+            onBack={goBack}
+            onClose={onExit}
+            onResume={resume}
+          />
+        ) : null}
+      </div>
     </Portal>
   );
 }

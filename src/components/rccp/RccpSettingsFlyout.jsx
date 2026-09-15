@@ -76,7 +76,6 @@ export default function RccpSettingsFlyout({ open, onClose, onSaved }) {
               icon={<Save24Regular />}
               onClick={handleSave}
               disabled={settings.saving}
-              data-tour="rccp-settings-save"
             >
               Save settings
             </Button>

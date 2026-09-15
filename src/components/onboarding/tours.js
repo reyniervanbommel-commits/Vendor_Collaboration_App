@@ -19,8 +19,8 @@
 
 import { BOARD_GUIDES } from './guidesBoard';
 import { INSIGHT_GUIDES } from './guidesInsights';
-import { RCCP_GUIDES } from './guidesRccp';
 import { REMARKS_GUIDES } from './guidesRemarks';
+import { TAB_GUIDES } from './guidesTabs';
 import { PAGE_TOURS } from './pageTours';
 
-export const TOURS = [...PAGE_TOURS, ...REMARKS_GUIDES, ...BOARD_GUIDES, ...INSIGHT_GUIDES, ...RCCP_GUIDES];
+export const TOURS = [...PAGE_TOURS, ...REMARKS_GUIDES, ...TAB_GUIDES, ...BOARD_GUIDES, ...INSIGHT_GUIDES];

@@ -18,8 +18,6 @@ const TABS = [
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalL) },
-  // Wraps the active tab's fields (also the product tour anchor for the settings guide).
-  panel: { display: 'flex', flexDirection: 'column', ...shorthands.gap(tokens.spacingVerticalL) },
   hint: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   error: { color: tokens.colorPaletteRedForeground1 },
   actions: { display: 'flex', alignItems: 'center', ...shorthands.gap(tokens.spacingHorizontalM), flexWrap: 'wrap' },
@@ -46,49 +44,47 @@ function RccpSettingsForm({
       )}
       <TabList selectedValue={tab} onTabSelect={handleTab} size={isFlyout ? 'small' : 'medium'}>
         {TABS.map((entry) => (
-          <Tab key={entry.value} value={entry.value} data-tour={`rccp-settings-tab-${entry.value}`}>{entry.label}</Tab>
+          <Tab key={entry.value} value={entry.value}>{entry.label}</Tab>
         ))}
       </TabList>
-      <div className={styles.panel} data-tour="rccp-settings-panel">
-        {tab === 'data' && (
-          <RccpSettingsDataFields
-            config={config}
-            columns={columns}
-            statusOptions={statusOptions}
-            compact={isFlyout}
-            onUpdateField={onUpdateField}
-          />
-        )}
-        {tab === 'quantities' && (
-          <RccpQuantityMeasuresEditor
-            measures={config.quantityMeasures || []}
-            columns={columns}
-            openMeasureKey={config.openMeasureKey}
-            deliveredMeasureKey={config.deliveredMeasureKey}
-            orderedMeasureKey={config.orderedMeasureKey}
-            onChange={handlers.handleMeasures}
-            onUpdateField={onUpdateField}
-          />
-        )}
-        {tab === 'display' && (
-          <RccpSettingsDisplayFields
-            config={config}
-            compact={isFlyout}
-            itemColumns={itemColumns}
-            onUpdateField={onUpdateField}
-            onGreen={handlers.handleGreen}
-            onOrange={handlers.handleOrange}
-            onItemPickerColumns={handlers.handleItemPickerColumns}
-          />
-        )}
-        {tab === 'highlights' && (
-          <RccpChartWeekRangesEditor
-            ranges={config.chartWeekRanges || []}
-            compact={isFlyout}
-            onChange={handlers.handleRanges}
-          />
-        )}
-      </div>
+      {tab === 'data' && (
+        <RccpSettingsDataFields
+          config={config}
+          columns={columns}
+          statusOptions={statusOptions}
+          compact={isFlyout}
+          onUpdateField={onUpdateField}
+        />
+      )}
+      {tab === 'quantities' && (
+        <RccpQuantityMeasuresEditor
+          measures={config.quantityMeasures || []}
+          columns={columns}
+          openMeasureKey={config.openMeasureKey}
+          deliveredMeasureKey={config.deliveredMeasureKey}
+          orderedMeasureKey={config.orderedMeasureKey}
+          onChange={handlers.handleMeasures}
+          onUpdateField={onUpdateField}
+        />
+      )}
+      {tab === 'display' && (
+        <RccpSettingsDisplayFields
+          config={config}
+          compact={isFlyout}
+          itemColumns={itemColumns}
+          onUpdateField={onUpdateField}
+          onGreen={handlers.handleGreen}
+          onOrange={handlers.handleOrange}
+          onItemPickerColumns={handlers.handleItemPickerColumns}
+        />
+      )}
+      {tab === 'highlights' && (
+        <RccpChartWeekRangesEditor
+          ranges={config.chartWeekRanges || []}
+          compact={isFlyout}
+          onChange={handlers.handleRanges}
+        />
+      )}
       {!isFlyout && (
         <div className={styles.actions}>
           <Button appearance="primary" icon={<Save24Regular />} onClick={onSave} disabled={saving}>

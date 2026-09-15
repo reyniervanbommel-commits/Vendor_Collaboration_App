@@ -46,11 +46,11 @@ function RccpWeekWindowFields({
         checked={kpiWindowOnly}
         onChange={handleToggle}
       />
-      <div className={styles.toggles} role="group" aria-label="Week and load date" data-tour="rccp-view-toggles">
-        <Field className={styles.viewField} label="View">
+      <div className={styles.toggles} role="group" aria-label="Week and load date">
+        <Field className={styles.viewField} label="View" data-tour="rccp-view-grain">
           <RccpPeriodGrainToggle value={periodGrain} onChange={onPeriodGrainChange} />
         </Field>
-        <Field className={styles.viewField} label="Load date">
+        <Field className={styles.viewField} label="Load date" data-tour="rccp-load-date">
           <RccpLoadDateToggle
             value={planningDateModes}
             onChange={onPlanningDateModesChange}

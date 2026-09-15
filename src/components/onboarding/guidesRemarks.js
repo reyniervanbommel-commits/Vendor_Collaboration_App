@@ -1,7 +1,6 @@
-import { t } from './tourSelectors';
+import { COLUMN_MENU_SURFACE, t } from './tourSelectors';
 
 const REMARKS_COLUMN_TRIGGER = '[data-tour="po-column-menu-trigger"][data-column-type="remarks"]';
-const COLUMN_MENU_SURFACE = '[data-column-menu-surface="true"]';
 
 /** How-to guides for cell actions and remarks on the Master plan board (all roles). */
 export const REMARKS_GUIDES = [

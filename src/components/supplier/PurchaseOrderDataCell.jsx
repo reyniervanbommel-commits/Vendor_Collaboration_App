@@ -6,6 +6,10 @@ import { isCellContextMenuDisabled } from '../../utils/tableViewFilterUtils';
 import TrackChangeMarks from './TrackChangeMarks';
 import { useTrackChangesMeta } from './trackChangesContext';
 
+// Product tour anchor: only plain text/number cells, where right-click offers every action
+// (image and remarks cells only show Remarks).
+const TOUR_CELL_TYPES = new Set(['text', 'number']);
+
 function isWhiteCellBackground(backgroundColor) {
   const value = String(backgroundColor || '').trim().toLowerCase();
   return !value || value === '#fff' || value === '#ffffff' || value.startsWith('var(');
@@ -69,7 +73,7 @@ function PurchaseOrderDataCell({
       className={className}
       style={resolvedCellStyle}
       onContextMenu={handleContextMenu}
-      data-tour={disabled ? undefined : 'po-cell'}
+      data-tour={!disabled && TOUR_CELL_TYPES.has(column?.dataType || 'text') ? 'po-cell' : undefined}
     >
       <div className={contentClassName || undefined} style={contentStyle}>{children}</div>
       {trackPattern ? <TrackChangeMarks pattern={trackPattern} mode={trackMeta?.mode} /> : null}

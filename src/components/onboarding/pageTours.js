@@ -1,5 +1,5 @@
 import { ROLES } from '../../constants/roles';
-import { STAFF, t } from './tourSelectors';
+import { t } from './tourSelectors';
 
 /** Orientation tours — one per page, offered on first visit. */
 export const PAGE_TOURS = [
@@ -148,12 +148,24 @@ export const PAGE_TOURS = [
         body: 'Switch on to calculate the KPI cards for the selected weeks only; switch off to include all load of the vendor.',
       },
       {
-        id: 'view-toggles',
-        anchor: t('rccp-view-toggles'),
+        id: 'view-grain',
+        anchor: t('rccp-view-grain'),
         placement: 'bottom',
         optional: true,
-        title: 'View and load date',
-        body: 'Show the chart per week or per month, and choose which delivery date places the load in a period.',
+        title: 'View: week or month',
+        body: 'Choose whether the chart and the matrix show the load per week or per month.',
+      },
+      {
+        id: 'load-date',
+        anchor: t('rccp-load-date'),
+        placement: 'bottom',
+        optional: true,
+        title: 'Load date: requested or confirmed',
+        bullets: [
+          { term: 'Req.', text: 'shows load on the requested delivery date' },
+          { term: 'Confirmed', text: 'shows load on the confirmed delivery date (with the share of confirmed orders)' },
+        ],
+        body: 'Switch on one or both: with both on, the chart and matrix show both series side by side.',
       },
       {
         id: 'kpis',
@@ -169,33 +181,7 @@ export const PAGE_TOURS = [
         roles: [ROLES.ADMIN],
         placement: 'bottom',
         title: 'Settings',
-        body: 'Configure which columns drive the planning. The Guides panel has a step-by-step guide for these settings.',
-      },
-    ],
-  },
-  {
-    id: 'settings',
-    kind: 'tour',
-    version: 1,
-    route: '/admin',
-    icon: 'settings',
-    title: 'Settings tour',
-    description: 'What you can configure and where.',
-    steps: [
-      {
-        id: 'sidebar',
-        anchor: t('settings-sidebar'),
-        placement: 'right',
-        title: 'All settings in one place',
-        body: 'The sections you see depend on your role. General is for everyone.',
-      },
-      {
-        id: 'staff',
-        anchor: t('settings-sidebar'),
-        roles: STAFF,
-        placement: 'right',
-        title: 'For staff',
-        body: 'Staff also manage analytics and external links. Admins additionally manage users, mail templates, the data model and the D365 refresh.',
+        body: 'Admins configure here which purchase order columns drive the planning and how the charts look.',
       },
     ],
   },

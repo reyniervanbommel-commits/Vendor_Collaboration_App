@@ -165,6 +165,7 @@ export default function PurchaseOrderColumnFilterMenuColumnActionsSection({
                 size="small"
                 closeSubmenu={closeSubmenu}
                 onClick={handleCreateTabsFromColumn}
+                data-tour="col-tabs-from-column"
               >
                 {menuLabel(styles, <TabAddRegular />, 'Tabs from column…')}
               </PurchaseOrderColumnFilterMenuButton>
