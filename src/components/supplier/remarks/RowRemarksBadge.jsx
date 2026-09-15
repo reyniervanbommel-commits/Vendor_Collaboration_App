@@ -34,7 +34,14 @@ function RowRemarksBadge({ count = 0, onOpen, orderNumber = '', onFormattedBackg
   );
 
   return (
-    <button type="button" className="remarks-badge-button" aria-label={label} title={label} onClick={handleOpen}>
+    <button
+      type="button"
+      className="remarks-badge-button"
+      aria-label={label}
+      title={label}
+      onClick={handleOpen}
+      data-tour="row-remarks-badge"
+    >
       <span className="remarks-badge-icon-wrap" aria-hidden="true">
         <Chat24Regular className="remarks-badge-icon" style={{ color: iconColor }} />
         {!hasMessages ? (

@@ -231,7 +231,7 @@ export default function RccpPageContent() {
     <div className={styles.root}>
       <RccpPageHeader activeTab={activeTab} onTabSelect={handleTabSelect} />
 
-      <div className={styles.toolbar}>
+      <div className={styles.toolbar} data-tour="rccp-toolbar">
         {!isSupplier && (
           <RccpVendorFilter
             value={vendorAccount || ''}
@@ -269,7 +269,9 @@ export default function RccpPageContent() {
         )}
         <Button icon={<ArrowClockwise24Regular />} onClick={handleRefresh}>Refresh</Button>
         {isAdmin && (
-          <Button icon={<Settings24Regular />} onClick={handleOpenSettings}>Settings</Button>
+          <Button icon={<Settings24Regular />} onClick={handleOpenSettings} data-tour="rccp-settings-button">
+            Settings
+          </Button>
         )}
       </div>
 

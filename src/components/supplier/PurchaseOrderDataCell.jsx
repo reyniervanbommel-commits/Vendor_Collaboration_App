@@ -69,6 +69,7 @@ function PurchaseOrderDataCell({
       className={className}
       style={resolvedCellStyle}
       onContextMenu={handleContextMenu}
+      data-tour={disabled ? undefined : 'po-cell'}
     >
       <div className={contentClassName || undefined} style={contentStyle}>{children}</div>
       {trackPattern ? <TrackChangeMarks pattern={trackPattern} mode={trackMeta?.mode} /> : null}

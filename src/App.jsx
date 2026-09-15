@@ -7,6 +7,7 @@ import IdleSessionGuard from './components/auth/IdleSessionGuard';
 import LoginPage from './components/auth/LoginPage';
 import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
+import { TourProvider } from './components/onboarding';
 import AppToaster from './components/shared/AppToaster';
 import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
 import { BulkWriteBackJobProvider } from './context/BulkWriteBackJobContext';
@@ -75,40 +76,42 @@ function AppInner({ isDarkMode, onToggleTheme }) {
   );
 
   return (
-    <div className={styles.appShell}>
-      <SecretExpiryWarning />
-      <div className={styles.content}>
-        <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/set-password" element={<SetPasswordPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route path="/mfa" element={<MfaPage />} />
-          <Route
-            path="/admin"
-            element={
-              <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
-                <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
-                  <AdminPage />
-                </AppLayout>
-              </AuthGuard>
-            }
-          />
-          <Route path="/bi" element={dataPagesElement} />
-          <Route path="/rccp" element={dataPagesElement} />
-          <Route path="/" element={dataPagesElement} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        </Suspense>
+    <TourProvider enabled={showFooter}>
+      <div className={styles.appShell}>
+        <SecretExpiryWarning />
+        <div className={styles.content}>
+          <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/set-password" element={<SetPasswordPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/mfa" element={<MfaPage />} />
+            <Route
+              path="/admin"
+              element={
+                <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
+                  <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
+                    <AdminPage />
+                  </AppLayout>
+                </AuthGuard>
+              }
+            />
+            <Route path="/bi" element={dataPagesElement} />
+            <Route path="/rccp" element={dataPagesElement} />
+            <Route path="/" element={dataPagesElement} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          </Suspense>
+        </div>
+
+        {showFooter ? <AppFooter /> : null}
+        <AppToaster />
+
+        {isDevEnvironment ? <DevFeatureChecklist /> : null}
+        {isPerfEnabled ? <DevPerfOverlay /> : null}
       </div>
-
-      {showFooter ? <AppFooter /> : null}
-      <AppToaster />
-
-      {isDevEnvironment ? <DevFeatureChecklist /> : null}
-      {isPerfEnabled ? <DevPerfOverlay /> : null}
-    </div>
+    </TourProvider>
   );
 }
 

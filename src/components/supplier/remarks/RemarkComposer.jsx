@@ -37,7 +37,7 @@ function RemarkComposer({ currentUser, column = null, onSubmit, textareaRef = nu
   );
 
   return (
-    <form className="remarks-composer" onSubmit={handleSubmit}>
+    <form className="remarks-composer" onSubmit={handleSubmit} data-tour="remark-composer">
       <div className="remarks-composer-user">
         <Avatar name={displayName} size={32} color="colorful" aria-hidden="true" />
         <label htmlFor="row-remark-composer" className="remarks-composer-label">

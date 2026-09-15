@@ -20,6 +20,8 @@ const { expandRetentionSettings } = require('../utils/syncRetentionSettings');
 const refreshRunService = require('../services/RefreshRunService');
 const { parseAlertEmails, serializeAlertEmails } = require('../utils/alertEmails');
 const poTableZoomSettings = require('../services/PoTableZoomSettings');
+const { ONBOARDING_BOARD_KEY, buildOnboardingProgressRow } = require('../utils/onboardingSettings');
+const { time } = require('../utils/timing');
 
 function getPool() {
   return getSqlPool();
@@ -286,6 +288,21 @@ router.get('/analytics/click-stats', async (req, res, next) => {
       FROM dbo.user_activity WHERE ${where}
       GROUP BY page_name, element_type ORDER BY count DESC`);
     res.json({ stats: result.recordset });
+  } catch (err) { next(err); }
+});
+
+// Welke gebruiker welke product tours/guides heeft doorlopen, en tot welke stap (staff-only via /api/admin).
+router.get('/analytics/onboarding', async (req, res, next) => {
+  try {
+    const pool = await getPool();
+    const result = await time('onboarding_progress_sql', () => pool.request()
+      .input('boardKey', sql.NVarChar(64), ONBOARDING_BOARD_KEY)
+      .query(`
+        SELECT u.id, u.email, u.display_name, u.role, u.vendor_account, s.settings_json
+        FROM dbo.users u
+        LEFT JOIN dbo.user_board_settings s ON s.user_id = u.id AND s.board_key = @boardKey
+        ORDER BY u.email`));
+    res.json({ users: result.recordset.map(buildOnboardingProgressRow) });
   } catch (err) { next(err); }
 });
 

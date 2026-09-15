@@ -155,6 +155,7 @@ export default function PurchaseOrderSavedViewsControl({
               className={styles.titleTrigger}
               disabled={saving}
               title={triggerLabel}
+              data-tour="po-view-title"
             >
               <span className={styles.titleName}>{triggerLabel}</span>
               {hasUnsavedChanges ? (
@@ -169,6 +170,7 @@ export default function PurchaseOrderSavedViewsControl({
               iconPosition="before"
               className={styles.trigger}
               disabled={saving}
+              data-tour="po-view-title"
             >
               <span className={styles.triggerLabel}>{triggerLabel}</span>
               <ChevronDownRegular />

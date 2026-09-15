@@ -6,6 +6,7 @@ import {
 } from '@fluentui/react-icons';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useTour } from '../onboarding';
 import RccpNavIcon from '../rccp/RccpNavIcon';
 import { useVendorCompanyName } from '../../hooks/useVendorCompanyName';
 import { layout as appLayoutTokens } from '../../styles/brandTokens';
@@ -144,6 +145,7 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const { startPageTour, openGuides } = useTour();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const vendorCompanyName = useVendorCompanyName(user);
@@ -199,6 +201,18 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
     handleNavigate('/admin');
   }, [handleNavigate]);
 
+  const handleStartTour = useCallback(() => {
+    setUserMenuOpen(false);
+    setSidebarOpen(false);
+    startPageTour();
+  }, [startPageTour]);
+
+  const handleOpenGuides = useCallback(() => {
+    setUserMenuOpen(false);
+    setSidebarOpen(false);
+    openGuides();
+  }, [openGuides]);
+
   return (
     <div className={styles.root}>
       <AppShellHeader
@@ -214,12 +228,14 @@ export default function AppLayout({ children, isDarkMode, onToggleTheme }) {
         vendorCompanyName={vendorCompanyName}
         onNavigateAdmin={handleNavigateAdmin}
         onLogout={handleLogout}
+        onStartTour={handleStartTour}
+        onOpenGuides={handleOpenGuides}
         endSlot={<BulkWriteBackJobBadge />}
       />
 
       <div className={styles.body}>
         {!sidebarOpen && (
-          <aside className={styles.rail} aria-label="Primary navigation">
+          <aside className={styles.rail} aria-label="Primary navigation" data-tour="nav-rail">
             {navItems.map((item, index) => (
               <AppNavItem
                 key={item.id || `divider-${index}`}

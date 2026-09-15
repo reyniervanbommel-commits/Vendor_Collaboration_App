@@ -24,6 +24,7 @@ import {
   Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 import { useAnalyticsData, formatDuration } from '../../hooks/useAnalyticsData';
+import OnboardingProgressAnalytics from './OnboardingProgressAnalytics';
 
 const useStyles = makeStyles({
   container: { display: 'flex', flexDirection: 'column', ...shorthands.gap('24px') },
@@ -251,6 +252,8 @@ export default function UserAnalytics() {
             <MessageBarBody>No analytics data found for the selected period.</MessageBarBody>
           </MessageBar>
       )}
+
+      <OnboardingProgressAnalytics />
     </div>
   );
 }

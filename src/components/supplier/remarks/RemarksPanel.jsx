@@ -82,6 +82,7 @@ function RemarksPanel({
       className="remarks-side-panel"
       style={panelStyle}
       aria-label={`Remarks for purchase order ${orderNumber}`}
+      data-tour="remarks-panel"
     >
       <header className="remarks-panel-header">
         <Button
@@ -110,7 +111,12 @@ function RemarksPanel({
       </header>
       <div className="remarks-panel-body">
         <div className="remarks-panel">
-          <TabList className="remarks-tabs" selectedValue={controller.selectedTab} onTabSelect={controller.onTabSelect}>
+          <TabList
+            className="remarks-tabs"
+            selectedValue={controller.selectedTab}
+            onTabSelect={controller.onTabSelect}
+            data-tour="remarks-tabs"
+          >
             <Tab value="remarks">Remarks ({remarkCount})</Tab>
             <Tab value="history">History ({historyCount})</Tab>
             <Tab value="all">All</Tab>

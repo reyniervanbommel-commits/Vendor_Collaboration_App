@@ -22,6 +22,7 @@ function PurchaseOrderColumnFilterSubmenuButton({
       onMouseEnter={handleOpen}
       onFocus={handleOpen}
       onClick={handleOpen}
+      data-tour={`col-submenu-${name}`}
     >
       {submenuLabel(styles, icon, label)}
     </Button>

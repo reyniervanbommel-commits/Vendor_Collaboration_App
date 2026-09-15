@@ -196,6 +196,7 @@ export default function BoardSplitView({
       <div
         className={mergeClasses(styles.toggleBar, !split.open && styles.toggleBarCollapsed)}
         style={PO_TABLE_SPLIT_ZOOM_STYLE}
+        data-tour="board-split-bar"
       >
         <Button
           size="small"
@@ -204,16 +205,18 @@ export default function BoardSplitView({
           aria-expanded={split.open}
           aria-label={split.open ? 'Hide panel' : 'Show panel'}
           onClick={split.toggleOpen}
+          data-tour="board-split-toggle"
         />
 
         <TabList
           size="small"
           selectedValue={split.activeTab}
           onTabSelect={handleTabSelect}
+          data-tour="board-split-tabs"
         >
           {/* BI/Charts-tab verborgen op verzoek */}
-          <Tab value="rccp">Performance & Planning</Tab>
-          <Tab value="kpis">KPIs</Tab>
+          <Tab value="rccp" data-tour="board-split-tab-rccp">Performance & Planning</Tab>
+          <Tab value="kpis" data-tour="board-split-tab-kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
         {showRccpPane ? (

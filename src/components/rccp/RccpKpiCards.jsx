@@ -26,7 +26,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
   const uniqueLateItems = kpis.lateDeliveryItemCount;
   return (
     <KpiCardStyleProvider>
-    <div className={styles.row}>
+    <div className={styles.row} data-tour="rccp-kpis">
       <KpiCard
         kpiKey="ordered"
         label="Total ordered"

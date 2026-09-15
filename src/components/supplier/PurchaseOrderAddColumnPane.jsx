@@ -30,6 +30,7 @@ const AddColumnTypeButton = memo(function AddColumnTypeButton({ type, styles, di
       size="small"
       disabled={disabled}
       onClick={handleClick}
+      data-tour={`col-type-${type.key}`}
     >
       <span className={localStyles.typeButtonContent}>
         <span className={styles.menuItemIcon} aria-hidden>

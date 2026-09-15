@@ -24,7 +24,7 @@ export default function AppNavItem({ item, compact, active, styles, onNavigate, 
 
   if (compact) {
     return (
-      <div className={styles.railItem} onMouseEnter={handleMouseEnter}>
+      <div className={styles.railItem} onMouseEnter={handleMouseEnter} data-tour={`nav-${item.id}`}>
         <Button
           appearance={active ? 'primary' : 'subtle'}
           icon={<Icon />}
