@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import {
   Badge,
   Button,
@@ -9,11 +9,12 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { AddRegular, SaveRegular, FilterRegular, ArrowResetRegular, NumberSymbolRegular } from '@fluentui/react-icons';
-import { useSyncFilters, ENUM_FIELDS } from '../../../hooks/useSyncFilters';
+import { AddRegular, SaveRegular, FilterRegular } from '@fluentui/react-icons';
+import { useSyncFilterLayers } from '../../../hooks/useSyncFilterLayers';
+import { ENUM_FIELDS } from '../../../hooks/useSyncFilters';
 import FilterFieldPickerDialog from './FilterFieldPickerDialog';
 import FilterPreview from './FilterPreview';
-import SyncFilterRuleRow from './SyncFilterRuleRow';
+import SyncFilterLayerCard from './SyncFilterLayerCard';
 import AdminInfoHint from './AdminInfoHint';
 import { DATA_MODEL_INFO } from './dataModelInfoCopy';
 
@@ -43,6 +44,7 @@ const useStyles = makeStyles({
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase200 },
   fieldBadge: { minWidth: '220px', maxWidth: '420px', flex: '1 1 260px' },
   templateDropdown: { width: '200px', minWidth: '180px' },
+  layers: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px') },
 });
 
 // Nulmeting-knop: haalt alles opnieuw op zonder het als wijzigingen te loggen. Los van "Sync now"
@@ -51,12 +53,7 @@ function ReimportBaselineButton({ onReimportBaseline, busy }) {
   if (!onReimportBaseline) return null;
   return (
     <>
-      <Button
-        size="small"
-        appearance="secondary"
-        onClick={onReimportBaseline}
-        disabled={busy}
-      >
+      <Button size="small" appearance="secondary" onClick={onReimportBaseline} disabled={busy}>
         {busy ? 'Re-importing...' : 'Re-import (baseline)'}
       </Button>
       <AdminInfoHint text={DATA_MODEL_INFO.reimportBaseline} label="About re-import baseline" />
@@ -66,7 +63,7 @@ function ReimportBaselineButton({ onReimportBaseline, busy }) {
 
 function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onReimportBaseline, baselineBusy = false }) {
   const styles = useStyles();
-  const [pickerState, setPickerState] = useState({ open: false, index: null, level: null });
+  const [pickerState, setPickerState] = useState({ open: false, layerId: null, index: null, level: null });
   // Read-only leunt op de server (syncFilter.readOnly). vendors/product-receipt-lines blijven
   // altijd inherited; items is bewerkbaar maar blijft binnen de PO lookup scope.
   const isReadOnly = Boolean(syncFilter?.readOnly)
@@ -77,56 +74,33 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
   // Master-only tabellen (bv. items op ReleasedProductsV2) hebben geen regel-niveau.
   const hasLineLevel = (filterCatalog?.line?.length || 0) > 0;
   const {
-    rules, preview, addRule, updateRule, removeRule, applyRules, resetRules, countRows,
-    save, saving, error, savedAt, queryCount, countLoading, countError,
-  } = useSyncFilters(syncFilter?.rules, tableKey);
+    layers, addLayer, addTemplateLayer, removeLayer, renameLayer, toggleLayerActive,
+    addRule, updateRule, removeRule, previewFor, countLayer, countByLayerId,
+    countLoadingByLayerId, countErrorByLayerId, save, saving, error, savedAt, canAddLayer,
+  } = useSyncFilterLayers(syncFilter, tableKey);
 
   const templates = syncFilter?.templates || [];
-  const activeRules = useMemo(() => rules.filter((r) => r.field && r.value !== '' && r.value !== null && r.value !== undefined), [rules]);
   const retainedRows = Number(cache?.retainedRows) || 0;
   const retainedMaxAuto = Number(cache?.retainedMaxAuto) || 2000;
-  const retentionHint = useMemo(() => {
-    if (tableKey !== 'purchase-orders' || retainedRows <= 0) return '';
-    const warning = String(cache?.retentionWarning || 'none');
-    if (warning === 'cap' || warning === 'critical') {
-      return `${retainedRows} orders are retained outside the current sync filter (limit ${retainedMaxAuto.toLocaleString('en-US')} reached — review filter or hidden rows).`;
-    }
-    if (warning === 'approaching') {
-      return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
-    }
-    return `${retainedRows} orders are retained outside the current sync filter and will be refreshed individually.`;
-  }, [cache?.retentionWarning, retainedMaxAuto, retainedRows, tableKey]);
+  const retentionHint = retainedRows > 0
+    ? `${retainedRows} orders are retained outside the current sync filter layers and will be refreshed individually.`
+    : `Orders that leave every active layer stay on the board and are refreshed individually (up to ${retainedMaxAuto.toLocaleString('en-US')}). Change the cap on the OData tab.`;
 
-  const groupFilterHint = useMemo(() => {
-    if (tableKey !== 'purchase-orders') return '';
-    const usesGroup = rules.some((rule) => rule.field === 'VendorGroupId' && String(rule.value || '').trim());
-    if (usesGroup) return '';
-    const accountRule = rules.find((rule) => (
-      rule.field === 'OrderVendorAccountNumber' && rule.operator === 'oneof'
-    ));
-    if (!accountRule) return '';
-    const count = String(accountRule.value ?? '').split(',').map((part) => part.trim()).filter(Boolean).length;
-    if (count < 6) return '';
-    return 'A vendor group filter is shorter and faster in D365 than a long list of vendor accounts. Choose Vendor group from the field picker.';
-  }, [rules, tableKey]);
   const fieldsForLevel = useCallback(
     (level) => (level === 'line' ? (filterCatalog?.line || []) : (filterCatalog?.header || [])),
     [filterCatalog]
   );
-  const openPicker = useCallback(
-    (index, level) => {
-      const safeLevel = level === 'line' ? 'line' : 'header';
-      setPickerState({ open: true, index, level: safeLevel });
-    },
-    []
-  );
-  const closePicker = useCallback(() => setPickerState({ open: false, index: null, level: null }), []);
+  const openPicker = useCallback((layerId, index, level) => {
+    const safeLevel = level === 'line' ? 'line' : 'header';
+    setPickerState({ open: true, layerId, index, level: safeLevel });
+  }, []);
+  const closePicker = useCallback(() => setPickerState({ open: false, layerId: null, index: null, level: null }), []);
   const pickerLevel = pickerState.level || 'header';
   const pickerFields = fieldsForLevel(pickerLevel);
 
   const handlePickField = useCallback((field, operator) => {
-    if (pickerState.index === null) return;
-    updateRule(pickerState.index, {
+    if (pickerState.index === null || !pickerState.layerId) return;
+    updateRule(pickerState.layerId, pickerState.index, {
       field: field.field,
       label: field.label,
       valueType: field.valueType || 'text',
@@ -137,7 +111,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
       value: '',
     });
     closePicker();
-  }, [pickerState.index, updateRule, closePicker]);
+  }, [pickerState.index, pickerState.layerId, updateRule, closePicker]);
 
   if (isReadOnly) {
     return (
@@ -165,84 +139,68 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         <FilterRegular />
         <Text weight="semibold" size={400}>D365 sync filters</Text>
         <AdminInfoHint text={DATA_MODEL_INFO.syncFilters} label="About D365 sync filters" />
-        <Badge appearance="tint" color={activeRules.length ? 'brand' : 'warning'} size="small">
-          {activeRules.length ? `${activeRules.length} active` : 'No active filter'}
-        </Badge>
+        <Badge appearance="tint" color="brand" size="small">{layers.length} layer(s)</Badge>
       </div>
       <Text className={styles.hint} block>
-        Filters are applied directly in the D365 OData call (headers + subitems). This reduces D365 load,
-        network traffic and sync time. Prefer a vendor group or status over a long list of vendor accounts.
-        Use Discover D365 fields to register all entity columns first.
+        Filter layers combine with OR: a row enters the cache as soon as it matches at least one
+        active layer. Filters are applied directly in the D365 OData call (headers + subitems).
       </Text>
-      {groupFilterHint ? (
-        <Text className={styles.hint} block>{groupFilterHint}</Text>
-      ) : null}
-      {poScopeHint ? (
-        <Text className={styles.hint} block>{poScopeHint}</Text>
-      ) : null}
-      {poScopeHint ? (
-        <FilterPreview label="Purchase Orders $filter (scope)" value={inheritedCompiled} />
-      ) : null}
+      {poScopeHint ? <Text className={styles.hint} block>{poScopeHint}</Text> : null}
+      {poScopeHint ? <FilterPreview label="Purchase Orders $filter (scope)" value={inheritedCompiled} /> : null}
       {tableKey === 'purchase-orders' ? (
         <div className={styles.titleRow}>
-          <Text className={styles.hint}>
-            {retentionHint || `Orders that leave this filter stay on the board and are refreshed individually (up to ${retainedMaxAuto.toLocaleString('en-US')}). Change the cap on the OData tab.`}
-          </Text>
+          <Text className={styles.hint}>{retentionHint}</Text>
           <AdminInfoHint text={DATA_MODEL_INFO.retention} label="About retained orders" />
         </div>
       ) : null}
 
       <div className={styles.actions}>
-        <Button size="small" appearance="secondary" icon={<AddRegular />} onClick={() => addRule()}>Add filter</Button>
-        <Button size="small" appearance="secondary" icon={<ArrowResetRegular />} onClick={resetRules}>Reset filters</Button>
+        <Button size="small" appearance="secondary" icon={<AddRegular />} onClick={addLayer} disabled={!canAddLayer}>
+          Add layer
+        </Button>
+        {!canAddLayer ? <Text className={styles.hint}>Maximum 3 layers</Text> : null}
         <Dropdown
           className={styles.templateDropdown}
           size="small"
-          placeholder="Apply template"
+          placeholder="Add template as layer"
           onOptionSelect={(_, data) => {
             const template = templates.find((t) => t.id === data.optionValue);
-            if (template) applyRules(template.rules);
+            if (template) addTemplateLayer(template);
           }}
+          disabled={!canAddLayer}
         >
           {templates.map((template) => (
             <Option key={template.id} value={template.id} text={template.label}>{template.label}</Option>
           ))}
         </Dropdown>
         <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
-        <Button
-          size="small"
-          appearance="secondary"
-          icon={<NumberSymbolRegular />}
-          onClick={() => countRows()}
-          disabled={countLoading}
-        >
-          {countLoading ? 'Counting...' : 'Count rows'}
-        </Button>
-        <AdminInfoHint text={DATA_MODEL_INFO.countRows} label="About count rows" />
-        {queryCount !== null ? (
-          <Badge appearance="tint" color="brand">
-            Query rows in D365: {queryCount.toLocaleString('nl-NL')}
-          </Badge>
-        ) : null}
       </div>
 
-      {rules.map((rule, index) => (
-        <SyncFilterRuleRow
-          key={index}
-          rule={{
-            ...rule,
-            availableFieldCount: fieldsForLevel(rule.level || 'header').length,
-          }}
-          index={index}
-          hasLineLevel={hasLineLevel}
-          onUpdate={updateRule}
-          onRemove={removeRule}
-          onOpenPicker={openPicker}
-          styles={styles}
-        />
-      ))}
-
-      <FilterPreview label="$filter" value={preview} />
+      <div className={styles.layers}>
+        {layers.map((layer, index) => (
+          <SyncFilterLayerCard
+            key={layer.id}
+            layer={layer}
+            index={index}
+            hasLineLevel={hasLineLevel}
+            fieldsForLevel={fieldsForLevel}
+            canRemove={layers.length > 1}
+            onRename={renameLayer}
+            onToggleActive={toggleLayerActive}
+            onRemove={removeLayer}
+            onAddRule={addRule}
+            onUpdateRule={updateRule}
+            onRemoveRule={removeRule}
+            onOpenPicker={openPicker}
+            preview={previewFor(layer.id)}
+            count={countByLayerId[layer.id]}
+            countLoading={Boolean(countLoadingByLayerId[layer.id])}
+            countError={countErrorByLayerId[layer.id]}
+            onCountRows={countLayer}
+            styles={styles}
+          />
+        ))}
+      </div>
 
       <div className={styles.actions}>
         <Button appearance="primary" icon={<SaveRegular />} onClick={save} disabled={saving}>
@@ -250,8 +208,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
         </Button>
         <AdminInfoHint text={DATA_MODEL_INFO.saveFilters} label="About save filters" />
         {error ? <Text className={styles.error}>{error}</Text> : null}
-        {countError ? <Text className={styles.error}>{countError}</Text> : null}
-        {savedAt ? <Text className={styles.saved}>Saved. Next sync uses these filters.</Text> : null}
+        {savedAt ? <Text className={styles.saved}>Saved. Next sync uses these layers.</Text> : null}
       </div>
 
       <FilterFieldPickerDialog

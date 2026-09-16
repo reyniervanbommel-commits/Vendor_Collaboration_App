@@ -511,7 +511,7 @@ router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, 
 // PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
 router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
-    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
+    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.layers || req.body?.rules));
   } catch (err) {
     return next(err);
   }
@@ -520,7 +520,7 @@ router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res,
 // POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
 router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
-    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
+    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.layers || req.body?.rules));
   } catch (err) {
     return next(err);
   }
