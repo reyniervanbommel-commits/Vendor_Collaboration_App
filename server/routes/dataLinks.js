@@ -6,8 +6,13 @@
 const express = require('express');
 const multer = require('multer');
 const excelLink = require('../services/ExcelLinkService');
+const { requirePagePermission } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Elke route hier hoort bij de Instellingen-tab "External links" (#AB:326). Eén guard op
+// routerniveau i.p.v. per route, zodat een nieuwe route hier niet per ongeluk ongeguard blijft.
+router.use(requirePagePermission('external-links'));
 
 // Upload in-memory (geen tijdelijke bestanden); harde grootte-limiet.
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB

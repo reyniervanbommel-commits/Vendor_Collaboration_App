@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const auth = useSessionAuth();
   const value = useMemo(() => ({
     user: auth.user,
+    permissions: auth.permissions,
     loading: auth.loading,
     error: auth.error,
     isAuthenticated: auth.isAuthenticated,

@@ -30,18 +30,27 @@ function renderPage() {
 
 describe('AdminPage settings audience', () => {
   it('shows only General to vendors', () => {
-    useAuth.mockReturnValue({ user: { role: 'supplier' } });
+    useAuth.mockReturnValue({ user: { role: 'supplier' }, permissions: [] });
     renderPage();
     expect(screen.getByRole('button', { name: /General/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Users/i })).toBeNull();
   });
 
-  it('shows only the bijlage-visible tabs for employees', () => {
-    useAuth.mockReturnValue({ user: { role: 'employee' } });
+  it('shows only General to an employee without granted permissions', () => {
+    useAuth.mockReturnValue({ user: { role: 'employee' }, permissions: [] });
     renderPage();
+    expect(screen.getByRole('button', { name: /General/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Analytics/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /External links/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Users/i })).toBeNull();
+  });
+
+  it('shows an employee exactly the granted settings tabs', () => {
+    useAuth.mockReturnValue({ user: { role: 'employee' }, permissions: ['analytics', 'external-links'] });
+    renderPage();
     expect(screen.getByRole('button', { name: /Analytics/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /External links/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Users/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Mail template/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /OData/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /Data model/i })).toBeNull();

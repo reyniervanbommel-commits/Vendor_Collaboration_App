@@ -23,7 +23,7 @@ const {
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
 const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
-const { requireRole, requireAnyRole } = require('../middleware/auth');
+const { requireRole, requireAnyRole, requirePagePermission } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
 const { getSupplierAccount } = require('../utils/supplierScope');
@@ -219,7 +219,7 @@ router.get('/:tableKey', async (req, res, next) => {
 // body.baseline = true: nulmeting. Haalt alles opnieuw op zonder wijzigingen in het dagboek te
 // zetten — bedoeld na een datamodel-wijziging, zodat de nieuwe uitgangssituatie niet als duizenden
 // "nieuwe" rijen op het bord verschijnt.
-router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/refresh', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const baseline = req.body?.baseline === true;
@@ -232,7 +232,7 @@ router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, nex
 });
 
 // POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
-router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/refresh/start', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const result = await dataService.startRefresh(tableKey, { triggeredByUserId: req.user?.id });
@@ -243,7 +243,7 @@ router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, re
 });
 
 // GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
-router.get('/:tableKey/refresh/progress', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/refresh/progress', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const refreshRunService = require('../services/RefreshRunService');
@@ -273,7 +273,7 @@ router.post('/:tableKey/viewed', viewedRoleGuard, async (req, res, next) => {
   }
 });
 
-router.get('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/board-columns', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     if (req.params.tableKey !== PAV_TABLE_KEY) {
       return res.status(404).json({ error: 'Not found' });
@@ -282,7 +282,7 @@ router.get('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res
   } catch (err) { return next(err); }
 });
 
-router.post('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/board-columns', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     if (req.params.tableKey !== PAV_TABLE_KEY) {
       return res.status(404).json({ error: 'Not found' });
@@ -490,7 +490,7 @@ router.put('/:tableKey/value', async (req, res, next) => {
 });
 
 // GET /api/data/:tableKey/datamodel — admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
-router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/datamodel', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.getDataModel(req.params.tableKey));
   } catch (err) {
@@ -500,7 +500,7 @@ router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, ne
 
 // POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
 // geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
-router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/discover-fields', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.discoverSourceFields(req.params.tableKey));
   } catch (err) {
@@ -509,7 +509,7 @@ router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, 
 });
 
 // PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
-router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.put('/:tableKey/sync-filters', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
   } catch (err) {
@@ -518,7 +518,7 @@ router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res,
 });
 
 // POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
-router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/sync-filters/count', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
   } catch (err) {

@@ -268,7 +268,7 @@ describe('GET /me', () => {
   it('geeft user: null terug zonder sessie', async () => {
     await withServer({ session: {} }, async (baseUrl) => {
       const { data } = await getJson(baseUrl, '/api/auth/me');
-      expect(data).toEqual({ user: null });
+      expect(data).toEqual({ user: null, permissions: [] });
     });
   });
 });
