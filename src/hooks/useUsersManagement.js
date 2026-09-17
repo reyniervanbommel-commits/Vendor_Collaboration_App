@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
-import { PAGE_PERMISSION_LABELS } from '../constants/pagePermissions';
 
 /**
  * useUsersManagement — state en handlers voor admin gebruikersbeheer.
@@ -143,15 +142,6 @@ export function useUsersManagement() {
     }
   }, [permDialogUser?.id, loadUsers]);
 
-  const getDisplayPermissions = useCallback((rawPermissions) => {
-    const unique = new Set();
-    rawPermissions.forEach((perm) => {
-      const label = PAGE_PERMISSION_LABELS[perm];
-      if (label) unique.add(label);
-    });
-    return Array.from(unique);
-  }, []);
-
   return {
     filteredUsers,
     userPermissions,
@@ -188,6 +178,5 @@ export function useUsersManagement() {
     handleEditRole,
     handleRoleSave,
     handlePermissionsSaved,
-    getDisplayPermissions,
   };
 }

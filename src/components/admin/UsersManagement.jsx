@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   makeStyles,
   tokens,
@@ -36,6 +36,7 @@ import SupplierFilterColumnSelect from './SupplierFilterColumnSelect';
 import { UserSecurityActions } from './UserSecurityActions';
 import { useUsersManagement } from '../../hooks/useUsersManagement';
 import { useAuth } from '../../context/AuthContext';
+import { getUserAccessSummary } from '../../utils/userAccessSummary';
 import { ROLES } from '../../constants/roles';
 
 const useStyles = makeStyles({
@@ -96,9 +97,16 @@ export default function UsersManagement() {
     handleEditRole,
     handleRoleSave,
     handlePermissionsSaved,
-    getDisplayPermissions,
   } = useUsersManagement();
   const { user: currentUser } = useAuth();
+
+  const accessByUserId = useMemo(() => {
+    const map = {};
+    filteredUsers.forEach((user) => {
+      map[user.id] = getUserAccessSummary(user.role, userPermissions[user.id] || []);
+    });
+    return map;
+  }, [filteredUsers, userPermissions]);
 
   if (loading) return <Text>Loading...</Text>;
 
@@ -147,8 +155,7 @@ export default function UsersManagement() {
         </TableHeader>
         <TableBody>
           {filteredUsers.map((user) => {
-            const rawPermissions = userPermissions[user.id] || [];
-            const displayPermissions = getDisplayPermissions(rawPermissions);
+            const access = accessByUserId[user.id];
             const isUpdated = recentlyUpdatedUserId === user.id;
 
             return (
@@ -175,30 +182,23 @@ export default function UsersManagement() {
                 </TableCell>
                 <TableCell className={isUpdated ? styles.permUpdated : undefined}>
                   <div className={styles.permissionStateCell}>
-                    {displayPermissions.length > 0 ? (
-                      <>
-                        <span className={styles.permissionOn}><CheckmarkCircle24Regular /></span>
-                        <Text size={200}>Enabled</Text>
-                      </>
-                    ) : (
-                      <>
-                        <span className={styles.permissionOff}><Circle24Regular /></span>
-                        <Text size={200}>No permissions</Text>
-                      </>
-                    )}
+                    <span className={access.hasAccess ? styles.permissionOn : styles.permissionOff}>
+                      {access.hasAccess ? <CheckmarkCircle24Regular /> : <Circle24Regular />}
+                    </span>
+                    <Text size={200}>{access.statusLabel}</Text>
                   </div>
                 </TableCell>
                 <TableCell className={isUpdated ? styles.permUpdated : undefined}>
-                  {displayPermissions.length > 0 ? (
+                  {access.badges.length > 0 ? (
                     <div className={styles.permissionBadges}>
-                      {displayPermissions.map((label) => (
+                      {access.badges.map((label) => (
                         <Badge key={label} appearance="tint" color="brand" size="small" className={styles.permBadge}>
                           {label}
                         </Badge>
                       ))}
                     </div>
                   ) : (
-                    <Text size={200} className={styles.noPerms}>No page permissions</Text>
+                    <Text size={200} className={styles.noPerms}>{access.emptyLabel}</Text>
                   )}
                 </TableCell>
                 <TableCell>
