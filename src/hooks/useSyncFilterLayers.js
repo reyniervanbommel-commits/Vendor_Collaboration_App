@@ -38,12 +38,14 @@ function normalizeInitialLayers(syncFilter) {
  * PUT /data/:tableKey/sync-filters ({ layers }) en tellen per laag via
  * POST /data/:tableKey/sync-filters/count ({ rules: <layer.rules> }).
  *
- * Input: syncFilter (uit het datamodel-endpoint; { layers } of legacy { rules }), tableKey.
+ * Input: syncFilter (uit het datamodel-endpoint; { layers } of legacy { rules }), tableKey,
+ *        onSaved (optioneel — reload van de bovenliggende datamodel-fetch na een geslaagde save,
+ *        zodat een latere tab-wissel niet de stale data van vóór de save toont).
  * Output: { layers, addLayer, removeLayer, renameLayer, toggleLayerActive, addRule, updateRule,
  *           removeRule, previewFor, countLayer, countByLayerId, countLoadingByLayerId, save,
  *           saving, error, savedAt, canAddLayer }.
  */
-export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
+export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders', onSaved) {
   const [layers, setLayers] = useState(() => normalizeInitialLayers(syncFilter));
   const tableSyncBase = syncBase(tableKey);
 
@@ -143,13 +145,17 @@ export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
         body: { layers: layers.map(({ id, name, active, rules }) => ({ id, name, active, rules })) },
       });
       setSavedAt(new Date());
+      // Ververst de bovenliggende datamodel-fetch (useDataModelAdmin haalt dit anders maar één keer
+      // op bij het openen van de pagina). Zonder deze reload toont de UI na een tab-wissel weer de
+      // oude, vóór-save-data — de laag lijkt dan "verdwenen" terwijl hij wél is opgeslagen (#325).
+      if (typeof onSaved === 'function') await onSaved();
       await Promise.all(layers.filter((layer) => layer.active).map((layer) => countLayer(layer.id)));
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
     }
-  }, [layers, tableSyncBase, countLayer]);
+  }, [layers, tableSyncBase, countLayer, onSaved]);
 
   const canAddLayer = layers.length < MAX_LAYERS;
 

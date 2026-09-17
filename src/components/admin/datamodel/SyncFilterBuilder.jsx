@@ -58,7 +58,7 @@ function ReimportBaselineButton({ onReimportBaseline, busy }) {
   );
 }
 
-function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onReimportBaseline, baselineBusy = false }) {
+function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFilter, cache, onReimportBaseline, baselineBusy = false, onSyncFiltersSaved }) {
   const styles = useStyles();
   const [pickerState, setPickerState] = useState({ open: false, layerId: null, index: null, level: null });
   // Read-only leunt op de server (syncFilter.readOnly). vendors/product-receipt-lines blijven
@@ -74,7 +74,7 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
     layers, addLayer, removeLayer, renameLayer, toggleLayerActive,
     addRule, updateRule, removeRule, previewFor, countLayer, countByLayerId,
     countLoadingByLayerId, countErrorByLayerId, save, saving, error, savedAt, canAddLayer,
-  } = useSyncFilterLayers(syncFilter, tableKey);
+  } = useSyncFilterLayers(syncFilter, tableKey, onSyncFiltersSaved);
 
   const retainedRows = Number(cache?.retainedRows) || 0;
   const retainedMaxAuto = Number(cache?.retainedMaxAuto) || 2000;
