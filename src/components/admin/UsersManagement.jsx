@@ -26,7 +26,6 @@ import {
 import {
   CheckmarkCircle24Regular,
   Circle24Regular,
-  Edit24Regular,
   Search24Regular,
 } from '@fluentui/react-icons';
 import CreateUserDialog from './CreateUserDialog';
@@ -47,7 +46,7 @@ const useStyles = makeStyles({
   permissionStateCell: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px') },
   permissionOn: { color: tokens.colorPaletteGreenForeground1, display: 'inline-flex', alignItems: 'center' },
   permissionOff: { color: tokens.colorPaletteRedForeground1, display: 'inline-flex', alignItems: 'center' },
-  permissionsButton: { minWidth: '120px' },
+  permissionBadges: { display: 'flex', flexWrap: 'wrap', ...shorthands.gap('4px') },
   noPerms: { color: tokens.colorNeutralForeground3, fontStyle: 'italic' },
   permUpdated: {
     animationName: {
@@ -190,18 +189,8 @@ export default function UsersManagement() {
                   </div>
                 </TableCell>
                 <TableCell className={isUpdated ? styles.permUpdated : undefined}>
-                  <Button
-                    appearance="secondary"
-                    icon={<Edit24Regular />}
-                    size="small"
-                    className={styles.permissionsButton}
-                    onClick={() => handleEditPermissions(user)}
-                    title="Manage permissions"
-                  >
-                    Permissions
-                  </Button>
                   {displayPermissions.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
+                    <div className={styles.permissionBadges}>
                       {displayPermissions.map((label) => (
                         <Badge key={label} appearance="tint" color="brand" size="small" className={styles.permBadge}>
                           {label}
