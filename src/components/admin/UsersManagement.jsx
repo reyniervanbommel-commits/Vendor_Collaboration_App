@@ -32,9 +32,11 @@ import {
 import CreateUserDialog from './CreateUserDialog';
 import EditPermissionsDialog from './EditPermissionsDialog';
 import EditVendorAccountDialog from './EditVendorAccountDialog';
+import EditRoleDialog from './EditRoleDialog';
 import SupplierFilterColumnSelect from './SupplierFilterColumnSelect';
 import { UserSecurityActions } from './UserSecurityActions';
 import { useUsersManagement } from '../../hooks/useUsersManagement';
+import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
 
 const useStyles = makeStyles({
@@ -77,6 +79,9 @@ export default function UsersManagement() {
     vendorDialogUser,
     vendorDialogOpen,
     setVendorDialogOpen,
+    roleDialogUser,
+    roleDialogOpen,
+    setRoleDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -89,9 +94,12 @@ export default function UsersManagement() {
     handleEditPermissions,
     handleEditVendorAccount,
     handleVendorAccountSave,
+    handleEditRole,
+    handleRoleSave,
     handlePermissionsSaved,
     getDisplayPermissions,
   } = useUsersManagement();
+  const { user: currentUser } = useAuth();
 
   if (loading) return <Text>Loading...</Text>;
 
@@ -207,8 +215,10 @@ export default function UsersManagement() {
                 <TableCell>
                   <UserSecurityActions
                     user={user}
+                    currentUserId={currentUser?.id}
                     onEditPermissions={handleEditPermissions}
                     onEditVendorAccount={handleEditVendorAccount}
+                    onEditRole={handleEditRole}
                     onLockToggle={handleLockToggle}
                     onMfaRequiredToggle={handleMfaRequiredToggle}
                     onForceReset={handleForceReset}
@@ -240,6 +250,13 @@ export default function UsersManagement() {
         open={vendorDialogOpen}
         onOpenChange={setVendorDialogOpen}
         onSave={handleVendorAccountSave}
+      />
+
+      <EditRoleDialog
+        user={roleDialogUser}
+        open={roleDialogOpen}
+        onOpenChange={setRoleDialogOpen}
+        onSave={handleRoleSave}
       />
 
       <Dialog open={deleteDialogOpen} onOpenChange={(_, d) => setDeleteDialogOpen(d.open)}>

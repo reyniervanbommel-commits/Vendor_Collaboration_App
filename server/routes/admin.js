@@ -12,7 +12,7 @@ const settingsService = require('../services/SettingsService');
 const trackChangesService = require('../services/TrackChangesService');
 const rccpSettingsService = require('../services/RccpSettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
-const { getSqlPool } = require('../utils/sqlPool');
+const sqlPool = require('../utils/sqlPool');
 const { requireRole, requirePagePermission } = require('../middleware/auth');
 const { getAppBaseUrl } = require('../utils/appEnvironment');
 const { getSecretExpiryStatus } = require('../utils/secretExpiry');
@@ -24,7 +24,7 @@ const { ONBOARDING_BOARD_KEY, buildOnboardingProgressRow } = require('../utils/o
 const { time } = require('../utils/timing');
 
 function getPool() {
-  return getSqlPool();
+  return sqlPool.getSqlPool();
 }
 
 // Leveranciersaccount normaliseren: getrimd, max 64 tekens, lege waarde -> null.
@@ -100,6 +100,10 @@ router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
       if (!isAllowedRole(normalizedRole)) {
         return res.status(400).json({ error: 'Invalid role specified' });
       }
+      // Voorkomt dat een admin zichzelf uit de admin-rol schrijft en daarmee buitensluit.
+      if (parseInt(id) === req.user.id && normalizedRole !== ROLES.ADMIN) {
+        return res.status(400).json({ error: 'You cannot change your own role' });
+      }
       setClauses.push('role = @role');
       request.input('role', sql.NVarChar, normalizedRole);
     }
@@ -116,8 +120,18 @@ router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
     const result = await request.query('UPDATE dbo.users SET ' + setClauses.join(', ') + ' OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.vendor_account, INSERTED.is_locked, INSERTED.mfa_required WHERE id = @id');
     if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
 
+    const updated = result.recordset[0];
+    // Granulaire instellingen-permissies gelden alleen voor employees (#AB:326); na een rolwissel
+    // naar admin of vendor zijn achtergebleven rijen misleidend en zouden ze bij een latere
+    // terugwissel naar employee stilzwijgend weer gaan gelden.
+    if (role !== undefined && updated.role !== ROLES.EMPLOYEE) {
+      await pool.request()
+        .input('userId', sql.Int, parseInt(id))
+        .query('DELETE FROM dbo.user_permissions WHERE user_id = @userId');
+    }
+
     await auditLog(req.user.id, req.user.email, 'UPDATE_USER', 'users', id, req.body);
-    res.json({ user: result.recordset[0] });
+    res.json({ user: updated });
   } catch (err) {
     next(err);
   }
