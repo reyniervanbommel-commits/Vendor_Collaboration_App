@@ -66,19 +66,6 @@ export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
     touch();
   }, [touch]);
 
-  // Voegt een nieuwe laag toe, voorgevuld met een template (Apply template-dropdown). Andere lagen
-  // blijven ongewijzigd — dit is bewust additief, in lijn met de OR-tussen-lagen-filosofie (#325).
-  const addTemplateLayer = useCallback((template) => {
-    if (!template) return;
-    setLayers((prev) => (prev.length >= MAX_LAYERS ? prev : [...prev, {
-      id: makeLayerId(),
-      name: template.label || `Layer ${prev.length + 1}`,
-      active: true,
-      rules: Array.isArray(template.rules) ? template.rules : [],
-    }]));
-    touch();
-  }, [touch]);
-
   const removeLayer = useCallback((layerId) => {
     setLayers((prev) => (prev.length <= 1 ? prev : prev.filter((layer) => layer.id !== layerId)));
     touch();
@@ -116,14 +103,6 @@ export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
     setLayers((prev) => prev.map((layer) => (layer.id === layerId ? {
       ...layer,
       rules: layer.rules.filter((_, i) => i !== index),
-    } : layer)));
-    touch();
-  }, [touch]);
-
-  const applyTemplateToLayer = useCallback((layerId, rules) => {
-    setLayers((prev) => prev.map((layer) => (layer.id === layerId ? {
-      ...layer,
-      rules: Array.isArray(rules) ? rules : [],
     } : layer)));
     touch();
   }, [touch]);
@@ -177,14 +156,12 @@ export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
   return useMemo(() => ({
     layers,
     addLayer,
-    addTemplateLayer,
     removeLayer,
     renameLayer,
     toggleLayerActive,
     addRule,
     updateRule,
     removeRule,
-    applyTemplateToLayer,
     previewFor,
     countLayer,
     countByLayerId,
@@ -196,8 +173,8 @@ export function useSyncFilterLayers(syncFilter, tableKey = 'purchase-orders') {
     savedAt,
     canAddLayer,
   }), [
-    layers, addLayer, addTemplateLayer, removeLayer, renameLayer, toggleLayerActive, addRule,
-    updateRule, removeRule, applyTemplateToLayer, previewFor, countLayer, countByLayerId,
+    layers, addLayer, removeLayer, renameLayer, toggleLayerActive, addRule,
+    updateRule, removeRule, previewFor, countLayer, countByLayerId,
     countLoadingByLayerId, countErrorByLayerId, save, saving, error, savedAt, canAddLayer,
   ]);
 }

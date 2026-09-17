@@ -2,8 +2,6 @@ import React, { memo, useCallback, useState } from 'react';
 import {
   Badge,
   Button,
-  Dropdown,
-  Option,
   Text,
   makeStyles,
   shorthands,
@@ -43,7 +41,6 @@ const useStyles = makeStyles({
   error: { color: tokens.colorPaletteRedForeground1, fontSize: tokens.fontSizeBase200 },
   saved: { color: tokens.colorPaletteGreenForeground1, fontSize: tokens.fontSizeBase200 },
   fieldBadge: { minWidth: '220px', maxWidth: '420px', flex: '1 1 260px' },
-  templateDropdown: { width: '200px', minWidth: '180px' },
   layers: { display: 'flex', flexDirection: 'column', ...shorthands.gap('10px') },
 });
 
@@ -74,12 +71,11 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
   // Master-only tabellen (bv. items op ReleasedProductsV2) hebben geen regel-niveau.
   const hasLineLevel = (filterCatalog?.line?.length || 0) > 0;
   const {
-    layers, addLayer, addTemplateLayer, removeLayer, renameLayer, toggleLayerActive,
+    layers, addLayer, removeLayer, renameLayer, toggleLayerActive,
     addRule, updateRule, removeRule, previewFor, countLayer, countByLayerId,
     countLoadingByLayerId, countErrorByLayerId, save, saving, error, savedAt, canAddLayer,
   } = useSyncFilterLayers(syncFilter, tableKey);
 
-  const templates = syncFilter?.templates || [];
   const retainedRows = Number(cache?.retainedRows) || 0;
   const retainedMaxAuto = Number(cache?.retainedMaxAuto) || 2000;
   const retentionHint = retainedRows > 0
@@ -159,20 +155,6 @@ function SyncFilterBuilder({ tableKey = 'purchase-orders', filterCatalog, syncFi
           Add layer
         </Button>
         {!canAddLayer ? <Text className={styles.hint}>Maximum 3 layers</Text> : null}
-        <Dropdown
-          className={styles.templateDropdown}
-          size="small"
-          placeholder="Add template as layer"
-          onOptionSelect={(_, data) => {
-            const template = templates.find((t) => t.id === data.optionValue);
-            if (template) addTemplateLayer(template);
-          }}
-          disabled={!canAddLayer}
-        >
-          {templates.map((template) => (
-            <Option key={template.id} value={template.id} text={template.label}>{template.label}</Option>
-          ))}
-        </Dropdown>
         <ReimportBaselineButton onReimportBaseline={onReimportBaseline} busy={baselineBusy} />
       </div>
 

@@ -188,6 +188,23 @@ describe('normalizeSyncLayers (work item #325 - sync filter layers)', () => {
     });
     expect(result.layers).toHaveLength(1);
   });
+
+  // Regressietest voor een bug in de route (#325): een kale array van LAAG-objecten
+  // (bv. { id, name, active, rules }[]) wordt hier als de legacy platte RULES-array gelezen en
+  // dus als 1 laag gewrapt (met de laag-objecten zelf als "rules" — niet als losse lagen). Callers
+  // moeten daarom altijd { layers: [...] } doorgeven, nooit de kale array. Zie server/routes/data.js.
+  it('wrapt een kale array van laag-objecten NIET als losse lagen (documenteert de contract-eis)', () => {
+    const layerObjects = [
+      { id: 'layer-1', name: 'Layer 1', active: true, rules: [{ field: 'A', operator: 'eq', value: '1', valueType: 'text' }] },
+      { id: 'layer-2', name: 'Layer 2', active: true, rules: [{ field: 'B', operator: 'eq', value: '2', valueType: 'text' }] },
+    ];
+    const wrongResult = normalizeSyncLayers(layerObjects);
+    expect(wrongResult.layers).toHaveLength(1);
+    expect(wrongResult.layers[0].rules).toBe(layerObjects);
+
+    const correctResult = normalizeSyncLayers({ layers: layerObjects });
+    expect(correctResult.layers).toHaveLength(2);
+  });
 });
 
 describe('recordMatchesAnyLayer (OR tussen lagen)', () => {
