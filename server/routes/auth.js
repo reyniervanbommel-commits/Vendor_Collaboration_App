@@ -146,12 +146,24 @@ router.post('/logout', async (req, res) => {
   req.session.destroy(() => res.json({ success: true }));
 });
 
-router.post('/set-password', async (req, res, next) => {
+// Uitsluitend de uitnodigingsflow: een account dat zijn eerste wachtwoord nog moet zetten.
+// Deze route is onvermijdelijk onbeschermd (de gebruiker heeft nog geen sessie), dus zonder de
+// controle hieronder kan iedereen die een e-mailadres kent het wachtwoord van dat account
+// overschrijven en direct ingelogd raken — inclusief dat van een admin. Een bestaand account
+// hoort via forgot-password/reset-password te gaan, met een token in de mailbox als bewijs.
+// Eén generieke fout voor "bestaat niet", "al ingesteld" en "vergrendeld", zodat deze route geen
+// geldige e-mailadressen prijsgeeft.
+router.post('/set-password', strictLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email address and password are required' });
     const user = await authService.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const mayEnroll = user && !user.is_locked && (user.must_set_password || !user.password_hash);
+    if (!mayEnroll) {
+      return res.status(403).json({
+        error: 'This account already has a password. Use "Forgot password" to request a reset link.',
+      });
+    }
     await authService.setPasswordForUser(user.id, password);
     const safeUser = authService.mapUserForSession(user);
     req.session.userId = user.id;

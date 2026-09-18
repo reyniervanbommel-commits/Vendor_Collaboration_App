@@ -147,8 +147,8 @@ describe('POST /logout', () => {
 });
 
 describe('POST /set-password', () => {
-  it('zet het wachtwoord, start de sessie en geeft de gemapte user terug', async () => {
-    authService.getUserByEmail = vi.fn().mockResolvedValue({ id: 2, email: 'new@b.com' });
+  it('zet het wachtwoord van een uitgenodigd account, start de sessie en geeft de gemapte user terug', async () => {
+    authService.getUserByEmail = vi.fn().mockResolvedValue({ id: 2, email: 'new@b.com', must_set_password: 1, password_hash: null });
     authService.setPasswordForUser = vi.fn().mockResolvedValue();
     authService.mapUserForSession = vi.fn().mockReturnValue({ id: 2, email: 'new@b.com', role: 'supplier' });
     const session = {};
@@ -161,12 +161,44 @@ describe('POST /set-password', () => {
     expect(session.userId).toBe(2);
   });
 
-  it('geeft 404 voor een onbekend e-mailadres', async () => {
+  // Account-overname: zonder rol- of tokencontrole kon iedereen die een e-mailadres kende het
+  // wachtwoord van dat account overschrijven en direct als die gebruiker ingelogd raken.
+  it('weigert een account dat al een wachtwoord heeft en wijzigt niets', async () => {
+    authService.getUserByEmail = vi.fn().mockResolvedValue({
+      id: 1, email: 'admin@b.com', role: 'admin', must_set_password: 0, password_hash: '$2b$12$hash',
+    });
+    authService.setPasswordForUser = vi.fn().mockResolvedValue();
+    const session = {};
+
+    await withServer({ session }, async (baseUrl) => {
+      const { status } = await postJson(baseUrl, '/api/auth/set-password', { email: 'admin@b.com', password: 'overgenomen1' });
+      expect(status).toBe(403);
+    });
+
+    expect(authService.setPasswordForUser).not.toHaveBeenCalled();
+    expect(session.userId).toBeUndefined();
+  });
+
+  it('weigert een vergrendeld account, ook als het nog geen wachtwoord heeft', async () => {
+    authService.getUserByEmail = vi.fn().mockResolvedValue({
+      id: 3, email: 'locked@b.com', must_set_password: 1, password_hash: null, is_locked: 1,
+    });
+    authService.setPasswordForUser = vi.fn().mockResolvedValue();
+
+    await withServer({}, async (baseUrl) => {
+      const { status } = await postJson(baseUrl, '/api/auth/set-password', { email: 'locked@b.com', password: 'longenoughpw' });
+      expect(status).toBe(403);
+    });
+
+    expect(authService.setPasswordForUser).not.toHaveBeenCalled();
+  });
+
+  it('geeft voor een onbekend e-mailadres dezelfde 403 — geen user enumeration', async () => {
     authService.getUserByEmail = vi.fn().mockResolvedValue(null);
 
     await withServer({}, async (baseUrl) => {
       const { status } = await postJson(baseUrl, '/api/auth/set-password', { email: 'x@b.com', password: 'longenoughpw' });
-      expect(status).toBe(404);
+      expect(status).toBe(403);
     });
   });
 
