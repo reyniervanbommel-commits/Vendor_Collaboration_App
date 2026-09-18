@@ -1,9 +1,10 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Field, Select } from '@fluentui/react-components';
+import { Field, Select, Text } from '@fluentui/react-components';
 import { ChevronDown24Regular } from '@fluentui/react-icons';
 
 function UserSecurityActionsComponent({
   user,
+  isAdmin,
   currentUserId,
   onEditPermissions,
   onEditVendorAccount,
@@ -40,6 +41,10 @@ function UserSecurityActionsComponent({
     if (action === 'force-reset') handleForceReset();
     if (action === 'remove') handleRemove();
   }, [handleEditPermissions, handleEditRole, handleEditVendorAccount, handleLockToggle, handleMfaToggle, handleForceReset, handleRemove]);
+
+  // Elke actie hieronder is backend-zijdig admin-only. Een employee met de 'users'-permissie mag
+  // de lijst lezen, maar zou anders knoppen zien die steevast op 403 uitlopen.
+  if (!isAdmin) return <Text size={200}>—</Text>;
 
   return (
     <Field validationMessage="">

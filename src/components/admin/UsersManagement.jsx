@@ -99,6 +99,7 @@ export default function UsersManagement() {
     handlePermissionsSaved,
   } = useUsersManagement();
   const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === ROLES.ADMIN;
 
   const accessByUserId = useMemo(() => {
     const map = {};
@@ -118,10 +119,12 @@ export default function UsersManagement() {
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
           onUserCreated={loadUsers}
+          allowStaffRoles={isAdmin}
         />
       </div>
 
-      <SupplierFilterColumnSelect />
+      {/* De bijbehorende PUT is admin-only; voor een employee zou dit veld altijd falen. */}
+      {isAdmin && <SupplierFilterColumnSelect />}
 
       <Input
         placeholder="Search by email or role..."
@@ -204,6 +207,7 @@ export default function UsersManagement() {
                 <TableCell>
                   <UserSecurityActions
                     user={user}
+                    isAdmin={isAdmin}
                     currentUserId={currentUser?.id}
                     onEditPermissions={handleEditPermissions}
                     onEditVendorAccount={handleEditVendorAccount}

@@ -18,7 +18,11 @@ import { PersonAdd24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import { ROLES } from '../../constants/roles';
 
-export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) {
+/**
+ * Nieuw account aanmaken. Zonder `allowStaffRoles` blijft alleen de vendor-rol over: een employee
+ * met de 'users'-permissie mag uitsluitend vendors aanmaken, de backend weigert de rest met 403.
+ */
+export default function CreateUserDialog({ open, onOpenChange, onUserCreated, allowStaffRoles }) {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(ROLES.SUPPLIER);
   const [vendorAccount, setVendorAccount] = useState('');
@@ -76,10 +80,14 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
               />
             </Field>
             <Field label="Role">
-              <Select value={role} onChange={(e) => setRole(e.target.value)} disabled={loading}>
+              <Select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={loading || !allowStaffRoles}
+              >
                 <option value={ROLES.SUPPLIER}>Supplier</option>
-                <option value={ROLES.EMPLOYEE}>Employee</option>
-                <option value={ROLES.ADMIN}>Admin</option>
+                {allowStaffRoles && <option value={ROLES.EMPLOYEE}>Employee</option>}
+                {allowStaffRoles && <option value={ROLES.ADMIN}>Admin</option>}
               </Select>
             </Field>
             {isSupplier && (
