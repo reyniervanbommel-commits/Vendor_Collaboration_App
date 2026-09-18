@@ -29,7 +29,7 @@ const {
   loadStaffRuntimeHeaderLinks,
   annotateAdminColumnsWithLineLinks,
 } = require('../utils/runtimeHeaderLinks');
-const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, normalizeSyncLayers, recordMatchesAnyLayer, compileSyncLayerChunks, OPERATORS, MAX_RULES, MAX_LAYERS } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
   lookupRawFieldValue,
@@ -276,9 +276,10 @@ async function clearSyncRetainedForTable(pool, tableId) {
     `);
 }
 
-async function markOutOfScopeCacheRows(pool, tableId, rules) {
-  if (!Array.isArray(rules) || !rules.length) return { marked: 0 };
-  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+async function markOutOfScopeCacheRows(pool, tableId, syncLayers) {
+  const rules = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
+  if (!rules.length) return { marked: 0 };
+  const hasLineRules = rules.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
   const masters = await pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
@@ -298,7 +299,7 @@ async function markOutOfScopeCacheRows(pool, tableId, rules) {
   for (const row of masters.recordset || []) {
     const headerJson = parseJson(row.data_json);
     const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
-    if (!recordMatchesSyncRules(rules, headerJson, lineRecords)) {
+    if (!recordMatchesAnyLayer(rules, headerJson, lineRecords)) {
       outOfScopeKeys.push({ partitionKey: row.partition_key, recordKey: row.record_key });
     }
   }
@@ -327,6 +328,64 @@ async function markOutOfScopeCacheRows(pool, tableId, rules) {
     throw err;
   }
   return { marked: outOfScopeKeys.length };
+}
+
+/**
+ * Herstelt cache-rijen die weer binnen scope vallen (bv. een laag is opnieuw geactiveerd) direct,
+ * zonder op de volgende nachtrun te wachten. Tegenhanger van markOutOfScopeCacheRows (#325).
+ */
+async function unmarkInScopeCacheRows(pool, tableId, syncLayers) {
+  const layers = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
+  if (!layers.length) return { unmarked: 0 };
+  const hasLineRules = layers.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
+  const removedMasters = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT partition_key, record_key, data_json
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 1 AND sync_retained = 0
+    `);
+  const detailJsonByRecord = hasLineRules
+    ? await loadDetailJsonByRecord(
+      pool,
+      tableId,
+      (removedMasters.recordset || []).map((row) => `${row.partition_key}|${row.record_key}`)
+    )
+    : new Map();
+
+  const inScopeKeys = [];
+  for (const row of removedMasters.recordset || []) {
+    const headerJson = parseJson(row.data_json);
+    const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
+    if (recordMatchesAnyLayer(layers, headerJson, lineRecords)) {
+      inScopeKeys.push({ partitionKey: row.partition_key, recordKey: row.record_key });
+    }
+  }
+  if (!inScopeKeys.length) return { unmarked: 0 };
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { partitionKey, recordKey } of inScopeKeys) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, tableId)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .query(`
+          UPDATE dbo.tb_cache
+          SET removed_at_source = 0
+          WHERE table_id = @tableId AND scope = 'master'
+            AND partition_key = @partitionKey AND record_key = @recordKey
+            AND detail_key = ${MASTER_DETAIL_KEY}
+            AND removed_at_source = 1
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+  return { unmarked: inScopeKeys.length };
 }
 
 async function countSyncRetainedMasters(pool, tableId) {
@@ -361,12 +420,12 @@ async function loadDetailJsonByRecord(pool, tableId, recordKeys) {
   return grouped;
 }
 
-async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings, syncRules) {
-  const rules = Array.isArray(syncRules) ? syncRules : [];
+async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings, syncLayers) {
+  const rules = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
   const rawCandidates = (removedMasters.recordset || []).filter((row) => (
     Number(row.previous_removed) === 0 && Number(row.removed_at_source) === 1
   ));
-  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const hasLineRules = rules.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
   const detailJsonByRecord = hasLineRules
     ? await loadDetailJsonByRecord(
       pool,
@@ -378,7 +437,7 @@ async function applySyncRetainedTransitions(pool, table, removedMasters, retenti
     if (!rules.length) return true;
     const headerJson = parseJson(row.data_json);
     const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
-    return recordMatchesSyncRules(rules, headerJson, lineRecords);
+    return recordMatchesAnyLayer(rules, headerJson, lineRecords);
   });
   if (!candidates.length) {
     return { retainedAdded: 0, capReached: false, retainedKeys: new Set() };
@@ -608,9 +667,9 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2500);
   let filterChunks = [''];
   try {
-    const rules = await getTableSyncRules(table);
-    const resolved = await resolveSyncRules(rules, { forD365: true });
-    filterChunks = compileSyncRulesChunks(resolved);
+    const layers = await getTableSyncLayers(table);
+    const resolvedLayers = await resolveSyncLayers(layers, { forD365: true });
+    filterChunks = compileSyncLayerChunks(resolvedLayers);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
@@ -899,8 +958,11 @@ async function getInheritedPoLookupScopes(table) {
   })).filter((entry) => entry.values.length > 0);
 }
 
-async function getPurchaseOrderSyncRules() {
-  return parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+async function getPurchaseOrderSyncLayers() {
+  const raw = await settingsService.getAsync('PO_SYNC_RULES', '');
+  let parsed = [];
+  try { parsed = raw ? JSON.parse(raw) : []; } catch { parsed = []; }
+  return normalizeSyncLayers(parsed).layers;
 }
 
 function resolveLookupTargetSourceField(lookup, targetColumns) {
@@ -922,15 +984,15 @@ function resolveLookupTargetSourceField(lookup, targetColumns) {
   return configuredTargetField;
 }
 
-async function getTableSyncRules(table) {
+async function getTableSyncLayers(table) {
   if (table.key === 'purchase-orders') {
-    const fromSettings = await getPurchaseOrderSyncRules();
+    const fromSettings = await getPurchaseOrderSyncLayers();
     if (fromSettings.length) return fromSettings;
   }
   if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     return [];
   }
-  return parseDefaultFilterRules(table.defaultFilter);
+  return normalizeSyncLayers(parseDefaultFilterRules(table.defaultFilter)).layers;
 }
 
 async function listVendorAccountsByGroupsFromCache(groupIds) {
@@ -964,11 +1026,27 @@ async function resolveSyncRules(rules, { forD365 = false } = {}) {
   return expandVendorGroupRules(list, accounts);
 }
 
+// Past resolveSyncRules (vendor-group-expansie) toe per laag; lagen zelf blijven OR-gecombineerd,
+// alleen de regels binnen elke laag worden geresolved (#325).
+async function resolveSyncLayers(layers, opts) {
+  const list = Array.isArray(layers) ? layers : [];
+  return Promise.all(list.map(async (layer) => ({
+    ...layer,
+    rules: await resolveSyncRules(layer.rules, opts),
+  })));
+}
+
 async function getTableSyncFilter(table) {
-  const rules = await getTableSyncRules(table);
+  if (table.key === 'purchase-orders') {
+    const layers = await getTableSyncLayers(table);
+    const resolvedLayers = await resolveSyncLayers(layers, { forD365: true });
+    const chunks = compileSyncLayerChunks(resolvedLayers).filter(Boolean);
+    return chunks.length ? chunks.map((c) => `(${c})`).join(' or ') : '';
+  }
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) return '';
+  const rules = parseDefaultFilterRules(table.defaultFilter);
   if (!rules.length) return '';
-  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
-  return compileSyncRules(resolved);
+  return compileSyncRules(rules);
 }
 
 function normalizeLookupKeyPart(value) {
@@ -2355,13 +2433,13 @@ async function refresh(tableKey, options = {}) {
 
     if (table.key === 'purchase-orders') {
       const retentionSettings = await getSyncRetentionSettings();
-      const syncRules = await resolveSyncRules(await getTableSyncRules(table), { forD365: false });
+      const syncLayers = await resolveSyncLayers(await getTableSyncLayers(table), { forD365: false });
       const retentionResult = await applySyncRetainedTransitions(
         pool,
         table,
         removedMasters,
         retentionSettings,
-        syncRules
+        syncLayers
       );
       retentionCapReached = Boolean(retentionResult.capReached);
       retainedKeys = retentionResult.retainedKeys || new Set();
@@ -3521,8 +3599,8 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
         return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries, recordFilter);
       })
     : Promise.resolve(emptyTrackMarks);
-  const syncRulesPromise = table.key === 'purchase-orders'
-    ? time('tb_sync_rules', () => getTableSyncRules(table))
+  const syncLayersPromise = table.key === 'purchase-orders'
+    ? time('tb_sync_rules', () => getTableSyncLayers(table))
     : Promise.resolve([]);
   const ledgerPromise = includeChangeDecorations
     ? (async () => {
@@ -3565,7 +3643,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     { d365LedgerRows, hasLedgerWindow },
     historyByCell,
     trackMarks,
-    syncRules,
+    syncLayers,
   ] = await Promise.all([
     time('tb_read_cols', () => Promise.all([
       listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
@@ -3586,11 +3664,11 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     ledgerPromise,
     historyByCellPromise,
     trackMarksPromise,
-    syncRulesPromise,
+    syncLayersPromise,
   ]);
-  const resolvedSyncRules = table.key === 'purchase-orders'
-    ? await resolveSyncRules(syncRules, { forD365: false })
-    : (Array.isArray(syncRules) ? syncRules : []);
+  const resolvedSyncLayers = table.key === 'purchase-orders'
+    ? await resolveSyncLayers(syncLayers, { forD365: false })
+    : [];
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const pavColumns = (detailCols || []).filter((column) => column?.options?.kind === 'product-attribute');
@@ -3639,7 +3717,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   let newCount = 0;
   let changedCount = 0;
   let scopedRows;
-  const activeSyncRules = Array.isArray(resolvedSyncRules) ? resolvedSyncRules : [];
+  const activeSyncLayers = Array.isArray(resolvedSyncLayers) ? resolvedSyncLayers.filter((layer) => layer && layer.active) : [];
   const masterJsonByRecKey = new Map(
     mastersResult.recordset.map((m) => [`${m.partition_key}|${m.record_key}`, parseJson(m.data_json)])
   );
@@ -3748,17 +3826,17 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   });
 
   let visibleRows = rows;
-  if (table.key === 'purchase-orders' && (activeSyncRules.length || itemsLineFilterActive)) {
+  if (table.key === 'purchase-orders' && (activeSyncLayers.length || itemsLineFilterActive)) {
     visibleRows = rows.filter((row) => {
       const recKey = `${row.partitionKey}|${row.recordKey}`;
       // Items-filter: verberg orders zonder enkele matchende regel (ook retained orders — de
       // gebruiker wil een schoon, op de items-filter gefilterd bord).
       if (itemsLineFilterActive && ordersHiddenByItemsFilter.has(recKey)) return false;
-      if (activeSyncRules.length) {
+      if (activeSyncLayers.length) {
         if (row.syncRetained) return true;
         const masterJson = masterJsonByRecKey.get(recKey) || {};
         const lineRecords = (detailsByRecord.get(recKey) || []).map((d) => parseJson(d.data_json));
-        return recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords);
+        return recordMatchesAnyLayer(activeSyncLayers, masterJson, lineRecords);
       }
       return true;
     });
@@ -3890,10 +3968,10 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const wanted = new Set(valueColumnKeys.filter(Boolean));
   const cols = masterCols.filter((c) => wanted.has(c.key));
 
-  const activeSyncRules = table.key === 'purchase-orders'
-    ? await resolveSyncRules(await getTableSyncRules(table), { forD365: false })
+  const activeSyncLayers = table.key === 'purchase-orders'
+    ? await resolveSyncLayers(await getTableSyncLayers(table), { forD365: false })
     : [];
-  const needsLineRecords = activeSyncRules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const needsLineRecords = activeSyncLayers.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
 
   const mastersResult = await time('tb_vendor_master_only', () => pool.request()
     .input('tableId', sql.BigInt, table.id)
@@ -3928,9 +4006,9 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const rows = [];
   for (const m of mastersResult.recordset) {
     const masterJson = parseJson(m.data_json);
-    if (activeSyncRules.length && !Boolean(m.sync_retained)) {
+    if (activeSyncLayers.length && !Boolean(m.sync_retained)) {
       const lineRecords = lineRecordsByRecKey?.get(`${m.partition_key}|${m.record_key}`) || [];
-      if (!recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords)) continue;
+      if (!recordMatchesAnyLayer(activeSyncLayers, masterJson, lineRecords)) continue;
     }
     rows.push({
       recordKey: m.record_key,
@@ -5100,16 +5178,23 @@ async function getDataModel(tableKey) {
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
   ]);
-  const syncRules = await getTableSyncRules(table);
-  let compiledFilter = '';
-  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+  const syncLayers = await getTableSyncLayers(table);
+  const compiledLayers = syncLayers.map((layer) => {
+    let compiled = '';
+    try { compiled = compileSyncRules(layer.rules); } catch { compiled = ''; }
+    return { ...layer, compiled };
+  });
   const isInheritedSyncFilterTable = READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
   const usesPoLookupScope = PO_LOOKUP_SCOPED_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
-  let inheritedSyncRules = [];
+  let inheritedLayers = [];
   let inheritedCompiledFilter = '';
   if (isInheritedSyncFilterTable || usesPoLookupScope) {
-    inheritedSyncRules = await getPurchaseOrderSyncRules();
-    try { inheritedCompiledFilter = compileSyncRules(inheritedSyncRules); } catch { inheritedCompiledFilter = ''; }
+    inheritedLayers = await getPurchaseOrderSyncLayers();
+    const inheritedChunks = inheritedLayers
+      .filter((layer) => layer.active)
+      .map((layer) => { try { return compileSyncRules(layer.rules); } catch { return ''; } })
+      .filter(Boolean);
+    inheritedCompiledFilter = inheritedChunks.length ? inheritedChunks.map((c) => `(${c})`).join(' or ') : '';
   }
 
   // Cache-stats uit tb_cache + tb_sync_state.
@@ -5156,13 +5241,14 @@ async function getDataModel(tableKey) {
   const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
   if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
     try {
-      const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
+      const resolvedPreviewLayers = await resolveSyncLayers(compiledLayers, { forD365: true });
+      const previewChunks = compileSyncLayerChunks(resolvedPreviewLayers);
       const fallbackSample = await fetchPurchaseOrders({
         supplierAccount: null,
         top: DATA_MODEL_PREVIEW_ROW_LIMIT,
         skip: 0,
         fetchAll: false,
-        extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
+        extraFilter: previewChunks[0] || '',
         maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
       });
       const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
@@ -5214,25 +5300,33 @@ async function getDataModel(tableKey) {
     };
   }));
 
+  const firstActiveLayer = compiledLayers.find((layer) => layer.active);
   const syncFilterPayload = isInheritedSyncFilterTable
     ? {
+        layers: [],
         rules: [],
         compiled: '',
-        inheritedRules: inheritedSyncRules,
+        inheritedLayers,
+        inheritedRules: inheritedLayers.flatMap((layer) => (layer.active ? layer.rules : [])),
         inheritedCompiled: inheritedCompiledFilter,
         readOnly: true,
         inheritedFromTable: 'purchase-orders',
         message: 'This table automatically inherits the active Purchase Orders sync filter.',
         operators: OPERATORS,
         maxRules: MAX_RULES,
+        maxLayers: MAX_LAYERS,
         templates: [],
       }
     : {
-        rules: syncRules,
-        compiled: compiledFilter,
+        // Nieuwe, primaire vorm (#325): meerdere additieve (OR) filter-lagen.
+        layers: compiledLayers,
+        // Backwards compat voor oudere clients: eerste actieve laag als platte "rules"/"compiled".
+        rules: firstActiveLayer ? firstActiveLayer.rules : [],
+        compiled: firstActiveLayer ? firstActiveLayer.compiled : '',
         readOnly: false,
         operators: OPERATORS,
         maxRules: MAX_RULES,
+        maxLayers: MAX_LAYERS,
         templates: syncTemplatesForTable(table.key),
         // Items zijn bewerkbaar maar blijven beperkt tot de PO lookup scope (itemnummers uit
         // gesyncte inkooporders). De PO-filter tonen we informatief; het eigen filter werkt binnen die scope.
@@ -5281,41 +5375,53 @@ async function saveTableDefaultFilter(tableId, rules) {
   invalidateTableCache();
 }
 
-// Sync-filter-regels per tabel opslaan.
-async function saveSyncFilters(tableKey, rules) {
+// Sync-filter-LAGEN per tabel opslaan (#325: meerdere additieve OR-lagen i.p.v. één vervangende
+// regel-lijst). Accepteert zowel { layers: [...] } als de legacy platte rules-array (auto-wrap via
+// normalizeSyncLayers) voor backwards compatibility.
+async function saveSyncFilters(tableKey, payload) {
   const table = await getTableByKey(tableKey);
   if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     throw Object.assign(new Error('This table automatically inherits the Purchase Orders filter and cannot be changed manually.'), { status: 400 });
   }
-  const list = Array.isArray(rules) ? rules : [];
-  if (list.some(isVendorGroupRule)) expandVendorGroupRules(list, ['ok']);
-  const compiled = compileSyncRules(list.filter((rule) => !isVendorGroupRule(rule)));
+  const { layers } = normalizeSyncLayers(payload);
+  for (const layer of layers) {
+    if (layer.rules.some(isVendorGroupRule)) expandVendorGroupRules(layer.rules, ['ok']);
+  }
+  const compiledLayers = layers.map((layer) => {
+    let compiled = '';
+    try { compiled = compileSyncRules(layer.rules.filter((rule) => !isVendorGroupRule(rule))); } catch { compiled = ''; }
+    return { ...layer, compiled };
+  });
+
   if (table.key === 'purchase-orders') {
-    await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+    await settingsService.set('PO_SYNC_RULES', JSON.stringify({ layers }));
     const pool = await getPool();
-    await clearSyncRetainedForTable(pool, table.id);
-    if (list.length) {
-      const matchingRules = await resolveSyncRules(list, { forD365: false });
-      await markOutOfScopeCacheRows(pool, table.id, matchingRules);
+    const activeLayers = layers.filter((layer) => layer.active);
+    if (activeLayers.length) {
+      const resolvedLayers = await resolveSyncLayers(activeLayers, { forD365: false });
+      // Alleen rijen buiten de nieuwe combinatie van actieve lagen markeren als out-of-scope —
+      // niet meer blind alle sync_retained resetten (dat verloor eerder ten onrechte de scope/
+      // retentie van niet-gewijzigde lagen, zie AC #2 work item #325).
+      await markOutOfScopeCacheRows(pool, table.id, resolvedLayers);
+      // Rijen die weer matchen (bv. een laag opnieuw actief) direct herstellen, zodat eerder
+      // gecachte data direct terugkomt zonder op de nachtrun te wachten (AC #3, unmarkInScopeCacheRows).
+      await unmarkInScopeCacheRows(pool, table.id, resolvedLayers);
+    } else {
+      await clearSyncRetainedForTable(pool, table.id);
     }
   }
-  await saveTableDefaultFilter(table.id, list);
+  await saveTableDefaultFilter(table.id, layers.flatMap((layer) => (layer.active ? layer.rules : [])));
   // Deze actie verandert wélke rijen in scope zijn (removed_at_source / sync_retained) zonder
   // content_changed_at of last_full_sync_at te raken. De gedeelde BI/RCCP-snapshots moeten dus
   // expliciet weg, anders tonen die tot de volgende signatuurwijziging out-of-scope rijen.
   // eslint-disable-next-line global-require
   require('./BoardSnapshotCache').invalidateBoardSnapshots({ tableKey: table.key });
-  return { rules: list, compiled };
+  return { layers: compiledLayers };
 }
 
-// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen).
-async function countSyncFilter(tableKey, rules) {
-  const table = await getTableByKey(tableKey);
-  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
-    throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
-  }
-  const list = Array.isArray(rules) ? rules : [];
-  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(list, { forD365: true }) : list;
+// Tel hoeveel bron-rijen ÉÉN regel-set matcht (interne helper, hergebruikt per laag).
+async function countSyncFilterForRules(table, rules) {
+  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
   const compiled = compileSyncRules(resolved);
   const filterChunks = compileSyncRulesChunks(resolved);
 
@@ -5372,6 +5478,30 @@ async function countSyncFilter(tableKey, rules) {
     total += Number(result.total) || 0;
   }
   return { total, compiled };
+}
+
+// Tel hoeveel bron-rijen de sync-filter-LAGEN matchen (impact-preview vóór verversen, #325).
+// Accepteert { layers: [...] } of de legacy platte rules-array. Som over actieve lagen is een
+// bovengrens (een rij die door 2 lagen matcht telt dubbel) — zelfde pragmatische aanpak als de
+// bestaande grote-one-of-chunking, ruim voldoende voor een impact-indicatie.
+async function countSyncFilter(tableKey, payload) {
+  const table = await getTableByKey(tableKey);
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
+  }
+  const { layers } = normalizeSyncLayers(payload);
+  const activeLayers = layers.filter((layer) => layer.active);
+  if (!activeLayers.length) return { total: 0, compiled: '', layers: [] };
+
+  const perLayer = [];
+  let total = 0;
+  for (const layer of activeLayers) {
+    const result = await countSyncFilterForRules(table, layer.rules);
+    perLayer.push({ id: layer.id, name: layer.name, total: result.total, compiled: result.compiled });
+    total += result.total;
+  }
+  const compiled = perLayer.map((l) => l.compiled).filter(Boolean).map((c) => `(${c})`).join(' or ');
+  return { total, compiled, layers: perLayer };
 }
 
 module.exports = {
