@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
+import { ROLES } from '../constants/roles';
 
 /**
  * useUsersManagement — state en handlers voor admin gebruikersbeheer.
@@ -30,15 +31,19 @@ export function useUsersManagement() {
       const list = data.users || [];
       setUsers(list);
 
+      // Alleen employees hebben betekenisvolle permissierijen (#AB:326): een admin mag sowieso
+      // alles en een vendor bereikt geen instellingentab. Dat scheelt een call per gebruiker.
       const permissionsMap = {};
-      await Promise.all(list.map(async (user) => {
-        try {
-          const perms = await apiRequest(`/admin/users/${user.id}/permissions`);
-          permissionsMap[user.id] = (Array.isArray(perms) ? perms : []).map((p) => p.page_name);
-        } catch {
-          permissionsMap[user.id] = [];
-        }
-      }));
+      await Promise.all(list
+        .filter((user) => user.role === ROLES.EMPLOYEE)
+        .map(async (user) => {
+          try {
+            const perms = await apiRequest(`/admin/users/${user.id}/permissions`);
+            permissionsMap[user.id] = (Array.isArray(perms) ? perms : []).map((p) => p.page_name);
+          } catch {
+            permissionsMap[user.id] = [];
+          }
+        }));
       setUserPermissions(permissionsMap);
     } catch (err) {
       setError(err.message || 'Failed to load users');

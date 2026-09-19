@@ -49,19 +49,12 @@ export const GRANTABLE_SETTINGS_TAB_IDS = Object.freeze(
 );
 
 /**
- * Leesbaar publiek van een tab. Een grantable admin-tab is ook voor een employee met de
- * bijbehorende permissie bereikbaar; dat maakt het label anders dan de kale rollenlijst.
  * @param {string[]} roles
- * @param {{ grantable?: boolean }} [options]
  * @returns {string}
  */
-export function formatAudience(roles, options = {}) {
+export function formatAudience(roles) {
   const list = Array.isArray(roles) ? roles : [];
-  const labels = list.map((role) => ROLE_LABELS[role] || role);
-  if (options.grantable && !list.includes(ROLES.EMPLOYEE)) {
-    labels.push(`${ROLE_LABELS[ROLES.EMPLOYEE]} (with permission)`);
-  }
-  return labels.join(', ');
+  return list.map((role) => ROLE_LABELS[role] || role).join(', ');
 }
 
 /**
@@ -110,16 +103,4 @@ export function getGrantableSettingsSections() {
   return SETTINGS_NAV_SECTIONS
     .map((section) => ({ ...section, items: section.items.filter((item) => item.grantable) }))
     .filter((section) => section.items.length > 0);
-}
-
-/**
- * @param {string} tabId
- * @returns {string[]}
- */
-export function getSettingsTabRoles(tabId) {
-  for (const section of SETTINGS_NAV_SECTIONS) {
-    const item = section.items.find((entry) => entry.id === tabId);
-    if (item) return item.roles;
-  }
-  return [];
 }

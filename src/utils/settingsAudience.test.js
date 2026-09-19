@@ -6,7 +6,6 @@ import {
   canSeeSettingsTab,
   formatAudience,
   getGrantableSettingsSections,
-  getSettingsTabRoles,
   getVisibleSettingsSections,
 } from './settingsAudience';
 
@@ -15,11 +14,6 @@ describe('settingsAudience', () => {
     expect(formatAudience(SETTINGS_AUDIENCE.ALL)).toBe('Admin, Employee, Vendor');
     expect(formatAudience(SETTINGS_AUDIENCE.STAFF)).toBe('Admin, Employee');
     expect(formatAudience(SETTINGS_AUDIENCE.ADMIN)).toBe('Admin');
-  });
-
-  it('marks a grantable admin tab as reachable for employees with permission', () => {
-    expect(formatAudience(SETTINGS_AUDIENCE.ADMIN, { grantable: true })).toBe('Admin, Employee (with permission)');
-    expect(formatAudience(SETTINGS_AUDIENCE.STAFF, { grantable: true })).toBe('Admin, Employee');
   });
 
   it('shows only General to vendors', () => {
@@ -73,9 +67,8 @@ describe('settingsAudience', () => {
     expect(sections[0].items.map((item) => item.id)).toEqual(['users', 'analytics', 'mail-template']);
   });
 
-  it('resolves audience for a tab id', () => {
-    expect(getSettingsTabRoles('general')).toEqual(SETTINGS_AUDIENCE.ALL);
-    expect(getSettingsTabRoles('users')).toEqual(SETTINGS_AUDIENCE.ADMIN);
+  it('keeps an admin-only tab invisible for a plain role check', () => {
     expect(canSeeSettingsTab(SETTINGS_AUDIENCE.ADMIN, ROLES.EMPLOYEE)).toBe(false);
+    expect(canSeeSettingsTab(SETTINGS_AUDIENCE.ALL, ROLES.SUPPLIER)).toBe(true);
   });
 });
