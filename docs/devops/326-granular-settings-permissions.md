@@ -52,6 +52,25 @@
 - [x] Tests: `settingsAudience.test.js` (`grantable`-regel); nieuwe route-test in de stijl van `admin.general-settings.test.js` met de 4 escalatie-testgevallen (rol-wijziging, delete, force-reset, permissies-beheer) + 1 test voor de `supplier-filter-column`-guard.
 - [x] Versienummer ophogen in `src/config/version.js`.
 
+### Grens van de `datamodel`-permissie (vastgelegd na security-review)
+
+De kolomroutes in `server/routes/data.js` vallen in twee groepen. Alleen de eerste zit achter
+`requirePagePermission('datamodel')`:
+
+| Route | Guard | Reden |
+|---|---|---|
+| `PATCH /:tableKey/columns/:id/writeback` | `datamodel` | Zet echte D365-mutaties aan; de toggle zit uitsluitend in Instellingen > Data model (het board-kolommenu heeft hem bewust niet, zie `usePurchaseOrderColumnMenuFlags`) |
+| `PATCH /:tableKey/columns/:id/visibility` | `datamodel` | Alleen aangeroepen vanuit `useDataModelAdmin` |
+| `PATCH /:tableKey/columns/:id/visible-at-delete` | `datamodel` | Alleen aangeroepen vanuit `useDataModelAdmin` |
+| `POST /:tableKey/columns` | open voor staff | Kolom toevoegen vanuit het PO-board-kolommenu |
+| `PATCH /:tableKey/columns/:id` | open voor staff | Hernoemen, datatype, statusopties en formules vanuit het board-kolommenu |
+| `POST /:tableKey/columns/validate-formula` | open voor staff | Read-only validatie bij het formule-dialoog |
+| `DELETE /:tableKey/columns/:id`, `PATCH .../vendor-editable` | `requireRole(ADMIN)` | Ongewijzigd admin-only |
+
+Kolommen toevoegen en hernoemen hoort bij het dagelijks werk van een employee op het bord, niet bij
+het beheer van het datamodel; die routes achter de permissie zetten zou bestaande werkwijze breken.
+De grens is vastgelegd in `server/routes/data.column-permissions.test.js`.
+
 ### Afwijkingen t.o.v. het ontwerp
 
 - `dataLinks.js` krijgt één `router.use(requirePagePermission('external-links'))` in plaats van de guard per route; alle routes van die router horen bij dezelfde tab en een nieuwe route blijft zo nooit per ongeluk ongeguard.

@@ -416,7 +416,8 @@ router.delete('/:tableKey/columns/:id', requireRole(ROLES.ADMIN), async (req, re
 });
 
 // PATCH /api/data/:tableKey/columns/:id/visibility — kolom tonen/verbergen op het bord (is_active). #AB:170
-router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
+// Alleen bereikbaar vanuit Instellingen > Data model, dus achter die permissie (#AB:326).
+router.patch('/:tableKey/columns/:id/visibility', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -428,7 +429,7 @@ router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
 });
 
 // PATCH /api/data/:tableKey/columns/:id/visible-at-delete — zichtbaar in de verborgen-orders-popup. #AB:170
-router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
+router.patch('/:tableKey/columns/:id/visible-at-delete', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -452,7 +453,9 @@ router.patch('/:tableKey/columns/:id/vendor-editable', requireRole(ROLES.ADMIN),
 });
 
 // PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
-router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
+// Schakelt echte D365-mutaties in; de toggle zit alleen in Instellingen > Data model (het
+// board-kolommenu heeft hem bewust niet), dus achter de datamodel-permissie (#AB:326).
+router.patch('/:tableKey/columns/:id/writeback', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
