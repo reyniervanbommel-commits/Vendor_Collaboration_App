@@ -514,7 +514,12 @@ router.post('/:tableKey/discover-fields', requirePagePermission('datamodel'), as
 // PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
 router.put('/:tableKey/sync-filters', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
-    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
+    // { layers: [...] } (#325) moet als object naar normalizeSyncLayers — een kale array wordt
+    // daar als legacy platte régel-lijst gelezen (niet als lagen-lijst). Bugfix: zonder deze
+    // wrap verdween een 2e laag bij herladen (de hele lagen-array werd als "rules" van 1 laag
+    // opgeslagen).
+    const payload = req.body?.layers ? { layers: req.body.layers } : req.body?.rules;
+    return res.json(await dataService.saveSyncFilters(req.params.tableKey, payload));
   } catch (err) {
     return next(err);
   }
@@ -523,7 +528,8 @@ router.put('/:tableKey/sync-filters', requirePagePermission('datamodel'), async 
 // POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
 router.post('/:tableKey/sync-filters/count', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
-    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
+    const payload = req.body?.layers ? { layers: req.body.layers } : req.body?.rules;
+    return res.json(await dataService.countSyncFilter(req.params.tableKey, payload));
   } catch (err) {
     return next(err);
   }

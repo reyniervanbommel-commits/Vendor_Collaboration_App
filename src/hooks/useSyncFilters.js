@@ -21,7 +21,9 @@ export const ENUM_FIELDS = {
 };
 
 // Lichtgewicht client-preview van wat de server compileert (zie server/utils/odataSyncFilter.js).
-function previewRule(rule) {
+// Geëxporteerd zodat useSyncFilterLayers.js (#325 — meerdere additieve filter-lagen) dezelfde
+// preview-logica per laag kan hergebruiken zonder duplicatie.
+export function previewRule(rule) {
   const { level, field, operator, value, valueType, enumType } = rule;
   if (!field || !operator || value === '' || value === null || value === undefined) return null;
   const fieldRef = level === 'line' ? `l/${field}` : field;

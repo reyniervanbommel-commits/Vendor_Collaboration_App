@@ -4,6 +4,17 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'feature-325-sync-filter-layers-v1-62-2',
+    title: 'Feature 325 - D365 sync filter layers (v1.62.2)',
+    checks: [
+      'Admin > Data model > Purchase orders > D365 sync filters: een 2e laag toevoegen, een regel invullen, opslaan',
+      'Na Save filters naar een ander tabblad (bv. Vendors) wisselen en terug naar Purchase orders: beide lagen blijven staan',
+      'Een laag uitzetten (Active-toggle) laat de andere laag ongewijzigd (geen reset van retentie)',
+      'Opslaan van een actieve laag zonder regels geeft een duidelijke foutmelding',
+      'Count rows per laag toont een apart resultaat per laag',
+    ],
+  },
+  {
     id: 'feature-326-granular-settings-permissions-v1-69-2',
     title: 'Feature 326 - Granulaire instellingen-permissies (v1.69.2)',
     checks: [

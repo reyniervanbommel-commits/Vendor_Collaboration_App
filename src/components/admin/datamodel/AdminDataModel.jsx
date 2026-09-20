@@ -112,6 +112,7 @@ export default function AdminDataModel() {
             cache={selectedModel.cache}
             onReimportBaseline={selectedModel.reimportBaseline}
             baselineBusy={selectedModel.togglingKey === 'baseline-import'}
+            onSyncFiltersSaved={selectedModel.reload}
           />
           <DataPreviewTables
             tableKey={selectedTab}
