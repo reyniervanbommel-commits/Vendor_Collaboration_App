@@ -1,7 +1,9 @@
 import { defineConfig } from 'vitest/config';
 
-// Omgeving, includes en setup staan per project in vitest.workspace.mjs (node vs jsdom).
-// Hier blijft alleen wat workspace-breed geldt: coverage en de thresholds.
+// Omgeving, includes en setup staan per project in vitest.workspace.mjs (node vs jsdom) — dat
+// vervangt de eerdere environmentMatchGlobs-aanpak en houdt óók de jest-dom-setup weg bij tests
+// die geen DOM nodig hebben. Gemeten op server/utils (283 tests): 894s met jsdom tegen 323s met
+// node. Hier blijft alleen wat workspace-breed geldt: coverage en de thresholds.
 export default defineConfig({
   test: {
     coverage: {

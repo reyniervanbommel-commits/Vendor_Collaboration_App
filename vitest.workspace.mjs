@@ -24,7 +24,11 @@ export default defineWorkspace([
       environment: 'node',
       globals: true,
       testTimeout: 15000,
-      include: ['server/**/*.test.{js,jsx}', 'src/utils/**/*.test.js'],
+      include: [
+        'server/**/*.test.{js,jsx}',
+        'scripts/**/*.test.{js,mjs}',
+        'src/utils/**/*.test.js',
+      ],
       exclude: EXCLUDE,
     },
   },
