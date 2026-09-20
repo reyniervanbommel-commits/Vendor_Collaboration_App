@@ -493,6 +493,16 @@ async function analyze({
   const kpis = { ...poKpiPair.windowed, ...capacityKpis };
   const kpisAll = { ...poKpiPair.all, ...capacityKpis };
 
+  // Confirmed-datum-basis (i.p.v. requested delivery date) — voedt de omdraaibare
+  // C/R-kant van de KPI-tegels. Zelfde structuur als hierboven, andere datumkolom.
+  const poKpiPairConfirmed = await time('rccp_kpis_confirmed', () => buildRccpPoKpisPair(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+    planningDateMode: 'confirmed',
+  }));
+  const kpisConfirmed = { ...poKpiPairConfirmed.windowed, ...capacityKpis };
+  const kpisAllConfirmed = { ...poKpiPairConfirmed.all, ...capacityKpis };
+
   return {
     config,
     window,
@@ -506,6 +516,8 @@ async function analyze({
     diagnostics,
     kpis,
     kpisAll,
+    kpisConfirmed,
+    kpisAllConfirmed,
     dataWindow: pickDataWindow(dataRangeByVendor, effectiveVendor),
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
@@ -564,8 +576,15 @@ async function boardKpis({ supplierAccount = null } = {}) {
     now,
     vendorAccount: supplierAccount || null,
   }));
+  // Confirmed-datum-basis — voedt de omdraaibare C/R-kant van de PO-board KPI-tegels.
+  const compactConfirmed = await time('rccp_board_kpis_confirmed', () => buildRccpPoKpiByOrder(poRows, config, {
+    now,
+    vendorAccount: supplierAccount || null,
+    planningDateMode: 'confirmed',
+  }));
   const payload = {
     ...compact,
+    confirmed: compactConfirmed,
     configured: Boolean(
       String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
     ),
