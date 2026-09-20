@@ -30,8 +30,15 @@ function applySessionPoTableZoom(data) {
   if (data && data.poTableZoom != null) setPoTableZoom(data.poTableZoom);
 }
 
+// Granulaire instellingen-permissies van de ingelogde gebruiker (#AB:326); de backend stuurt ze
+// vers mee bij /me, /login en /set-password, zodat ze nooit stale zijn.
+function readPermissions(data) {
+  return Array.isArray(data?.permissions) ? data.permissions : [];
+}
+
 export function useSessionAuth() {
   const [user, setUser] = useState(null);
+  const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -40,12 +47,14 @@ export function useSessionAuth() {
     try {
       const data = await apiRequest('/me');
       setUser(data.user);
+      setPermissions(readPermissions(data));
       if (data.user) applySessionPoTableZoom(data);
       else setPoTableZoom(PO_TABLE_ZOOM_DEFAULT);
       setError(null);
       return data;
     } catch (_) {
       setUser(null);
+      setPermissions([]);
       return null;
     } finally {
       setLoading(false);
@@ -59,6 +68,7 @@ export function useSessionAuth() {
     clearBoardCaches();
     const data = await apiRequest('/login', { method: 'POST', body: { email, password } });
     if (data.user) setUser(data.user);
+    setPermissions(readPermissions(data));
     applySessionPoTableZoom(data);
     return data;
   }, []);
@@ -66,6 +76,7 @@ export function useSessionAuth() {
   const setPassword = useCallback(async (email, password) => {
     const data = await apiRequest('/set-password', { method: 'POST', body: { email, password } });
     if (data.user) setUser(data.user);
+    setPermissions(readPermissions(data));
     applySessionPoTableZoom(data);
     return data;
   }, []);
@@ -75,14 +86,15 @@ export function useSessionAuth() {
       clearBoardCaches();
       setPoTableZoom(PO_TABLE_ZOOM_DEFAULT);
       setUser(null);
+      setPermissions([]);
     }
   }, []);
 
   const actions = useMemo(() => ({ login, logout, checkAuth, setPassword }), [login, logout, checkAuth, setPassword]);
 
   return useMemo(() => ({
-    user, loading, error,
+    user, permissions, loading, error,
     isAuthenticated: Boolean(user),
     actions,
-  }), [user, loading, error, actions]);
+  }), [user, permissions, loading, error, actions]);
 }

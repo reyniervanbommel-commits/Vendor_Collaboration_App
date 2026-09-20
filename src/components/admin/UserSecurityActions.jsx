@@ -1,11 +1,14 @@
 import React, { memo, useCallback, useState } from 'react';
-import { Field, Select } from '@fluentui/react-components';
+import { Field, Select, Text } from '@fluentui/react-components';
 import { ChevronDown24Regular } from '@fluentui/react-icons';
 
 function UserSecurityActionsComponent({
   user,
+  isAdmin,
+  currentUserId,
   onEditPermissions,
   onEditVendorAccount,
+  onEditRole,
   onLockToggle,
   onMfaRequiredToggle,
   onForceReset,
@@ -13,9 +16,12 @@ function UserSecurityActionsComponent({
 }) {
   const [selectedAction, setSelectedAction] = useState('');
   const isSupplier = user.role === 'supplier';
+  // De backend weigert een rolwissel op het eigen account; die optie hier dan ook niet tonen.
+  const isSelf = user.id === currentUserId;
 
   const handleEditPermissions = useCallback(() => onEditPermissions(user), [onEditPermissions, user]);
   const handleEditVendorAccount = useCallback(() => onEditVendorAccount(user), [onEditVendorAccount, user]);
+  const handleEditRole = useCallback(() => onEditRole(user), [onEditRole, user]);
   const handleLockToggle = useCallback(() => onLockToggle(user.id, user.is_locked), [onLockToggle, user]);
   const handleMfaToggle = useCallback(
     () => onMfaRequiredToggle(user.id, user.mfa_required),
@@ -28,12 +34,17 @@ function UserSecurityActionsComponent({
     const action = event.target.value;
     setSelectedAction('');
     if (action === 'permissions') handleEditPermissions();
+    if (action === 'role') handleEditRole();
     if (action === 'vendor-account') handleEditVendorAccount();
     if (action === 'lock-toggle') handleLockToggle();
     if (action === 'mfa-toggle') handleMfaToggle();
     if (action === 'force-reset') handleForceReset();
     if (action === 'remove') handleRemove();
-  }, [handleEditPermissions, handleEditVendorAccount, handleLockToggle, handleMfaToggle, handleForceReset, handleRemove]);
+  }, [handleEditPermissions, handleEditRole, handleEditVendorAccount, handleLockToggle, handleMfaToggle, handleForceReset, handleRemove]);
+
+  // Elke actie hieronder is backend-zijdig admin-only. Een employee met de 'users'-permissie mag
+  // de lijst lezen, maar zou anders knoppen zien die steevast op 403 uitlopen.
+  if (!isAdmin) return <Text size={200}>—</Text>;
 
   return (
     <Field validationMessage="">
@@ -44,6 +55,7 @@ function UserSecurityActionsComponent({
       >
         <option value="">Choose action</option>
         <option value="permissions">Manage permissions</option>
+        {!isSelf && <option value="role">Change role</option>}
         {isSupplier && <option value="vendor-account">Set vendor account</option>}
         <option value="lock-toggle">{user.is_locked ? 'Unlock' : 'Lock'}</option>
         <option value="mfa-toggle">{user.mfa_required ? 'Make MFA optional' : 'Require MFA'}</option>

@@ -2,13 +2,20 @@
 
 const express = require('express');
 const refreshRunService = require('../services/RefreshRunService');
+const pagePermissions = require('../utils/pagePermissions');
 
 const originalListRuns = refreshRunService.listRuns;
 const originalClearHistory = refreshRunService.clearHistory;
+const originalHasPagePermission = pagePermissions.hasPagePermission;
+
+beforeEach(() => {
+  pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(false);
+});
 
 afterEach(() => {
   refreshRunService.listRuns = originalListRuns;
   refreshRunService.clearHistory = originalClearHistory;
+  pagePermissions.hasPagePermission = originalHasPagePermission;
 });
 
 function buildApp(user) {
@@ -37,7 +44,7 @@ async function withServer(user, fn) {
 }
 
 describe('GET /api/admin/d365-refresh/runs', () => {
-  it('geeft employee 403', async () => {
+  it('geeft een employee zonder d365-refresh-permissie 403', async () => {
     await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/admin/d365-refresh/runs`);
       expect(res.status).toBe(403);
@@ -55,7 +62,7 @@ describe('GET /api/admin/d365-refresh/runs', () => {
 });
 
 describe('DELETE /api/admin/d365-refresh/runs', () => {
-  it('geeft employee 403', async () => {
+  it('geeft een employee zonder d365-refresh-permissie 403', async () => {
     await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/admin/d365-refresh/runs`, { method: 'DELETE' });
       expect(res.status).toBe(403);

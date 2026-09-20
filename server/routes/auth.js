@@ -11,6 +11,7 @@ const { getSqlPool } = require('../utils/sqlPool');
 const trackChangesService = require('../services/TrackChangesService');
 const poTableZoomSettings = require('../services/PoTableZoomSettings');
 const { getAppBaseUrl, isDevLikeApp } = require('../utils/appEnvironment');
+const pagePermissions = require('../utils/pagePermissions');
 
 const strictLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -94,6 +95,16 @@ async function readPoTableZoomSafe(userId = null) {
   }
 }
 
+// Permissies komen bewust vers uit de DB en niet uit de sessie: trekt een admin een permissie in,
+// dan moet dat bij de eerstvolgende call gelden en niet pas na een herlogin (#AB:326).
+async function readPagePermissionsSafe(userId = null) {
+  try {
+    return await pagePermissions.listPagePermissions(userId);
+  } catch {
+    return [];
+  }
+}
+
 router.post('/login', strictLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -108,7 +119,11 @@ router.post('/login', strictLimiter, async (req, res, next) => {
     await auditLog(result.user.id, result.user.email, 'LOGIN', 'users', result.user.id, { source: 'password' });
     await recordLoginAnalytics(result.user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(result.user.role);
-    res.json({ user: result.user, poTableZoom: await readPoTableZoomSafe(result.user.id) });
+    res.json({
+      user: result.user,
+      poTableZoom: await readPoTableZoomSafe(result.user.id),
+      permissions: await readPagePermissionsSafe(result.user.id),
+    });
   } catch (err) {
     if (err.message.includes('incorrect') || err.message.includes('locked')) {
       return res.status(401).json({ error: err.message });
@@ -131,12 +146,24 @@ router.post('/logout', async (req, res) => {
   req.session.destroy(() => res.json({ success: true }));
 });
 
-router.post('/set-password', async (req, res, next) => {
+// Uitsluitend de uitnodigingsflow: een account dat zijn eerste wachtwoord nog moet zetten.
+// Deze route is onvermijdelijk onbeschermd (de gebruiker heeft nog geen sessie), dus zonder de
+// controle hieronder kan iedereen die een e-mailadres kent het wachtwoord van dat account
+// overschrijven en direct ingelogd raken — inclusief dat van een admin. Een bestaand account
+// hoort via forgot-password/reset-password te gaan, met een token in de mailbox als bewijs.
+// Eén generieke fout voor "bestaat niet", "al ingesteld" en "vergrendeld", zodat deze route geen
+// geldige e-mailadressen prijsgeeft.
+router.post('/set-password', strictLimiter, async (req, res, next) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email address and password are required' });
     const user = await authService.getUserByEmail(email);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    const mayEnroll = user && !user.is_locked && (user.must_set_password || !user.password_hash);
+    if (!mayEnroll) {
+      return res.status(403).json({
+        error: 'This account already has a password. Use "Forgot password" to request a reset link.',
+      });
+    }
     await authService.setPasswordForUser(user.id, password);
     const safeUser = authService.mapUserForSession(user);
     req.session.userId = user.id;
@@ -145,7 +172,11 @@ router.post('/set-password', async (req, res, next) => {
     await auditLog(user.id, user.email, 'LOGIN', 'users', user.id, { source: 'set-password' });
     await recordLoginAnalytics(user.id, req.sessionID);
     await trackChangesService.recordSessionOnLogin(safeUser.role);
-    res.json({ user: safeUser, poTableZoom: await readPoTableZoomSafe(safeUser.id) });
+    res.json({
+      user: safeUser,
+      poTableZoom: await readPoTableZoomSafe(safeUser.id),
+      permissions: await readPagePermissionsSafe(safeUser.id),
+    });
   } catch (err) {
     next(err);
   }
@@ -200,9 +231,10 @@ router.get('/me', async (req, res, next) => {
       return res.json({
         user: req.session.user || null,
         poTableZoom: await readPoTableZoomSafe(req.session.userId),
+        permissions: await readPagePermissionsSafe(req.session.userId),
       });
     }
-    return res.json({ user: null });
+    return res.json({ user: null, permissions: [] });
   } catch (err) {
     next(err);
   }

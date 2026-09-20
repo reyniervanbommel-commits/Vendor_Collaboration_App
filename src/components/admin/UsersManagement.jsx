@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   makeStyles,
   tokens,
@@ -20,41 +20,27 @@ import {
   TableRow,
   TableHeader,
   TableHeaderCell,
-  Badge,
   shorthands,
 } from '@fluentui/react-components';
-import {
-  CheckmarkCircle24Regular,
-  Circle24Regular,
-  Edit24Regular,
-  Search24Regular,
-} from '@fluentui/react-icons';
+import { Search24Regular } from '@fluentui/react-icons';
 import CreateUserDialog from './CreateUserDialog';
 import EditPermissionsDialog from './EditPermissionsDialog';
 import EditVendorAccountDialog from './EditVendorAccountDialog';
+import EditRoleDialog from './EditRoleDialog';
 import SupplierFilterColumnSelect from './SupplierFilterColumnSelect';
-import { UserSecurityActions } from './UserSecurityActions';
+import UsersTableRow from './UsersTableRow';
 import { useUsersManagement } from '../../hooks/useUsersManagement';
+import { useAuth } from '../../context/AuthContext';
+import { getUserAccessSummary } from '../../utils/userAccessSummary';
 import { ROLES } from '../../constants/roles';
 
 const useStyles = makeStyles({
   container: { display: 'flex', flexDirection: 'column', ...shorthands.gap('16px') },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   table: { width: '100%' },
-  permBadge: { cursor: 'default' },
-  permissionStateCell: { display: 'flex', alignItems: 'center', ...shorthands.gap('8px') },
-  permissionOn: { color: tokens.colorPaletteGreenForeground1, display: 'inline-flex', alignItems: 'center' },
-  permissionOff: { color: tokens.colorPaletteRedForeground1, display: 'inline-flex', alignItems: 'center' },
-  permissionsButton: { minWidth: '120px' },
-  noPerms: { color: tokens.colorNeutralForeground3, fontStyle: 'italic' },
-  permUpdated: {
-    animationName: {
-      from: { backgroundColor: tokens.colorPaletteGreenBackground1 },
-      to: { backgroundColor: 'transparent' },
-    },
-    animationDuration: '1.5s',
-    animationTimingFunction: 'ease-out',
-  },
+  search: { minWidth: '280px', maxWidth: '360px' },
+  muted: { color: tokens.colorNeutralForeground3, fontStyle: 'italic' },
+  deleteButton: { backgroundColor: tokens.colorPaletteRedBackground3 },
 });
 
 export default function UsersManagement() {
@@ -77,6 +63,9 @@ export default function UsersManagement() {
     vendorDialogUser,
     vendorDialogOpen,
     setVendorDialogOpen,
+    roleDialogUser,
+    roleDialogOpen,
+    setRoleDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -89,9 +78,34 @@ export default function UsersManagement() {
     handleEditPermissions,
     handleEditVendorAccount,
     handleVendorAccountSave,
+    handleEditRole,
+    handleRoleSave,
     handlePermissionsSaved,
-    getDisplayPermissions,
   } = useUsersManagement();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === ROLES.ADMIN;
+
+  const accessByUserId = useMemo(() => {
+    const map = {};
+    filteredUsers.forEach((user) => {
+      map[user.id] = getUserAccessSummary(user.role, userPermissions[user.id] || []);
+    });
+    return map;
+  }, [filteredUsers, userPermissions]);
+
+  // Gebundeld en gememoizeerd, zodat de gememoizeerde rijen niet bij elke render hertekenen.
+  const rowActions = useMemo(() => ({
+    onEditPermissions: handleEditPermissions,
+    onEditVendorAccount: handleEditVendorAccount,
+    onEditRole: handleEditRole,
+    onLockToggle: handleLockToggle,
+    onMfaRequiredToggle: handleMfaRequiredToggle,
+    onForceReset: handleForceReset,
+    onDeleteClick: handleDeleteClick,
+  }), [
+    handleEditPermissions, handleEditVendorAccount, handleEditRole, handleLockToggle,
+    handleMfaRequiredToggle, handleForceReset, handleDeleteClick,
+  ]);
 
   if (loading) return <Text>Loading...</Text>;
 
@@ -103,17 +117,19 @@ export default function UsersManagement() {
           open={createDialogOpen}
           onOpenChange={setCreateDialogOpen}
           onUserCreated={loadUsers}
+          allowStaffRoles={isAdmin}
         />
       </div>
 
-      <SupplierFilterColumnSelect />
+      {/* De bijbehorende PUT is admin-only; voor een employee zou dit veld altijd falen. */}
+      {isAdmin && <SupplierFilterColumnSelect />}
 
       <Input
         placeholder="Search by email or role..."
         value={searchTerm}
         onChange={(_, d) => setSearchTerm(d.value)}
         contentBefore={<Search24Regular />}
-        style={{ minWidth: '280px', maxWidth: '360px' }}
+        className={styles.search}
       />
 
       {error && (
@@ -139,89 +155,21 @@ export default function UsersManagement() {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredUsers.map((user) => {
-            const rawPermissions = userPermissions[user.id] || [];
-            const displayPermissions = getDisplayPermissions(rawPermissions);
-            const isUpdated = recentlyUpdatedUserId === user.id;
-
-            return (
-              <TableRow key={user.id}>
-                <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <Badge appearance={user.role === ROLES.ADMIN ? 'filled' : 'outline'}>{user.role}</Badge>
-                </TableCell>
-                <TableCell>
-                  {user.role === ROLES.SUPPLIER ? (
-                    <Text size={200} className={user.vendor_account ? undefined : styles.noPerms}>
-                      {user.vendor_account || 'email prefix'}
-                    </Text>
-                  ) : (
-                    <Text size={200} className={styles.noPerms}>—</Text>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {user.is_locked && <Badge appearance="filled" color="danger">Locked</Badge>}
-                  {!user.is_locked && <Badge appearance="outline" color="success">Active</Badge>}
-                  {user.must_set_password && <Badge appearance="outline" color="warning">Set password</Badge>}
-                  {user.mfa_required && <Badge appearance="filled" color="brand">MFA required</Badge>}
-                  {user.mfa_enabled && <Badge appearance="outline" color="success">MFA active</Badge>}
-                </TableCell>
-                <TableCell className={isUpdated ? styles.permUpdated : undefined}>
-                  <div className={styles.permissionStateCell}>
-                    {displayPermissions.length > 0 ? (
-                      <>
-                        <span className={styles.permissionOn}><CheckmarkCircle24Regular /></span>
-                        <Text size={200}>Enabled</Text>
-                      </>
-                    ) : (
-                      <>
-                        <span className={styles.permissionOff}><Circle24Regular /></span>
-                        <Text size={200}>No permissions</Text>
-                      </>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className={isUpdated ? styles.permUpdated : undefined}>
-                  <Button
-                    appearance="secondary"
-                    icon={<Edit24Regular />}
-                    size="small"
-                    className={styles.permissionsButton}
-                    onClick={() => handleEditPermissions(user)}
-                    title="Manage permissions"
-                  >
-                    Permissions
-                  </Button>
-                  {displayPermissions.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '8px' }}>
-                      {displayPermissions.map((label) => (
-                        <Badge key={label} appearance="tint" color="brand" size="small" className={styles.permBadge}>
-                          {label}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <Text size={200} className={styles.noPerms}>No page permissions</Text>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <UserSecurityActions
-                    user={user}
-                    onEditPermissions={handleEditPermissions}
-                    onEditVendorAccount={handleEditVendorAccount}
-                    onLockToggle={handleLockToggle}
-                    onMfaRequiredToggle={handleMfaRequiredToggle}
-                    onForceReset={handleForceReset}
-                    onDeleteClick={handleDeleteClick}
-                  />
-                </TableCell>
-              </TableRow>
-            );
-          })}
+          {filteredUsers.map((user) => (
+            <UsersTableRow
+              key={user.id}
+              user={user}
+              access={accessByUserId[user.id]}
+              isUpdated={recentlyUpdatedUserId === user.id}
+              isAdmin={isAdmin}
+              currentUserId={currentUser?.id}
+              actions={rowActions}
+            />
+          ))}
           {filteredUsers.length === 0 && (
             <TableRow>
               <TableCell colSpan={7}>
-                <Text className={styles.noPerms}>No users found</Text>
+                <Text className={styles.muted}>No users found</Text>
               </TableCell>
             </TableRow>
           )}
@@ -242,6 +190,13 @@ export default function UsersManagement() {
         onSave={handleVendorAccountSave}
       />
 
+      <EditRoleDialog
+        user={roleDialogUser}
+        open={roleDialogOpen}
+        onOpenChange={setRoleDialogOpen}
+        onSave={handleRoleSave}
+      />
+
       <Dialog open={deleteDialogOpen} onOpenChange={(_, d) => setDeleteDialogOpen(d.open)}>
         <DialogSurface>
           <DialogBody>
@@ -254,7 +209,7 @@ export default function UsersManagement() {
               <DialogTrigger disableButtonEnhancement>
                 <Button appearance="secondary">Cancel</Button>
               </DialogTrigger>
-              <Button appearance="primary" onClick={handleDeleteConfirm} style={{ backgroundColor: tokens.colorPaletteRedBackground3 }}>
+              <Button appearance="primary" onClick={handleDeleteConfirm} className={styles.deleteButton}>
                 Delete
               </Button>
             </DialogActions>

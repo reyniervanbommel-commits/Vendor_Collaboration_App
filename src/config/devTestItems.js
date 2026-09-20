@@ -14,6 +14,21 @@ export const devTestItems = [
       'Count rows per laag toont een apart resultaat per laag',
     ],
   },
+  {
+    id: 'feature-326-granular-settings-permissions-v1-69-2',
+    title: 'Feature 326 - Granulaire instellingen-permissies (v1.69.2)',
+    checks: [
+      'Instellingen > Users: bij een employee opent Choose action > Manage permissions een lijst met 8 vinkjes onder People en Data',
+      'Geef een employee alleen OData; na herladen ziet die in de Instellingen-sidebar alleen General en OData',
+      'Trek die permissie weer in; de tab verdwijnt bij de eerstvolgende keer laden, zonder opnieuw inloggen',
+      'Bestaande employees hebben nog steeds Analytics en External links (migratie 050)',
+      'Kolom Permissions toont Full access bij een admin en Vendor access bij een vendor, niet No permissions',
+      'Choose action > Change role wijzigt de rol van een bestaande gebruiker; bij je eigen account ontbreekt die optie',
+      'Bij een vendor toont Manage permissions geen vinkjes maar de melding dat dit alleen voor employees geldt',
+      'Als employee zonder de datamodel-permissie is Instellingen > Data model niet zichtbaar en blijft write-back onbereikbaar',
+      'Wachtwoord vergeten van een bestaand account loopt via Forgot password; de set-password-pagina weigert een account dat al een wachtwoord heeft',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
