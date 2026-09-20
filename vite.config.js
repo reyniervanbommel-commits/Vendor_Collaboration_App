@@ -15,6 +15,9 @@ export default defineConfig(({ mode }) => {
   return {
   plugins: [react()],
   server: {
+    // '::' bindt dual-stack, zodat zowel http://127.0.0.1 als http://[::1] werkt.
+    // Met de Vite-default ('localhost' -> alleen ::1) weigert 127.0.0.1 de verbinding.
+    host: env.VITE_DEV_HOST || '::',
     port: Number.isFinite(devPort) && devPort > 0 ? devPort : 5178,
     proxy: {
       '/api': {
