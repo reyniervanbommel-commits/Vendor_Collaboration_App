@@ -12,8 +12,8 @@ const settingsService = require('../services/SettingsService');
 const trackChangesService = require('../services/TrackChangesService');
 const rccpSettingsService = require('../services/RccpSettingsService');
 const passwordResetEmailTemplateService = require('../services/PasswordResetEmailTemplateService');
-const { getSqlPool } = require('../utils/sqlPool');
-const { requireRole } = require('../middleware/auth');
+const sqlPool = require('../utils/sqlPool');
+const { requireRole, requirePagePermission } = require('../middleware/auth');
 const { getAppBaseUrl } = require('../utils/appEnvironment');
 const { getSecretExpiryStatus } = require('../utils/secretExpiry');
 const { expandRetentionSettings } = require('../utils/syncRetentionSettings');
@@ -24,7 +24,7 @@ const { ONBOARDING_BOARD_KEY, buildOnboardingProgressRow } = require('../utils/o
 const { time } = require('../utils/timing');
 
 function getPool() {
-  return getSqlPool();
+  return sqlPool.getSqlPool();
 }
 
 // Leveranciersaccount normaliseren: getrimd, max 64 tekens, lege waarde -> null.
@@ -34,7 +34,15 @@ function normalizeVendorAccount(value) {
   return trimmed ? trimmed.slice(0, 64) : null;
 }
 
-router.get('/users', requireRole(ROLES.ADMIN), async (req, res, next) => {
+// De 'users'-permissie geeft een employee alleen leesrecht + het aanmaken van een supplier-account.
+// Een staff-account aanmaken blijft admin-only, anders is dit een escalatiepad (#AB:326).
+function requireUsersCreateGuard(req, res, next) {
+  const role = authService.normalizeRole(req.body?.role || ROLES.SUPPLIER);
+  if (role === ROLES.SUPPLIER) return requirePagePermission('users')(req, res, next);
+  return requireRole(ROLES.ADMIN)(req, res, next);
+}
+
+router.get('/users', requirePagePermission('users'), async (req, res, next) => {
   try {
     const { page, pageSize } = parsePaginationParams(req.query);
     const offset = (page - 1) * pageSize;
@@ -54,7 +62,7 @@ router.get('/users', requireRole(ROLES.ADMIN), async (req, res, next) => {
   }
 });
 
-router.post('/users', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/users', requireUsersCreateGuard, async (req, res, next) => {
   try {
     const { email, role, display_name, vendor_account } = req.body;
     if (!email) return res.status(400).json({ error: 'Email address is required' });
@@ -92,6 +100,10 @@ router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
       if (!isAllowedRole(normalizedRole)) {
         return res.status(400).json({ error: 'Invalid role specified' });
       }
+      // Voorkomt dat een admin zichzelf uit de admin-rol schrijft en daarmee buitensluit.
+      if (parseInt(id) === req.user.id && normalizedRole !== ROLES.ADMIN) {
+        return res.status(400).json({ error: 'You cannot change your own role' });
+      }
       setClauses.push('role = @role');
       request.input('role', sql.NVarChar, normalizedRole);
     }
@@ -108,8 +120,18 @@ router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
     const result = await request.query('UPDATE dbo.users SET ' + setClauses.join(', ') + ' OUTPUT INSERTED.id, INSERTED.email, INSERTED.role, INSERTED.vendor_account, INSERTED.is_locked, INSERTED.mfa_required WHERE id = @id');
     if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
 
+    const updated = result.recordset[0];
+    // Granulaire instellingen-permissies gelden alleen voor employees (#AB:326); na een rolwissel
+    // naar admin of vendor zijn achtergebleven rijen misleidend en zouden ze bij een latere
+    // terugwissel naar employee stilzwijgend weer gaan gelden.
+    if (role !== undefined && updated.role !== ROLES.EMPLOYEE) {
+      await pool.request()
+        .input('userId', sql.Int, parseInt(id))
+        .query('DELETE FROM dbo.user_permissions WHERE user_id = @userId');
+    }
+
     await auditLog(req.user.id, req.user.email, 'UPDATE_USER', 'users', id, req.body);
-    res.json({ user: result.recordset[0] });
+    res.json({ user: updated });
   } catch (err) {
     next(err);
   }
@@ -204,7 +226,7 @@ router.post('/analytics/log-route', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/page-usage', async (req, res, next) => {
+router.get('/analytics/page-usage', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
@@ -221,7 +243,7 @@ router.get('/analytics/page-usage', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/sessions', async (req, res, next) => {
+router.get('/analytics/sessions', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
@@ -240,7 +262,7 @@ router.get('/analytics/sessions', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/login-stats', async (req, res, next) => {
+router.get('/analytics/login-stats', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
@@ -257,7 +279,7 @@ router.get('/analytics/login-stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/user-login-stats', async (req, res, next) => {
+router.get('/analytics/user-login-stats', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
@@ -274,7 +296,7 @@ router.get('/analytics/user-login-stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/analytics/click-stats', async (req, res, next) => {
+router.get('/analytics/click-stats', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const { startDate, endDate, userId } = req.query;
     const pool = await getPool();
@@ -292,7 +314,7 @@ router.get('/analytics/click-stats', async (req, res, next) => {
 });
 
 // Welke gebruiker welke product tours/guides heeft doorlopen, en tot welke stap (staff-only via /api/admin).
-router.get('/analytics/onboarding', async (req, res, next) => {
+router.get('/analytics/onboarding', requirePagePermission('analytics'), async (req, res, next) => {
   try {
     const pool = await getPool();
     const result = await time('onboarding_progress_sql', () => pool.request()
@@ -308,7 +330,7 @@ router.get('/analytics/onboarding', async (req, res, next) => {
 
 // ─── OData settings ──────────────────────────────────────────────────────────
 
-router.get('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/settings/odata', requirePagePermission('odata'), async (req, res, next) => {
   try {
     const config = await settingsService.getODataConfig();
 
@@ -338,7 +360,7 @@ router.get('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) =
   }
 });
 
-router.post('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/settings/odata', requirePagePermission('odata'), async (req, res, next) => {
   try {
     const allowed = [...settingsService.ODATA_KEYS];
     const incoming = req.body || {};
@@ -364,7 +386,7 @@ router.post('/settings/odata', requireRole(ROLES.ADMIN), async (req, res, next) 
 
 // ─── Password reset email template (admin only) ─────────────────────────────
 
-router.get('/settings/password-reset-email-template', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/settings/password-reset-email-template', requirePagePermission('mail-template'), async (req, res, next) => {
   try {
     const template = await passwordResetEmailTemplateService.getPasswordResetTemplate();
     res.json({ template });
@@ -373,7 +395,7 @@ router.get('/settings/password-reset-email-template', requireRole(ROLES.ADMIN), 
   }
 });
 
-router.patch('/settings/password-reset-email-template', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.patch('/settings/password-reset-email-template', requirePagePermission('mail-template'), async (req, res, next) => {
   try {
     const template = await passwordResetEmailTemplateService.updatePasswordResetTemplate(req.body || {}, req.user?.id ?? null);
     await auditLog(
@@ -390,10 +412,10 @@ router.patch('/settings/password-reset-email-template', requireRole(ROLES.ADMIN)
   }
 });
 
-// ─── Track changes settings (admin only) ────────────────────────────────────
-// De /api/admin-mount staat ook employees toe; deze route is bewust admin-only.
+// ─── Track changes settings ─────────────────────────────────────────────────
+// De /api/admin-mount staat ook employees toe; alleen met de 'track-changes'-permissie.
 
-router.get('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/settings/track-changes', requirePagePermission('track-changes'), async (req, res, next) => {
   try {
     const config = await trackChangesService.getConfig();
     res.json({ config });
@@ -402,7 +424,7 @@ router.get('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res,
   }
 });
 
-router.post('/settings/track-changes', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/settings/track-changes', requirePagePermission('track-changes'), async (req, res, next) => {
   try {
     const config = await trackChangesService.saveConfig(req.body || {}, req.user?.id ?? null);
     await auditLog(req.user.id, req.user.email, 'UPDATE_TRACK_CHANGES_SETTINGS', 'app_settings', null, {
@@ -432,7 +454,7 @@ router.get('/supplier-filter-column', async (req, res, next) => {
   }
 });
 
-router.put('/supplier-filter-column', async (req, res, next) => {
+router.put('/supplier-filter-column', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const columnKey = String(req.body?.columnKey || '').trim();
     if (!columnKey) return res.status(400).json({ error: 'columnKey is required' });
@@ -493,7 +515,7 @@ router.put('/rccp/settings/split-panel-kpis', requireRole(ROLES.ADMIN), async (r
   }
 });
 
-router.get('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/d365-refresh/alert-emails', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const raw = await settingsService.getAsync(refreshRunService.ALERT_EMAILS_KEY, '');
     res.json({ emails: parseAlertEmails(raw) });
@@ -502,7 +524,7 @@ router.get('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, r
   }
 });
 
-router.put('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.put('/d365-refresh/alert-emails', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const serialized = serializeAlertEmails(req.body?.emails ?? req.body?.value ?? '');
     await settingsService.set(refreshRunService.ALERT_EMAILS_KEY, serialized, req.user?.id ?? null);
@@ -516,7 +538,7 @@ router.put('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, r
   }
 });
 
-router.get('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/d365-refresh/runs', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const runs = await refreshRunService.listRuns({ limit: req.query.limit });
     res.json({ runs });
@@ -525,7 +547,7 @@ router.get('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next
   }
 });
 
-router.delete('/d365-refresh/runs', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.delete('/d365-refresh/runs', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const result = await refreshRunService.clearHistory();
     await auditLog(

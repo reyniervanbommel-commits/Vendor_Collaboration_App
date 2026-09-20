@@ -17,10 +17,11 @@ Thumbs.db
 coverage/
 test-results/
 
-# Eenmalige testrun-artefacten (screenshots + wegwerpscripts van browser/perf-sessies).
-# Rapporten die je wél wil bewaren commit je expliciet met `git add -f`.
-test-reports/*/shots/
-test-reports/onboarding-final/
-test-reports/onboarding-tour/
+# test-reports/ bevat wél de rapporten zelf (*.md, *.json) — die horen in git.
+# De ad-hoc scripts en screenshots van een testsessie niet.
+test-reports/**/*.js
+test-reports/**/*.png
+
+# Wegwerp-benchmarks/scripts in de repo-root (bv. tmp-agg-bench.mjs).
 tmp-*.mjs
 tmp-*.js

@@ -13,12 +13,22 @@ import {
   Select,
   MessageBar,
   MessageBarBody,
+  makeStyles,
 } from '@fluentui/react-components';
 import { PersonAdd24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import { ROLES } from '../../constants/roles';
 
-export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) {
+const useStyles = makeStyles({
+  notice: { marginBottom: '16px' },
+});
+
+/**
+ * Nieuw account aanmaken. Zonder `allowStaffRoles` blijft alleen de vendor-rol over: een employee
+ * met de 'users'-permissie mag uitsluitend vendors aanmaken, de backend weigert de rest met 403.
+ */
+export default function CreateUserDialog({ open, onOpenChange, onUserCreated, allowStaffRoles }) {
+  const styles = useStyles();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState(ROLES.SUPPLIER);
   const [vendorAccount, setVendorAccount] = useState('');
@@ -61,7 +71,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
         <DialogTitle>New user</DialogTitle>
         <DialogBody>
           {error && (
-            <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+            <MessageBar intent="error" className={styles.notice}>
               <MessageBarBody>{error}</MessageBarBody>
             </MessageBar>
           )}
@@ -76,10 +86,14 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated }) 
               />
             </Field>
             <Field label="Role">
-              <Select value={role} onChange={(e) => setRole(e.target.value)} disabled={loading}>
+              <Select
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                disabled={loading || !allowStaffRoles}
+              >
                 <option value={ROLES.SUPPLIER}>Supplier</option>
-                <option value={ROLES.EMPLOYEE}>Employee</option>
-                <option value={ROLES.ADMIN}>Admin</option>
+                {allowStaffRoles && <option value={ROLES.EMPLOYEE}>Employee</option>}
+                {allowStaffRoles && <option value={ROLES.ADMIN}>Admin</option>}
               </Select>
             </Field>
             {isSupplier && (

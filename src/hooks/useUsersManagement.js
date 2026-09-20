@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
-import { PAGE_PERMISSION_LABELS } from '../constants/pagePermissions';
+import { ROLES } from '../constants/roles';
 
 /**
  * useUsersManagement — state en handlers voor admin gebruikersbeheer.
@@ -18,6 +18,8 @@ export function useUsersManagement() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [vendorDialogUser, setVendorDialogUser] = useState(null);
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const [roleDialogUser, setRoleDialogUser] = useState(null);
+  const [roleDialogOpen, setRoleDialogOpen] = useState(false);
   const [recentlyUpdatedUserId, setRecentlyUpdatedUserId] = useState(null);
   const [resetMessage, setResetMessage] = useState('');
 
@@ -29,15 +31,19 @@ export function useUsersManagement() {
       const list = data.users || [];
       setUsers(list);
 
+      // Alleen employees hebben betekenisvolle permissierijen (#AB:326): een admin mag sowieso
+      // alles en een vendor bereikt geen instellingentab. Dat scheelt een call per gebruiker.
       const permissionsMap = {};
-      await Promise.all(list.map(async (user) => {
-        try {
-          const perms = await apiRequest(`/admin/users/${user.id}/permissions`);
-          permissionsMap[user.id] = (Array.isArray(perms) ? perms : []).map((p) => p.page_name);
-        } catch {
-          permissionsMap[user.id] = [];
-        }
-      }));
+      await Promise.all(list
+        .filter((user) => user.role === ROLES.EMPLOYEE)
+        .map(async (user) => {
+          try {
+            const perms = await apiRequest(`/admin/users/${user.id}/permissions`);
+            permissionsMap[user.id] = (Array.isArray(perms) ? perms : []).map((p) => p.page_name);
+          } catch {
+            permissionsMap[user.id] = [];
+          }
+        }));
       setUserPermissions(permissionsMap);
     } catch (err) {
       setError(err.message || 'Failed to load users');
@@ -120,6 +126,18 @@ export function useUsersManagement() {
     setTimeout(() => setRecentlyUpdatedUserId(null), 2000);
   }, [loadUsers]);
 
+  const handleEditRole = useCallback((user) => {
+    setRoleDialogUser(user);
+    setRoleDialogOpen(true);
+  }, []);
+
+  const handleRoleSave = useCallback(async (userId, role) => {
+    await apiRequest(`/admin/users/${userId}`, { method: 'PATCH', body: { role } });
+    await loadUsers();
+    setRecentlyUpdatedUserId(userId);
+    setTimeout(() => setRecentlyUpdatedUserId(null), 2000);
+  }, [loadUsers]);
+
   const handlePermissionsSaved = useCallback(() => {
     const userId = permDialogUser?.id;
     loadUsers();
@@ -128,15 +146,6 @@ export function useUsersManagement() {
       setTimeout(() => setRecentlyUpdatedUserId(null), 2000);
     }
   }, [permDialogUser?.id, loadUsers]);
-
-  const getDisplayPermissions = useCallback((rawPermissions) => {
-    const unique = new Set();
-    rawPermissions.forEach((perm) => {
-      const label = PAGE_PERMISSION_LABELS[perm];
-      if (label) unique.add(label);
-    });
-    return Array.from(unique);
-  }, []);
 
   return {
     filteredUsers,
@@ -156,6 +165,9 @@ export function useUsersManagement() {
     vendorDialogUser,
     vendorDialogOpen,
     setVendorDialogOpen,
+    roleDialogUser,
+    roleDialogOpen,
+    setRoleDialogOpen,
     recentlyUpdatedUserId,
     resetMessage,
     setResetMessage,
@@ -168,7 +180,8 @@ export function useUsersManagement() {
     handleEditPermissions,
     handleEditVendorAccount,
     handleVendorAccountSave,
+    handleEditRole,
+    handleRoleSave,
     handlePermissionsSaved,
-    getDisplayPermissions,
   };
 }

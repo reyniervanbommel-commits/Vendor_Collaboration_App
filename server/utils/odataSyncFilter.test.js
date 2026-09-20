@@ -1,6 +1,6 @@
 'use strict';
 
-const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, MAX_ONEOF_VALUES } = require('./odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, normalizeSyncLayers, recordMatchesAnyLayer, compileSyncLayerChunks, MAX_ONEOF_VALUES, MAX_LAYERS } = require('./odataSyncFilter');
 
 describe('compileSyncRules (D365-syncfilters)', () => {
   it('compileert een tekst-regel met quoting en escaping', () => {
@@ -140,5 +140,122 @@ describe('recordMatchesSyncRules', () => {
 
   it('geeft true bij geen actieve regels', () => {
     expect(recordMatchesSyncRules([], { status: 'Invoiced' }, [])).toBe(true);
+  });
+});
+
+describe('normalizeSyncLayers (work item #325 - sync filter layers)', () => {
+  it('wrapt een legacy platte regel-array automatisch als "Layer 1"', () => {
+    const rules = [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder', valueType: 'enum', enumType: 'PurchStatus' }];
+    const result = normalizeSyncLayers(rules);
+    expect(result.layers).toHaveLength(1);
+    expect(result.layers[0]).toMatchObject({ id: 'layer-1', name: 'Layer 1', active: true, rules });
+  });
+
+  it('geeft lege lagen-lijst bij lege legacy-array of niets', () => {
+    expect(normalizeSyncLayers([])).toEqual({ layers: [] });
+    expect(normalizeSyncLayers(null)).toEqual({ layers: [] });
+    expect(normalizeSyncLayers(undefined)).toEqual({ layers: [] });
+  });
+
+  it('accepteert een { layers: [...] }-payload en normaliseert velden', () => {
+    const result = normalizeSyncLayers({
+      layers: [
+        { id: 'layer-1', name: 'Initial load', active: true, rules: [{ field: 'A' }] },
+        { active: false, rules: [] },
+      ],
+    });
+    expect(result.layers).toHaveLength(2);
+    expect(result.layers[0]).toMatchObject({ id: 'layer-1', name: 'Initial load', active: true });
+    expect(result.layers[1]).toMatchObject({ id: 'layer-2', name: 'Layer 2', active: false, rules: [] });
+  });
+
+  it('gooit een 400-fout bij meer dan MAX_LAYERS actieve lagen', () => {
+    const layers = Array.from({ length: MAX_LAYERS + 1 }, (_, i) => ({
+      id: `layer-${i + 1}`, name: `Layer ${i + 1}`, active: true, rules: [{ field: 'A' }],
+    }));
+    expect(() => normalizeSyncLayers({ layers })).toThrow(/Maximum/);
+  });
+
+  it('gooit een 400-fout wanneer een actieve laag geen regels heeft', () => {
+    expect(() => normalizeSyncLayers({
+      layers: [{ id: 'layer-1', name: 'Layer 1', active: true, rules: [] }],
+    })).toThrow(/active but has no filter rules/);
+  });
+
+  it('staat een inactieve laag zonder regels toe', () => {
+    const result = normalizeSyncLayers({
+      layers: [{ id: 'layer-1', name: 'Layer 1', active: false, rules: [] }],
+    });
+    expect(result.layers).toHaveLength(1);
+  });
+
+  // Regressietest voor een bug in de route (#325): een kale array van LAAG-objecten
+  // (bv. { id, name, active, rules }[]) wordt hier als de legacy platte RULES-array gelezen en
+  // dus als 1 laag gewrapt (met de laag-objecten zelf als "rules" — niet als losse lagen). Callers
+  // moeten daarom altijd { layers: [...] } doorgeven, nooit de kale array. Zie server/routes/data.js.
+  it('wrapt een kale array van laag-objecten NIET als losse lagen (documenteert de contract-eis)', () => {
+    const layerObjects = [
+      { id: 'layer-1', name: 'Layer 1', active: true, rules: [{ field: 'A', operator: 'eq', value: '1', valueType: 'text' }] },
+      { id: 'layer-2', name: 'Layer 2', active: true, rules: [{ field: 'B', operator: 'eq', value: '2', valueType: 'text' }] },
+    ];
+    const wrongResult = normalizeSyncLayers(layerObjects);
+    expect(wrongResult.layers).toHaveLength(1);
+    expect(wrongResult.layers[0].rules).toBe(layerObjects);
+
+    const correctResult = normalizeSyncLayers({ layers: layerObjects });
+    expect(correctResult.layers).toHaveLength(2);
+  });
+});
+
+describe('recordMatchesAnyLayer (OR tussen lagen)', () => {
+  const layerBackorder = {
+    id: 'layer-1', name: 'Layer 1', active: true,
+    rules: [{ level: 'header', field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder', valueType: 'enum', enumType: 'PurchStatus' }],
+  };
+  const layerShoes = {
+    id: 'layer-2', name: 'Open shoes', active: true,
+    rules: [{ level: 'header', field: 'ProductCategory', operator: 'eq', value: 'Shoes', valueType: 'text' }],
+  };
+
+  it('matcht als minstens één actieve laag matcht (OR)', () => {
+    expect(recordMatchesAnyLayer([layerBackorder, layerShoes], { status: 'Backorder', ProductCategory: 'Bags' }, [])).toBe(true);
+    expect(recordMatchesAnyLayer([layerBackorder, layerShoes], { status: 'Invoiced', ProductCategory: 'Shoes' }, [])).toBe(true);
+    expect(recordMatchesAnyLayer([layerBackorder, layerShoes], { status: 'Invoiced', ProductCategory: 'Bags' }, [])).toBe(false);
+  });
+
+  it('negeert inactieve lagen', () => {
+    const inactiveShoes = { ...layerShoes, active: false };
+    expect(recordMatchesAnyLayer([layerBackorder, inactiveShoes], { status: 'Invoiced', ProductCategory: 'Shoes' }, [])).toBe(false);
+  });
+
+  it('geeft true (ongefilterd) bij geen actieve lagen', () => {
+    expect(recordMatchesAnyLayer([], { status: 'Invoiced' }, [])).toBe(true);
+    expect(recordMatchesAnyLayer([{ ...layerBackorder, active: false }], { status: 'Invoiced' }, [])).toBe(true);
+  });
+});
+
+describe('compileSyncLayerChunks (afplatting over lagen)', () => {
+  it('compileert elke actieve laag apart en plakt de chunks samen', () => {
+    const layers = [
+      { id: 'layer-1', name: 'Layer 1', active: true, rules: [{ field: 'OrderVendorAccountNumber', operator: 'eq', value: 'V001', valueType: 'text' }] },
+      { id: 'layer-2', name: 'Layer 2', active: true, rules: [{ field: 'OrderVendorAccountNumber', operator: 'eq', value: 'V002', valueType: 'text' }] },
+    ];
+    const chunks = compileSyncLayerChunks(layers);
+    expect(chunks).toEqual([
+      "OrderVendorAccountNumber eq 'V001'",
+      "OrderVendorAccountNumber eq 'V002'",
+    ]);
+  });
+
+  it('slaat inactieve lagen over', () => {
+    const layers = [
+      { id: 'layer-1', name: 'Layer 1', active: true, rules: [{ field: 'A', operator: 'eq', value: '1', valueType: 'text' }] },
+      { id: 'layer-2', name: 'Layer 2', active: false, rules: [{ field: 'B', operator: 'eq', value: '2', valueType: 'text' }] },
+    ];
+    expect(compileSyncLayerChunks(layers)).toEqual(["A eq '1'"]);
+  });
+
+  it('geeft [\'\'] bij geen actieve lagen (ongefilterd)', () => {
+    expect(compileSyncLayerChunks([])).toEqual(['']);
   });
 });
