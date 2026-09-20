@@ -16,3 +16,11 @@ Thumbs.db
 .claude/worktrees/
 coverage/
 test-results/
+
+# Eenmalige testrun-artefacten (screenshots + wegwerpscripts van browser/perf-sessies).
+# Rapporten die je wél wil bewaren commit je expliciet met `git add -f`.
+test-reports/*/shots/
+test-reports/onboarding-final/
+test-reports/onboarding-tour/
+tmp-*.mjs
+tmp-*.js

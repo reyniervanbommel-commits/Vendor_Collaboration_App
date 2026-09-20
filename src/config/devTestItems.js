@@ -2,7 +2,37 @@
 // push-feature-to-dev voegt automatisch nieuwe items toe zodra een feature naar DEV gaat.
 // Format per item: { id, title, checks: ['wat de tester controleert', ...] }.
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
-export const devTestItems = [];
+export const devTestItems = [
+  {
+    id: 'split-panel-kpi-tiles',
+    title: 'KPI-tegels in het rechterpaneel van de PO-tabel (#315)',
+    checks: [
+      'Open de PO-tabel, klap het onderpaneel uit en kies de tab "Performance & Planning" — rechts staan de gekozen KPI-tegels',
+      'Als admin: open de vouw in de hoek van een KPI-kaart en zet "Show in PO table panel" aan/uit — de tegel verschijnt/verdwijnt direct in het paneel',
+      'Meer dan 3 tegels aanzetten lukt niet; de keuze blijft na een refresh bewaard',
+      'Als medewerker of supplier: de tegels zijn zichtbaar, maar de toggle is er niet en er komt geen 403 in de console',
+      'Klik op een tegel — de PO-tabel filtert en de aantalkolommen tonen de eenheden van die tegel',
+    ],
+  },
+  {
+    id: 'kpi-confirmed-date-mode',
+    title: 'KPI-tegels omdraaibaar tussen confirmed en requested datum',
+    checks: [
+      'Zet de C/R-schakelaar boven de KPI-tab om — de tegelwaarden wijzigen naar de confirmed-datumbasis',
+      '"Not confirmed" telt alleen nog open regels zonder bevestigde datum (geleverde regels tellen niet meer mee)',
+      'De tegels op de RCCP-pagina laten dezelfde waarden zien als die in het PO-tabel-paneel',
+    ],
+  },
+  {
+    id: 'collapsed-detail-rollup',
+    title: 'Snellere PO-tabel door rollup van ingeklapte detailregels',
+    checks: [
+      'Open de PO-tabel met ingeklapte orders — totalen per order zijn gelijk aan vóór deze wijziging',
+      'Klap een order open — de detailregels laden en tellen op tot hetzelfde totaal',
+      'De PO-tabel voelt niet langzamer dan voorheen bij een grote selectie (DevTools → Network → Timing)',
+    ],
+  },
+];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
 export function buildDevChecklistItems(items = devTestItems) {
