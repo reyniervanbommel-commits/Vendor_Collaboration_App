@@ -11,8 +11,13 @@ import {
   Field,
   MessageBar,
   MessageBarBody,
+  makeStyles,
 } from '@fluentui/react-components';
 import { ROLES } from '../../constants/roles';
+
+const useStyles = makeStyles({
+  notice: { marginBottom: '16px' },
+});
 
 const ROLE_OPTIONS = [
   { value: ROLES.ADMIN, label: 'Admin — full access to every setting' },
@@ -25,6 +30,7 @@ const ROLE_OPTIONS = [
  * bepaalt of granulaire instellingen-permissies nog gelden, dus die waarschuwing hoort hier.
  */
 export default function EditRoleDialog({ user, open, onOpenChange, onSave }) {
+  const styles = useStyles();
   const [role, setRole] = useState(ROLES.SUPPLIER);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -68,12 +74,12 @@ export default function EditRoleDialog({ user, open, onOpenChange, onSave }) {
         <DialogTitle>Change role</DialogTitle>
         <DialogBody>
           {error && (
-            <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+            <MessageBar intent="error" className={styles.notice}>
               <MessageBarBody>{error}</MessageBarBody>
             </MessageBar>
           )}
           {losesPermissions && (
-            <MessageBar intent="warning" style={{ marginBottom: '16px' }}>
+            <MessageBar intent="warning" className={styles.notice}>
               <MessageBarBody>
                 The granted settings permissions of this user will be cleared.
               </MessageBarBody>

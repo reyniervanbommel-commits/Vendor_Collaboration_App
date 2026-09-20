@@ -11,13 +11,19 @@ import {
   DialogBody,
   DialogActions,
   DialogContent,
+  makeStyles,
 } from '@fluentui/react-components';
 import { Shield24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import { ROLES } from '../../constants/roles';
 import PermissionsChecklist from './PermissionsChecklist';
 
+const useStyles = makeStyles({
+  notice: { marginBottom: '8px' },
+});
+
 export default function EditPermissionsDialog({ user, open, onOpenChange, onSaved }) {
+  const styles = useStyles();
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,12 +94,12 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
           <DialogTitle>Permissions for {user.email}</DialogTitle>
           <DialogContent>
             {error && (
-              <MessageBar intent="error" style={{ marginBottom: '8px' }}>
+              <MessageBar intent="error" className={styles.notice}>
                 <MessageBarBody>{error}</MessageBarBody>
               </MessageBar>
             )}
             {success && (
-              <MessageBar intent="success" style={{ marginBottom: '8px' }}>
+              <MessageBar intent="success" className={styles.notice}>
                 <MessageBarBody>Permissions saved</MessageBarBody>
               </MessageBar>
             )}

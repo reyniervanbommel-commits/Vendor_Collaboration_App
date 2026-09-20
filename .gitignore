@@ -16,3 +16,8 @@ Thumbs.db
 .claude/worktrees/
 coverage/
 test-results/
+
+# test-reports/ bevat wél de rapporten zelf (*.md, *.json) — die horen in git.
+# De ad-hoc scripts en screenshots van een testsessie niet.
+test-reports/**/*.js
+test-reports/**/*.png

@@ -11,13 +11,19 @@ import {
   Field,
   MessageBar,
   MessageBarBody,
+  makeStyles,
 } from '@fluentui/react-components';
+
+const useStyles = makeStyles({
+  notice: { marginBottom: '16px' },
+});
 
 /**
  * Dialog om het leveranciersaccount van een supplier-gebruiker te zetten.
  * Bepaalt welke D365 purchase orders (op vendorAccount) de gebruiker mag inzien.
  */
 export default function EditVendorAccountDialog({ user, open, onOpenChange, onSave }) {
+  const styles = useStyles();
   const [vendorAccount, setVendorAccount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -53,7 +59,7 @@ export default function EditVendorAccountDialog({ user, open, onOpenChange, onSa
         <DialogTitle>Vendor account</DialogTitle>
         <DialogBody>
           {error && (
-            <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+            <MessageBar intent="error" className={styles.notice}>
               <MessageBarBody>{error}</MessageBarBody>
             </MessageBar>
           )}
