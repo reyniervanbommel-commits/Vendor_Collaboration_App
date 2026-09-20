@@ -13,7 +13,7 @@ BEGIN
     'E2E Test Supplier',
     'supplier',
     'V000583',
-    '$2b$12$JlFRsj7BlTLd0MC2szvG1uJjMB2sis9nINA8aLSiRMErObq6dns3K',
+    '$2b$12$3xmUrKWwCDDbVpBdn9QMoecEHFOs6Kgdl/Djo0U3D0s43006xSnZC',
     0
   );
 END
@@ -22,7 +22,7 @@ BEGIN
   UPDATE dbo.users
   SET role = 'supplier',
       vendor_account = 'V000583',
-      password_hash = '$2b$12$JlFRsj7BlTLd0MC2szvG1uJjMB2sis9nINA8aLSiRMErObq6dns3K',
+      password_hash = '$2b$12$3xmUrKWwCDDbVpBdn9QMoecEHFOs6Kgdl/Djo0U3D0s43006xSnZC',
       must_set_password = 0,
       is_locked = 0,
       failed_attempts = 0,

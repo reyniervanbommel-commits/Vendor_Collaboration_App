@@ -11,7 +11,7 @@ BEGIN
     'e2e-test@vanbommel.internal',
     'E2E Test Account',
     'employee',
-    '$2b$12$ItG/17L2mpDn3k3sllNe5uAJjSjZZSXYptt5Qs0pSoP2Thqymd8hq',
+    '$2b$12$zfwTex1Mp7DOUuaRlxALE.PnZ8L2LrO1frvxaIb94DvtrTrCBx7YK',
     0
   );
 END
@@ -20,7 +20,7 @@ BEGIN
   -- Zorg dat het account bruikbaar blijft: juiste rol/hash, niet vergrendeld.
   UPDATE dbo.users
   SET role = 'employee',
-      password_hash = '$2b$12$ItG/17L2mpDn3k3sllNe5uAJjSjZZSXYptt5Qs0pSoP2Thqymd8hq',
+      password_hash = '$2b$12$zfwTex1Mp7DOUuaRlxALE.PnZ8L2LrO1frvxaIb94DvtrTrCBx7YK',
       must_set_password = 0,
       is_locked = 0,
       failed_attempts = 0,
