@@ -68,6 +68,29 @@ Twijfel over het niveau → behandel als feature/risicovol (niet overslaan bij t
 - Bestaande dekking (en het patroon voor nieuwe mocks/test-utils) staat in
   `server/test-utils/`, `src/test-utils/` en de reeds aanwezige `*.test.js`-bestanden
 
+### Welke tests draai je lokaal
+
+De suite telt ~300 bestanden; `npm test` draait ze allemaal en kost minuten. Dat is zelden nodig —
+schaal mee met het niveau hierboven:
+
+| Niveau | Commando | Waarom |
+|---|---|---|
+| **Triviaal** en **normale feature** | `npm run test:changed` | Draait alleen de tests die de gewijzigde modules importeren — typisch 3–10 bestanden, seconden |
+| Wijziging in `server/` of pure `src/utils` | `npm run test:node` | Het hele node-project zonder jsdom-overhead |
+| Wijziging in componenten of hooks | `npm run test:dom` (of met bestandsfilter) | Alleen het jsdom-project |
+| Gedeelde util met veel importeurs, dependency-upgrade, wijziging in de Vitest-config zelf | `npm test` | De enige gevallen waarin de volledige suite lokaal iets toevoegt |
+
+De volledige suite mét coverage draait bij elke PR in CI (`.github/workflows/ci.yml`) — vertrouw
+daarop in plaats van 'm lokaal te herhalen.
+
+### Twee testprojecten (node / dom)
+
+`vitest.workspace.mjs` splitst de suite: `server/**` en `src/utils/**/*.test.js` draaien in een
+**node**-omgeving, de rest van `src/**` in **jsdom** met de jest-dom-matchers. Het opzetten van
+jsdom kost ~25s per bestand, dus een puur rekenkundige test hoort niet in dat project.
+Heeft een test in het node-project tóch DOM-globals nodig (`window`, `document`,
+`sessionStorage`)? Zet dan `// @vitest-environment jsdom` bovenaan dat ene bestand.
+
 ## Wanneer deze poort niet van toepassing is
 
 - Pure documentatie-wijzigingen (`.md`, `docs/`)

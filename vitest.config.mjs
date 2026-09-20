@@ -1,16 +1,9 @@
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 
+// Omgeving, includes en setup staan per project in vitest.workspace.mjs (node vs jsdom).
+// Hier blijft alleen wat workspace-breed geldt: coverage en de thresholds.
 export default defineConfig({
-  plugins: [react()],
   test: {
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: ['./src/test-utils/setupTests.js'],
-    // V8-coverage-instrumentatie maakt de suite ~4x trager; zonder marge liep dat een enkele
-    // DOM-zware test (findByRole/waitFor) willekeurig over de default 5s-timeout — niet
-    // reproduceerbaar op logica, puur CPU-overhead. Ruimere marge voorkomt die flakiness.
-    testTimeout: 15000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],
@@ -26,13 +19,5 @@ export default defineConfig({
         branches: 65,
       },
     },
-    exclude: [
-      '**/node_modules/**',
-      '**/.worktrees/**',
-      '**/.claude/worktrees/**',
-      // Playwright Test-suite (e2e/*.spec.js) — aparte runner (`npm run test:e2e`), Vitest's
-      // default include-patroon matcht anders ook *.spec.js en crasht op test.describe().
-      '**/e2e/**',
-    ],
   },
 });

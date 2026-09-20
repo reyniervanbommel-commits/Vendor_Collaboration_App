@@ -16,6 +16,9 @@
     "start": "node server/server.js",
     "migrate:db": "node scripts/db/run-migrations.js",
     "test": "vitest run",
+    "test:changed": "vitest run --changed",
+    "test:node": "vitest run --project node",
+    "test:dom": "vitest run --project dom",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
