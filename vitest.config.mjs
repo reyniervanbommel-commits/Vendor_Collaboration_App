@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
+    // Backend-tests hebben geen DOM nodig; een jsdom-omgeving per testbestand is puur overhead.
+    // Gemeten op server/utils (283 tests): 894s met jsdom tegen 323s met node.
+    environmentMatchGlobs: [
+      ['server/**', 'node'],
+      ['scripts/**', 'node'],
+    ],
     globals: true,
     setupFiles: ['./src/test-utils/setupTests.js'],
     // V8-coverage-instrumentatie maakt de suite ~4x trager; zonder marge liep dat een enkele
