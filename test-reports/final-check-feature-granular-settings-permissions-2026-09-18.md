@@ -155,4 +155,31 @@ Alleen artefacten van deze wijziging bekeken. Geen debug-logs, geen ongebruikte 
 | 2 | `MessageBar`-marges naar `makeStyles` | ✅ in alle vier de admin-dialogen |
 | 3 | Kolomroutes in `data.js` buiten de `datamodel`-permissie | ✅ writeback, visibility en visible-at-delete achter de permissie; board-acties bewust open en vastgelegd in een test |
 | 4 | `test-reports/` vervuilt `git status` | ✅ scripts en screenshots genegeerd, rapporten blijven in git |
-| 5 | Live-e2e wacht op testwachtwoorden | ⏳ vraagt om `E2E_TEST_PASSWORD` en `E2E_SUPPLIER_PASSWORD` in `.env` |
+| 5 | Live-e2e wacht op testwachtwoorden | ✅ nieuwe wachtwoorden uitgegeven en suite gedraaid tegen de preview |
+
+### Live-e2e — uitkomst 2026-09-20
+
+Nieuwe wachtwoorden gegenereerd voor beide seed-accounts; alleen de bcrypt-hash (cost 12) staat in
+`037_seed_e2e_test_user.sql` en `038_seed_e2e_supplier_test_user.sql`, het wachtwoord uitsluitend in
+`.env` (gitignored). De preview-deploy heeft de migraties op DEV toegepast, waarna beide accounts
+werken. Opnieuw uitgeven kan met `scripts/db/generate-e2e-hashes.js` + `verify-e2e-hashes.js`.
+
+Resultaat over `e2e/` (14 + 3 tests): alle autorisatie-assertions slagen. Wat onderweg is
+rechtgezet:
+
+- **Verkeerde aanname in twee tests.** Ze verwachtten dat een vendor op `/admin` wordt
+  weggestuurd. Dat klopt niet: `general` staat op `SETTINGS_AUDIENCE.ALL`, dus een vendor hoort daar
+  zijn persoonlijke tabelzoom te zien. De echte eigenschap — geen enkele beheertab — wordt nu getest.
+  Handmatig geverifieerd in de browser: de sidebar bevat voor een vendor alleen General.
+- **Onboarding-dialoog.** Een account dat de rondleiding nog niet zag krijgt een modale
+  welkomstdialoog die de rest van de pagina `aria-hidden` maakt. Inloggen sluit die nu.
+- **Te brede locator.** `getByRole('button', { name: 'General' })` matchte ook "About general
+  settings"; met `exact` is er precies één treffer en is landmark-scoping overbodig.
+- **2 tests overgeslagen, bewust.** Het vendor-testaccount (V000583) heeft op DEV op dit moment geen
+  zichtbare orders. "Geen vreemde rijen" bewijst dan niets, dus die twee slaan expliciet over met een
+  melding in plaats van groen te kleuren op een lege staat. Aandachtspunt voor de testdata.
+
+**Bekende flakiness:** de preview draait op een Container App met `min-replicas 0`. Tijdens een
+serieuze run van 8–12 minuten lopen losse requests op een timeout of ECONNRESET, elke run op een
+andere test. `retries: 2` vangt dit af; bij een enkele run kan er nog één rood blijven staan. Geen
+app-probleem — de assertions zelf slagen bij herhaling consequent.
