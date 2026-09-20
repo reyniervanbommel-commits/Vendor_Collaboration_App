@@ -473,6 +473,26 @@ router.put('/rccp/settings', requireRole(ROLES.ADMIN), async (req, res, next) =>
   }
 });
 
+// Losse toggle per KPI-kaart ("Show in PO table panel", via de vouw in het hoekje van elke
+// kaart) — spaart de admin het openen van het volledige Settings-scherm. Leest/schrijft
+// dezelfde RCCP_CONFIG als hierboven, alleen het veld splitPanelKpiKeys.
+router.put('/rccp/settings/split-panel-kpis', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const current = await rccpSettingsService.getConfig();
+    const config = await rccpSettingsService.saveConfig({
+      ...current,
+      splitPanelKpiKeys: req.body?.kpiKeys,
+    }, req.user?.id ?? null);
+    await auditLog(req.user.id, req.user.email, 'UPDATE_RCCP_SETTINGS', 'app_settings', null, {
+      splitPanelKpiKeys: config.splitPanelKpiKeys,
+    });
+    res.json({ success: true, config });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    next(err);
+  }
+});
+
 router.get('/d365-refresh/alert-emails', requireRole(ROLES.ADMIN), async (req, res, next) => {
   try {
     const raw = await settingsService.getAsync(refreshRunService.ALERT_EMAILS_KEY, '');

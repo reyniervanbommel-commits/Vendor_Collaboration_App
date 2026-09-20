@@ -3,6 +3,7 @@ import {
   Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
 import RccpChartMatrixPanel from './RccpChartMatrixPanel';
+import RccpSplitKpiPanel from './RccpSplitKpiPanel';
 import { filterRccpChartBySegments, filterRccpMatrixByItem } from './rccpChartItems';
 import { clampRccpChartHeight } from './rccpUtils';
 import {
@@ -24,15 +25,22 @@ const useStyles = makeStyles({
     height: '100%',
     width: '100%',
   },
+  bodyRow: {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    ...shorthands.gap(tokens.spacingHorizontalM),
+  },
   // 'auto' (niet 'hidden'): zodra de grafiek via de resize-handle meer hoogte krijgt, moet de
   // matrix binnen dit vak alsnog scrollbaar blijven in plaats van afgekapt te worden.
-  body: { flex: 1, minHeight: 0, overflow: 'auto' },
+  body: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto' },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
 function RccpSplitStrip({
   vendorAccount, refreshKey, enabled, isoWindow, filterByColumn, itemColumnKey, onItemClick,
   planningDateModes, periodGrain: periodGrainProp, orderNumbers, onAnalysisChange,
+  kpiPanelOrders, kpiFilterKey, onKpiFilter, kpiRefreshKey,
 }) {
   const styles = useStyles();
   const periodGrain = parseRccpPeriodGrain(periodGrainProp);
@@ -145,22 +153,32 @@ function RccpSplitStrip({
       {error && <Text className={styles.error}>{error}</Text>}
 
       {analysis && !error && (
-        <div className={styles.body}>
-          <RccpChartMatrixPanel
-            chart={filteredChart}
-            chartSecondary={secondaryFilteredChart}
-            measureRows={measureRows}
-            periods={chartView.periods}
-            cellMap={filteredCellMap}
-            cellMapSecondary={secondaryFilteredCellMap}
+        <div className={styles.bodyRow}>
+          <div className={styles.body}>
+            <RccpChartMatrixPanel
+              chart={filteredChart}
+              chartSecondary={secondaryFilteredChart}
+              measureRows={measureRows}
+              periods={chartView.periods}
+              cellMap={filteredCellMap}
+              cellMapSecondary={secondaryFilteredCellMap}
+              planningDateModes={planningDateModes}
+              chartWeekRanges={chartWeekRanges}
+              compact
+              chartHeight={chartHeight}
+              onChartHeightChange={handleChartHeightChange}
+              itemFocus={itemFocus}
+              matrixColorFill={analysis.config?.matrixColorFill !== false}
+              confirmedColor={analysis.config?.confirmedColor}
+            />
+          </div>
+          <RccpSplitKpiPanel
+            kpiKeys={analysis.config?.splitPanelKpiKeys}
+            orders={kpiPanelOrders}
+            selectedKey={kpiFilterKey}
+            onKpiFilter={onKpiFilter}
+            refreshKey={kpiRefreshKey}
             planningDateModes={planningDateModes}
-            chartWeekRanges={chartWeekRanges}
-            compact
-            chartHeight={chartHeight}
-            onChartHeightChange={handleChartHeightChange}
-            itemFocus={itemFocus}
-            matrixColorFill={analysis.config?.matrixColorFill !== false}
-            confirmedColor={analysis.config?.confirmedColor}
           />
         </div>
       )}

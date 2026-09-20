@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import {
-  Button, Tab, TabList, makeStyles, mergeClasses, shorthands, Spinner, tokens,
+  Button, Tab, TabList, mergeClasses, Spinner,
 } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronUpRegular } from '@fluentui/react-icons';
 import AdminInfoHint from '../admin/AdminInfoHint';
@@ -13,6 +13,7 @@ import {
   RCCP_PERIOD_GRAIN_WEEK,
 } from '../rccp/rccpPeriodGrain';
 import RccpSplitToolbar from '../rccp/RccpSplitToolbar';
+import KpiDateModeToggle from '../rccp/KpiDateModeToggle';
 import {
   nextRccpItemTableFilter,
   resolveRccpItemColumnKey,
@@ -26,73 +27,25 @@ import { BOARD_KEY } from './biConstants';
 import { buildTableDataRevision } from './tableDataRevision';
 import { useAuth } from '../../context/AuthContext';
 import { ROLES } from '../../constants/roles';
-import {
-  PO_TABLE_SPLIT_ZOOM_STYLE,
-  PO_TABLE_ZOOM_CSS_VAR,
-  PO_TABLE_ZOOM_DEFAULT,
-} from '../../utils/poTableZoom';
+import { PO_TABLE_SPLIT_ZOOM_STYLE } from '../../utils/poTableZoom';
+import { useBoardSplitViewStyles } from './boardSplitViewStyles';
 
 const BiChartStrip = lazy(() => import('./BiChartStrip'));
 const RccpSplitStrip = lazy(() => import('../rccp/RccpSplitStrip'));
 const PoBoardKpiStrip = lazy(() => import('../rccp/PoBoardKpiStrip'));
 
+// Expliciete hoogte op déze tab-wrapper zodat de RCCP-grafiek (chartHeight) en het
+// KPI-tegelpaneel ernaast altijd de volledige beschikbare paneelhoogte kunnen gebruiken.
+const RCCP_PANE_STYLE = { ...PO_TABLE_SPLIT_ZOOM_STYLE, height: '100%' };
+
 const PO_BOARD_KPI_INFO =
   'Values come from the purchase orders currently in the table. Click a tile to filter; quantity columns then show the units counted by that tile.';
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    [PO_TABLE_ZOOM_CSS_VAR]: String(PO_TABLE_ZOOM_DEFAULT),
-  },
-  tableRegion: {
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    display: 'flex',
-    overflow: 'hidden',
-    '& > *': {
-      flex: 1,
-      minHeight: 0,
-      minWidth: 0,
-      overflow: 'hidden',
-      scrollbarGutter: 'stable',
-    },
-  },
-  toggleBar: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
-    backgroundColor: tokens.colorNeutralBackground2,
-    flexWrap: 'wrap',
-  },
-  toggleBarCollapsed: {
-    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
-  },
-  pane: {
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS, tokens.spacingVerticalXS),
-    backgroundColor: tokens.colorNeutralBackground2,
-    minHeight: 0,
-    overflow: 'auto',
-  },
-  paneCollapsed: {
-    height: 0,
-    overflow: 'hidden',
-    padding: 0,
-    borderTopWidth: 0,
-    minHeight: 0,
-  },
-});
 
 export default function BoardSplitView({
   filterByColumn, tableRows, isStaff, visibleOrders, kpiFilterKey, onKpiFilter, tableFilter, children,
   orderNumbers, derivedVendor,
 }) {
-  const styles = useStyles();
+  const styles = useBoardSplitViewStyles();
   const setSplitRootNode = usePoTableZoomNode();
   const { user } = useAuth();
   const isSupplier = user?.role === ROLES.SUPPLIER;
@@ -103,6 +56,9 @@ export default function BoardSplitView({
   const { isoWindow, setIsoWindow, planningDateModes, setPlanningDateModes } = useRccpWindow();
   const [periodGrain, setPeriodGrain] = useState(RCCP_PERIOD_GRAIN_WEEK);
   const [rccpAnalysis, setRccpAnalysis] = useState(null);
+  // Centrale requested/confirmed-schakelaar voor de "KPIs"-tab (los van de "load date"-toggle
+  // van de "Performance & Planning"-tab, die 2 series tegelijk mag tonen).
+  const [kpiDateMode, setKpiDateMode] = useState('requested');
   const handlePeriodGrainChange = useCallback((value) => {
     setPeriodGrain(parseRccpPeriodGrain(value));
   }, []);
@@ -219,6 +175,9 @@ export default function BoardSplitView({
           <Tab value="kpis" data-tour="board-split-tab-kpis">KPIs</Tab>
         </TabList>
         {kpiEnabled ? <AdminInfoHint text={PO_BOARD_KPI_INFO} label="About KPI tiles" /> : null}
+        {kpiEnabled ? (
+          <KpiDateModeToggle value={kpiDateMode} onChange={setKpiDateMode} />
+        ) : null}
         {showRccpPane ? (
           <RccpSplitToolbar
             isoWindow={isoWindow}
@@ -252,7 +211,7 @@ export default function BoardSplitView({
             </Suspense>
           ) : null}
         </div>
-        <div hidden={!showRccpPane} style={PO_TABLE_SPLIT_ZOOM_STYLE}>
+        <div hidden={!showRccpPane} style={RCCP_PANE_STYLE}>
           {showRccpPane ? (
             <Suspense fallback={<Spinner size="tiny" label="Loading PERF…" />}>
               {rccpVendorReady ? (
@@ -268,6 +227,10 @@ export default function BoardSplitView({
                   periodGrain={periodGrain}
                   orderNumbers={orderNumbers}
                   onAnalysisChange={handleRccpAnalysisChange}
+                  kpiPanelOrders={visibleOrders}
+                  kpiFilterKey={kpiFilterKey || ''}
+                  onKpiFilter={onKpiFilter}
+                  kpiRefreshKey={dataRevision}
                 />
               ) : (
                 <Spinner size="tiny" label="Loading PERF…" />
@@ -283,6 +246,7 @@ export default function BoardSplitView({
                 selectedKey={kpiFilterKey || ''}
                 onKpiFilter={onKpiFilter}
                 refreshKey={dataRevision}
+                dateMode={kpiDateMode}
               />
             </Suspense>
           ) : null}
