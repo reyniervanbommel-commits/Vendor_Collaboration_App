@@ -38,6 +38,16 @@ async function time(label, fn) {
   }
 }
 
+// Registreer een benoemd feit zonder er een blok voor te meten. Bedoeld voor een keuze die je in
+// de header terug wilt zien — welke tak van een leesplan draaide, welke cache raak was — waar de
+// duur nul is en alleen de naam informatie draagt. Zelfde no-op-gedrag buiten een request.
+function mark(label, durMs = 0) {
+  const store = storage.getStore();
+  if (store && Array.isArray(store.timings)) {
+    store.timings.push({ label, dur: durMs });
+  }
+}
+
 // Bouw de Server-Timing-header: altijd `app` (totaal) + alle benoemde metingen van deze request.
 // Labels worden gesaneerd tot een geldig Server-Timing-token.
 function buildServerTimingHeader(totalMs) {
@@ -52,4 +62,4 @@ function buildServerTimingHeader(totalMs) {
   return parts.join(', ');
 }
 
-module.exports = { runWithRequestTiming, time, buildServerTimingHeader };
+module.exports = { runWithRequestTiming, time, mark, buildServerTimingHeader };

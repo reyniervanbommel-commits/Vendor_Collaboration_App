@@ -51,7 +51,7 @@ const {
 } = require('../utils/vendorGroupSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
-const { time } = require('../utils/timing');
+const { time, mark } = require('../utils/timing');
 const {
   resolveCollapsedDetailFields,
   buildDetailJsonFromProjection,
@@ -3668,7 +3668,16 @@ async function itemsLineFilterConfigured(table) {
 // Leesplan voor een dichtgeklapt bord: laat SQL de rollup per order berekenen ('aggregate'), of
 // anders alleen de data_json-velden leveren die de rollup nog leest ('fields'). Geeft null zodra
 // geen van beide met zekerheid kan — de read leest dan de volledige blob, zoals voorheen.
-async function planCollapsedDetailRead({
+async function planCollapsedDetailRead(input) {
+  const plan = await time('tb_detail_plan', () => resolveCollapsedDetailPlan(input));
+  // Welke leestak gekozen is, bepaalt volledig waar tb_read_details zijn tijd laat: de
+  // rollup-aggregatie, de JSON_VALUE-projectie of de volledige blob-read. Zonder deze marker is
+  // dat van buitenaf niet te zien en is een meting niet toe te rekenen.
+  mark(`tb_detail_plan_${plan?.mode || 'none'}`);
+  return plan;
+}
+
+async function resolveCollapsedDetailPlan({
   table, colsPromise, linksPromise, enrichmentPromise, syncStatePromise, viewedPromise,
 }) {
   try {
