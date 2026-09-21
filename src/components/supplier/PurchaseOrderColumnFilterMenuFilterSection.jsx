@@ -4,7 +4,7 @@ import { ChevronDownRegular } from '@fluentui/react-icons';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
 import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
 import { usePurchaseOrderColumnMenuFlyoutPlacement } from './usePurchaseOrderColumnMenuFlyoutPlacement';
-import { formatColumnUniqueValue } from '../../utils/purchStatusDisplay';
+import { formatColumnUniqueValue, serializePurchStatusFilterValue } from '../../utils/purchStatusDisplay';
 
 export default function PurchaseOrderColumnFilterMenuFilterSection({
   styles,
@@ -41,6 +41,14 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   const formatUniqueValue = useCallback((value) => (
     column ? formatColumnUniqueValue(column, value) : String(value ?? '')
   ), [column]);
+
+  const handleMappedDraftValueChange = useCallback((nextValue) => {
+    handleDraftValueChange(serializePurchStatusFilterValue(column, nextValue));
+  }, [column, handleDraftValueChange]);
+
+  const handleMappedApplyWithValue = useCallback((nextValue) => {
+    handleApplyFilterWithValue(serializePurchStatusFilterValue(column, nextValue));
+  }, [column, handleApplyFilterWithValue]);
 
   const handleOperatorToggle = useCallback(() => {
     if (operatorEntries.length <= 1) return;
@@ -112,8 +120,8 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
           <PurchaseOrderColumnFilterValuePicker
             mode={draft.operator === 'oneOf' ? 'multi' : 'single'}
             value={draft.value}
-            onChange={handleDraftValueChange}
-            onAutoApply={handleApplyFilterWithValue}
+            onChange={handleMappedDraftValueChange}
+            onAutoApply={handleMappedApplyWithValue}
             uniqueValues={uniqueColumnValues}
             isNumber={isNumber}
             columnLabel={columnLabel}

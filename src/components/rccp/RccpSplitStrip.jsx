@@ -1,4 +1,6 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  memo, useCallback, useDeferredValue, useEffect, useMemo, useState,
+} from 'react';
 import {
   Spinner, Text, makeStyles, shorthands, tokens,
 } from '@fluentui/react-components';
@@ -15,6 +17,15 @@ import { resolveRccpItemsFromFilter } from './resolveRccpItemFilter';
 import { useRccpSplitAnalysis } from '../../hooks/useRccpSplitAnalysis';
 
 export const RCCP_SPLIT_CHART_HEIGHT = 180;
+
+function ReloadOverlay({ show, className }) {
+  if (!show) return null;
+  return (
+    <div className={className} role="status">
+      <Spinner size="small" label="Loading PERF…" />
+    </div>
+  );
+}
 
 const useStyles = makeStyles({
   root: {
@@ -33,7 +44,23 @@ const useStyles = makeStyles({
   },
   // 'auto' (niet 'hidden'): zodra de grafiek via de resize-handle meer hoogte krijgt, moet de
   // matrix binnen dit vak alsnog scrollbaar blijven in plaats van afgekapt te worden.
-  body: { flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto' },
+  body: {
+    flex: 1,
+    minHeight: 0,
+    minWidth: 0,
+    overflow: 'auto',
+    position: 'relative',
+  },
+  reloadOverlay: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1} 70%, transparent)`,
+    zIndex: 1,
+    pointerEvents: 'none',
+  },
   error: { color: tokens.colorPaletteRedForeground1 },
 });
 
@@ -80,26 +107,32 @@ function RccpSplitStrip({
     () => resolveRccpItemsFromFilter(filterByColumn, undefined, itemColumnKey),
     [filterByColumn, itemColumnKey],
   );
+  // Defer the heavy chart/matrix filter so the overlay spinner can paint first.
+  // Same work, one frame later — does not add extra fetches or unmount the pane.
+  const deferredOrderNumbers = useDeferredValue(orderNumbers);
+  const deferredItemFilter = useDeferredValue(itemFilter);
+  const filterPending = deferredOrderNumbers !== orderNumbers || deferredItemFilter !== itemFilter;
+  const showReloadOverlay = Boolean(analysis && (loading || filterPending));
   const filteredChart = useMemo(
     () => {
       const filterOptions = {
-        emptyHidesAll: itemFilter.active || Array.isArray(orderNumbers),
-        orderNumbers,
-        containsTerm: itemFilter.containsTerm,
+        emptyHidesAll: deferredItemFilter.active || Array.isArray(deferredOrderNumbers),
+        orderNumbers: deferredOrderNumbers,
+        containsTerm: deferredItemFilter.containsTerm,
         measureRows,
       };
-      if (itemFilter.active) filterOptions.items = itemFilter.items;
+      if (deferredItemFilter.active) filterOptions.items = deferredItemFilter.items;
       return filterRccpChartBySegments(chartView.chart, filterOptions);
     },
-    [chartView.chart, itemFilter, orderNumbers, measureRows],
+    [chartView.chart, deferredItemFilter, deferredOrderNumbers, measureRows],
   );
   const filteredCellMap = useMemo(
     () => filterRccpMatrixByItem(chartView.cellMap, {
       chart: filteredChart,
       measureRows,
-      active: itemFilter.active || Array.isArray(orderNumbers),
+      active: deferredItemFilter.active || Array.isArray(deferredOrderNumbers),
     }),
-    [chartView.cellMap, filteredChart, measureRows, itemFilter, orderNumbers],
+    [chartView.cellMap, filteredChart, measureRows, deferredItemFilter, deferredOrderNumbers],
   );
   // Tweede load-date-serie: dezelfde grain en dezelfde PO-/item-filter op de al geladen
   // analyse van de andere leverdatum.
@@ -120,41 +153,42 @@ function RccpSplitStrip({
     () => {
       if (!secondaryChartView) return null;
       const filterOptions = {
-        emptyHidesAll: itemFilter.active || Array.isArray(orderNumbers),
-        orderNumbers,
-        containsTerm: itemFilter.containsTerm,
+        emptyHidesAll: deferredItemFilter.active || Array.isArray(deferredOrderNumbers),
+        orderNumbers: deferredOrderNumbers,
+        containsTerm: deferredItemFilter.containsTerm,
         measureRows,
       };
-      if (itemFilter.active) filterOptions.items = itemFilter.items;
+      if (deferredItemFilter.active) filterOptions.items = deferredItemFilter.items;
       return filterRccpChartBySegments(secondaryChartView.chart, filterOptions);
     },
-    [secondaryChartView, itemFilter, orderNumbers, measureRows],
+    [secondaryChartView, deferredItemFilter, deferredOrderNumbers, measureRows],
   );
   const secondaryFilteredCellMap = useMemo(
     () => (secondaryChartView
       ? filterRccpMatrixByItem(secondaryChartView.cellMap, {
         chart: secondaryFilteredChart,
         measureRows,
-        active: itemFilter.active || Array.isArray(orderNumbers),
+        active: deferredItemFilter.active || Array.isArray(deferredOrderNumbers),
       })
       : null),
-    [secondaryChartView, secondaryFilteredChart, measureRows, itemFilter, orderNumbers],
+    [secondaryChartView, secondaryFilteredChart, measureRows, deferredItemFilter, deferredOrderNumbers],
   );
 
-  const focusItem = itemFilter.items.length === 1 ? itemFilter.items[0] : '';
+  const focusItem = deferredItemFilter.items.length === 1 ? deferredItemFilter.items[0] : '';
   const itemFocus = useMemo(
     () => ({ item: focusItem, onSelect: onItemClick }),
     [focusItem, onItemClick],
   );
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} aria-busy={loading || filterPending}>
       {loading && !analysis && <Spinner size="tiny" label="Loading PERF…" />}
       {error && <Text className={styles.error}>{error}</Text>}
 
       {analysis && !error && (
         <div className={styles.bodyRow}>
           <div className={styles.body}>
+            <ReloadOverlay show={showReloadOverlay} className={styles.reloadOverlay} />
             <RccpChartMatrixPanel
               chart={filteredChart}
               chartSecondary={secondaryFilteredChart}

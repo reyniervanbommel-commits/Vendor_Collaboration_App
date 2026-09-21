@@ -1,5 +1,10 @@
 'use strict';
 
+const {
+  purchStatusValuesEquivalent,
+  resolvePurchStatusRefValue,
+} = require('./purchStatusDisplay');
+
 const MAX_FORMULA_LENGTH = 2000;
 const MAX_TOKENS = 1024;
 const MAX_EVAL_DEPTH = 64;
@@ -380,7 +385,7 @@ function compareValues(left, right, op) {
   } else {
     const leftText = left === null || left === undefined ? '' : String(left);
     const rightText = right === null || right === undefined ? '' : String(right);
-    cmp = leftText.localeCompare(rightText);
+    cmp = purchStatusValuesEquivalent(leftText, rightText) ? 0 : leftText.localeCompare(rightText);
   }
 
   if (op === '=') return cmp === 0;
@@ -593,7 +598,7 @@ function evalNode(node, rowValues, depth = 0, context = {}) {
     if (!Object.prototype.hasOwnProperty.call(rowValues || {}, key)) {
       throw new Error(`Unknown column reference '${key}'`);
     }
-    return rowValues[key];
+    return resolvePurchStatusRefValue(key, rowValues[key]);
   }
   if (node.type === 'unary') {
     const value = evalNode(node.argument, rowValues, depth + 1, context);

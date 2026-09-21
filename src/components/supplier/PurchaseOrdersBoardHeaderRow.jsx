@@ -90,6 +90,8 @@ export default function PurchaseOrdersBoardHeaderRow({
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
         const connectionTargets = getPoHeaderConnectionTargets({
           columnKey: column.key,
+          column,
+          columns,
           linkedLineTotalByHeaderKey,
           linkedLineValueByHeaderKey,
           lineColumns,
@@ -146,6 +148,7 @@ export default function PurchaseOrdersBoardHeaderRow({
                     autoEdit={editingColumnKey === column.key}
                     onEditingDone={onEditingDone}
                     showWriteBackIcon={Boolean(linkedLineValueByHeaderKey[column.key]?.writableToD365)}
+                    connectionTargets={connectionTargets}
                   />
                 )}
               </div>

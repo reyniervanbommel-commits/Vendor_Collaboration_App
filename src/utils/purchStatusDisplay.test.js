@@ -3,6 +3,9 @@ import {
   formatColumnUniqueValue,
   formatPurchStatusDisplay,
   isPurchaseOrderStatusColumn,
+  isPurchStatusAliasText,
+  purchStatusValuesEquivalent,
+  serializePurchStatusFilterValue,
   toPurchStatusStoredValue,
 } from './purchStatusDisplay';
 
@@ -31,5 +34,22 @@ describe('purchStatusDisplay', () => {
   it('formatteert unieke filterwaarden alleen voor de statuskolom', () => {
     expect(formatColumnUniqueValue({ d365Field: 'PurchaseOrderStatus' }, 'Backorder')).toBe('Open order');
     expect(formatColumnUniqueValue({ key: 'vendor' }, 'Backorder')).toBe('Backorder');
+  });
+
+  it('herkent Backorder en Open order als dezelfde status', () => {
+    expect(isPurchStatusAliasText('Backorder')).toBe(true);
+    expect(isPurchStatusAliasText('Open order')).toBe(true);
+    expect(isPurchStatusAliasText('Invoiced')).toBe(false);
+    expect(purchStatusValuesEquivalent('Backorder', 'Open order')).toBe(true);
+    expect(purchStatusValuesEquivalent('open order', 'backorder')).toBe(true);
+    expect(purchStatusValuesEquivalent('Invoiced', 'Open order')).toBe(false);
+    expect(purchStatusValuesEquivalent('Acme', 'Acme')).toBe(true);
+  });
+
+  it('zet getypte Open order-filterwaarden terug naar de opgeslagen enum', () => {
+    const statusColumn = { key: 'status', d365Field: 'PurchaseOrderStatus' };
+    expect(serializePurchStatusFilterValue(statusColumn, 'Open order')).toBe('Backorder');
+    expect(serializePurchStatusFilterValue(statusColumn, ['Open order', 'Invoiced'])).toEqual(['Backorder', 'Invoiced']);
+    expect(serializePurchStatusFilterValue({ key: 'vendor' }, 'Open order')).toBe('Open order');
   });
 });

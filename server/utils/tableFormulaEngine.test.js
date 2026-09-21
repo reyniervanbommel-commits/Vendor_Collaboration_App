@@ -365,3 +365,29 @@ describe('tableFormulaEngine — NETWERKDAGEN/NETWORKDAYS (weekend uitgesloten)'
     expect(res.error).toContain('must be a date');
   });
 });
+
+describe('tableFormulaEngine — PurchStatus Backorder als Open order', () => {
+  it('geeft Open order terug wanneer de formule de statuskolom kopieert', () => {
+    const compiled = compileFormula('(status)');
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'Open order', error: null });
+  });
+
+  it('laat IF((status)=\'Open order\';...) slagen voor opgeslagen Backorder', () => {
+    const compiled = compileFormula("IF((status)='Open order';'yes';'no')");
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'yes', error: null });
+  });
+
+  it('herkent ook de opgeslagen enum-literal Backorder', () => {
+    const compiled = compileFormula("IF((status)='Backorder';'yes';'no')");
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'yes', error: null });
+  });
+
+  it('laat andere kolommen met de tekst Backorder ongemoeid', () => {
+    const compiled = compileFormula('(vendor)');
+    const res = evaluateCompiledFormula(compiled, { vendor: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'Backorder', error: null });
+  });
+});

@@ -198,6 +198,22 @@ describe('purchase-order status display labels', () => {
     expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'equals', value: 'Backorder' })).toBe(true);
     expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'equals', value: 'Open order' })).toBe(true);
     expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'contains', value: 'open' })).toBe(true);
+    expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'contains', value: 'open order' })).toBe(true);
     expect(columnValueMatchesFilter(statusColumn, 'Invoiced', { operator: 'equals', value: 'Open order' })).toBe(false);
+  });
+
+  it('sluit Open order uit bij does not contain', () => {
+    expect(columnValueMatchesFilter(statusColumn, 'Backorder', { operator: 'notContains', value: 'open order' })).toBe(false);
+    expect(columnValueMatchesFilter(statusColumn, 'Invoiced', { operator: 'notContains', value: 'open order' })).toBe(true);
+  });
+
+  it('matcht Open order ook op een formulekolom die Backorder bevat', () => {
+    const formulaColumn = { key: 'statusLabel', dataType: 'text', formulaExpr: '(status)' };
+    expect(columnValueMatchesFilter(formulaColumn, 'Backorder', { operator: 'contains', value: 'open order' })).toBe(true);
+    expect(columnValueMatchesFilter(formulaColumn, 'Backorder', { operator: 'equals', value: 'Open order' })).toBe(true);
+    expect(columnValueMatchesFilter(formulaColumn, 'Backorder', { operator: 'oneOf', value: ['Open order'] })).toBe(true);
+    expect(columnValueMatchesFilter(formulaColumn, 'Invoiced', { operator: 'contains', value: 'open order' })).toBe(false);
+    expect(columnValueMatchesFilter(formulaColumn, 'Open order', { operator: 'equals', value: 'Backorder' })).toBe(true);
+    expect(columnValueMatchesFilter(formulaColumn, 'Open order', { operator: 'contains', value: 'backorder' })).toBe(true);
   });
 });

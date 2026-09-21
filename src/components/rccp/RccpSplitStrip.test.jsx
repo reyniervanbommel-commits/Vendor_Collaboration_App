@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { renderWithFluent } from '../../test-utils/render';
 import RccpSplitStrip from './RccpSplitStrip';
 
 const captured = vi.hoisted(() => ({ chartHeight: null, chart: null }));
-
-vi.mock('../../hooks/useRccpSplitAnalysis', () => ({
-  useRccpSplitAnalysis: () => ({
+const analysisState = vi.hoisted(() => ({
+  loading: false,
+  fixture: {
     analysis: { config: { itemPickerColumnKeys: ['productName'] }, chart: [], cells: [] },
-    loading: false,
     error: '',
     measureRows: [{ measureKey: 'open', isOpen: true }],
     periods: [{ year: 2026, week: 1, key: '2026-W01' }],
@@ -25,6 +24,13 @@ vi.mock('../../hooks/useRccpSplitAnalysis', () => ({
       segmentsBelow: [],
     }],
     chartWeekRanges: [],
+  },
+}));
+
+vi.mock('../../hooks/useRccpSplitAnalysis', () => ({
+  useRccpSplitAnalysis: () => ({
+    ...analysisState.fixture,
+    loading: analysisState.loading,
   }),
 }));
 
@@ -37,6 +43,10 @@ vi.mock('./RccpChartMatrixPanel', () => ({
 }));
 
 describe('RccpSplitStrip', () => {
+  beforeEach(() => {
+    analysisState.loading = false;
+  });
+
   it('renders the PO-board RCCP pane without an item picker', () => {
     const { container, queryByRole } = renderWithFluent(
       <MemoryRouter>
@@ -98,5 +108,23 @@ describe('RccpSplitStrip', () => {
     expect(captured.chart[0].segmentsAbove).toEqual([
       { itemNumber: 'ITEM-A', poNumber: 'PO-A', qty: 2, status: 'open' },
     ]);
+  });
+
+  it('shows a Fluent spinner overlay without unmounting the chart while PERF reloads', () => {
+    analysisState.loading = true;
+    const { container, getByRole } = renderWithFluent(
+      <MemoryRouter>
+        <RccpSplitStrip
+          vendorAccount="V000583"
+          refreshKey="1"
+          enabled
+          isoWindow={{ fromYear: 2026, fromWeek: 1, toYear: 2026, toWeek: 12 }}
+        />
+      </MemoryRouter>,
+    );
+    expect(container.textContent).toContain('chart-matrix');
+    expect(container.querySelector('.fui-Spinner')).not.toBeNull();
+    expect(getByRole('status')).toBeTruthy();
+    expect(container.querySelector('[aria-busy="true"]')).toBeTruthy();
   });
 });

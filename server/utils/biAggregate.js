@@ -1,5 +1,12 @@
 'use strict';
 
+const {
+  formatPurchStatusDisplay,
+  isPurchaseOrderStatusColumn,
+  matchTextFilterWithPurchStatusAlias,
+  shouldMatchPurchStatusAlias,
+} = require('./purchStatusDisplay');
+
 // Pure aggregatie-laag voor de BI-feature (#AB:219 / #AB:220).
 // rows in → chart-ready series out. Geen I/O, dus los unit-testbaar.
 //
@@ -38,7 +45,7 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
 }
 
-function textMatches(rawValue, filter) {
+function textMatchesPlain(rawValue, filter) {
   const normalized = normalizeText(rawValue);
   const query = normalizeText(filter.value);
   if (!query && filter.operator !== 'oneOf' && filter.operator !== 'equals') return true;
@@ -54,6 +61,13 @@ function textMatches(rawValue, filter) {
     }
     default: return true;
   }
+}
+
+function textMatches(rawValue, filter) {
+  if (shouldMatchPurchStatusAlias(null, rawValue, filter)) {
+    return matchTextFilterWithPurchStatusAlias(rawValue, filter, textMatchesPlain);
+  }
+  return textMatchesPlain(rawValue, filter);
 }
 
 function numberMatches(rawValue, filter) {
@@ -143,6 +157,9 @@ function groupLabel(rawValue, column, dateGrouping) {
     return groupLabelForDate(rawValue, dateGrouping);
   }
   if (rawValue === null || rawValue === undefined || rawValue === '') return '(none)';
+  if (isPurchaseOrderStatusColumn(column)) {
+    return formatPurchStatusDisplay(rawValue) || String(rawValue);
+  }
   return String(rawValue);
 }
 

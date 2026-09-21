@@ -30,4 +30,19 @@ describe('PurchaseOrderColumnHeader', () => {
     renderHeader({ showWriteBackIcon: true });
     expect(screen.getByLabelText('Write-back to D365 enabled')).toBeTruthy();
   });
+
+  it('shows a source-link icon for a Date W/M column', () => {
+    renderHeader({
+      column: {
+        id: 2,
+        key: 'deliveryWeek',
+        label: 'Date W/M',
+        source: 'custom',
+        dataType: 'date_period',
+      },
+      connectionTargets: ['Date column "Requested delivery date"'],
+    });
+    const icon = screen.getByTestId('column-date-period-source-icon');
+    expect(icon.getAttribute('title')).toBe('Connected to date column "Requested delivery date"');
+  });
 });

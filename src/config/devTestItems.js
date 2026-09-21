@@ -4,6 +4,16 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'perf-reload-spinner-v1-71-1',
+    title: 'Spinner bij herladen Performance & Planning (v1.71.1)',
+    checks: [
+      'PO-tabel, tab Performance & Planning: na een filter of celwijziging verschijnt een Fluent-spinner over grafiek en matrix tot het herladen klaar is',
+      'De bestaande grafiek en tabel blijven zichtbaar onder de spinner (geen lege flits)',
+      'Kolomfilter op status: "Open order" en "Backorder" vinden dezelfde rijen',
+      'Een Date W/M-kolom toont een ketting-icoon; hover noemt de bron-datumkolom',
+    ],
+  },
+  {
     id: 'formula-and-or-v1-71-0',
     title: 'AND/OR in de formule-kolom (v1.71.0)',
     checks: [

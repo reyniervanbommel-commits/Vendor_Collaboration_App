@@ -1,5 +1,11 @@
 import { HEX_COLOR_PATTERN } from '../../utils/hexColor';
 import { STATUS_COLOR_PALETTE, normalizeStatusCompareKey } from '../../utils/statusColumnUtils';
+import {
+  formatPurchStatusDisplay,
+  isPurchStatusAliasText,
+  purchStatusValuesEquivalent,
+  toPurchStatusStoredValue,
+} from '../../utils/purchStatusDisplay';
 
 const COLUMN_KEY_PATTERN = /^[a-zA-Z0-9_]{1,64}$/;
 
@@ -106,7 +112,10 @@ function compareScalarValues(left, right, op) {
     const rightText = String(right ?? '').trim().toLowerCase();
     // Bij lege query geen match (anders highlight je alles bij een lege input).
     if (!leftText || !rightText) return false;
-    return leftText.includes(rightText);
+    if (leftText.includes(rightText)) return true;
+    if (!isPurchStatusAliasText(left) && !isPurchStatusAliasText(right)) return false;
+    return formatPurchStatusDisplay(left).toLowerCase().includes(rightText)
+      || toPurchStatusStoredValue(left).toLowerCase().includes(rightText);
   }
 
   const leftDate = toDateOrNull(left);
@@ -136,7 +145,7 @@ function compareScalarValues(left, right, op) {
 
   const leftText = String(left ?? '');
   const rightText = String(right ?? '');
-  const diff = leftText.localeCompare(rightText);
+  const diff = purchStatusValuesEquivalent(leftText, rightText) ? 0 : leftText.localeCompare(rightText);
   if (op === '=') return diff === 0;
   if (op === '<>') return diff !== 0;
   if (op === '>') return diff > 0;

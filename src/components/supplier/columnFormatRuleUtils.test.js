@@ -136,6 +136,25 @@ describe('columnFormatRuleUtils.evalFormatRules', () => {
     }, {}, statusOptions);
     expect(color).toBe('#e7f4ea');
   });
+
+  it('matcht D365 Backorder op het schermlabel Open order', () => {
+    expect(evalFormatRules('Backorder', {
+      target: 'cell',
+      rules: [{ op: '=', value: 'Open order', color: '#E6F4FF' }],
+    })).toBe('#e6f4ff');
+    expect(evalFormatRules('Backorder', {
+      target: 'cell',
+      rules: [{ op: 'contains', value: 'open', color: '#FFF4CE' }],
+    })).toBe('#fff4ce');
+    expect(evalFormatRules('Invoiced', {
+      target: 'cell',
+      rules: [{ op: '=', value: 'Open order', color: '#E6F4FF' }],
+    })).toBeNull();
+    expect(evalFormatRules('Open order', {
+      target: 'cell',
+      rules: [{ op: '=', value: 'Backorder', color: '#E6F4FF' }],
+    })).toBe('#e6f4ff');
+  });
 });
 
 describe('columnFormatRuleUtils.migrateFormatRulesForStatusRenames', () => {
