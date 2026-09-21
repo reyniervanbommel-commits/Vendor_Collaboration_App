@@ -45,8 +45,7 @@ const useStyles = makeStyles({
     justifyContent: 'flex-start',
     minWidth: 0,
   },
-  // Titel blijft bovenaan. Geen vertical centering: tegels zonder balk zouden anders
-  // de titel in het midden zetten en die lopen dan uit de pas met tegels mét balk.
+  // Titel blijft bovenaan; geen vertical centering (anders zakken tegels zonder balk).
   middleGroup: {
     display: 'flex',
     flexDirection: 'column',
@@ -86,10 +85,14 @@ const useStyles = makeStyles({
     flexShrink: 0,
   },
   labelCompact: {
-    fontSize: tokens.fontSizeBase300,
-    lineHeight: tokens.lineHeightBase300,
-    minHeight: `calc(${tokens.lineHeightBase300} * 2)`,
-    height: `calc(${tokens.lineHeightBase300} * 2)`,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
+    minHeight: tokens.lineHeightBase200,
+    height: tokens.lineHeightBase200,
+    display: 'block',
+    WebkitLineClamp: 1,
+    whiteSpace: 'nowrap',
+    textOverflow: 'ellipsis',
   },
   // Pil rechts op de items-regel. Padding bewust krap zodat 96.6% niet de teller wegdrukt.
   badge: {
@@ -125,9 +128,7 @@ const useStyles = makeStyles({
     minWidth: 0,
   },
   valueCompact: {
-    fontSize: tokens.fontSizeBase300,
-    overflowX: 'hidden',
-    textOverflow: 'ellipsis',
+    fontSize: tokens.fontSizeBase400,
   },
   hash: {
     fontSize: tokens.fontSizeBase400,
@@ -140,6 +141,11 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
     width: 'auto',
+  },
+  asideCompact: {
+    whiteSpace: 'nowrap',
+    overflowX: 'hidden',
+    textOverflow: 'ellipsis',
   },
   detail: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   metaRow: {
@@ -158,8 +164,11 @@ const useStyles = makeStyles({
     minWidth: 0,
     ...shorthands.gap(tokens.spacingHorizontalXS),
   },
-  // Balk onderaan de kaart. `marginTop: auto` vult de ruimte onder titel/teller,
-  // zodat titels op alle tegels bovenaan blijven staan — ook zonder %.
+  metaTextCompact: {
+    flexWrap: 'nowrap',
+    overflowX: 'hidden',
+  },
+  // Balk onderaan zodat titels op alle tegels bovenaan blijven, ook zonder %.
   barTrack: {
     marginTop: 'auto',
     width: '100%',
@@ -231,6 +240,7 @@ function KpiCard({
                 <Text
                   className={mergeClasses(styles.label, compact && styles.labelCompact)}
                   data-kpi-label=""
+                  title={compact ? [label, active.detail].filter(Boolean).join(' · ') : undefined}
                 >
                   {label}
                 </Text>
@@ -241,11 +251,8 @@ function KpiCard({
                 {showMark && markBefore ? (
                   <Text className={mergeClasses(styles.hash, compact && styles.hashCompact)}>{mark}</Text>
                 ) : null}
-                <Text
-                  className={mergeClasses(styles.value, compact && styles.valueCompact)}
-                  title={compact ? formatQty(active.qty) : undefined}
-                >
-                  {formatQty(active.qty, compact)}
+                <Text className={mergeClasses(styles.value, compact && styles.valueCompact)}>
+                  {formatQty(active.qty)}
                 </Text>
                 {showMark && !markBefore ? (
                   <Text className={mergeClasses(styles.hash, compact && styles.hashCompact)}>{mark}</Text>
@@ -254,9 +261,11 @@ function KpiCard({
             </div>
             {(active.aside || active.detail || showBadge) ? (
               <div className={styles.metaRow}>
-                <div className={styles.metaText}>
-                  {active.aside ? <Text className={styles.aside}>{active.aside}</Text> : null}
-                  {active.detail ? <Text className={styles.detail}>{active.detail}</Text> : null}
+                <div className={mergeClasses(styles.metaText, compact && styles.metaTextCompact)}>
+                  {active.aside ? (
+                    <Text className={mergeClasses(styles.aside, compact && styles.asideCompact)}>{active.aside}</Text>
+                  ) : null}
+                  {!compact && active.detail ? <Text className={styles.detail}>{active.detail}</Text> : null}
                 </div>
                 {showBadge ? (
                   <Text

@@ -4,6 +4,15 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'kpi-tile-layout-v1-70-5',
+    title: 'KPI-tegel layout op de PO-tabel (v1.70.5)',
+    checks: [
+      'KPIs-tab: titels staan bovenaan op alle kaarten, de teller is volledig leesbaar en de %-pil staat naast de items-regel',
+      'Performance & Planning: kleine tegels naast de grafiek tonen het volledige getal (geen 333.2K) en blijven leesbaar',
+      'Lange titels op kleine tegels blijven op één regel; hover toont de volledige titel',
+    ],
+  },
+  {
     id: 'split-panel-kpi-tiles',
     title: 'KPI-tegels in het rechterpaneel van de PO-tabel (#315)',
     checks: [

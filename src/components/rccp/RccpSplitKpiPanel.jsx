@@ -12,7 +12,7 @@ import { resolveSplitPanelKpiColumns } from '../../utils/rccpSplitPanelColumns';
 import KpiCardStyleProvider from './KpiCardStyleProvider';
 import KpiCard from './RccpKpiCard';
 
-const TILE_WIDTH = 124;
+const TILE_WIDTH = 140;
 const TILE_HEIGHT = 108;
 const TILE_GAP = 8;
 const MAX_COLUMNS = 3;

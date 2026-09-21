@@ -2,16 +2,9 @@ function hasQty(value) {
   return value !== null && value !== undefined;
 }
 
-export function formatQty(value, compact = false) {
+export function formatQty(value) {
   if (!hasQty(value)) return '—';
-  const n = Number(value || 0);
-  if (compact) {
-    return new Intl.NumberFormat('en-US', {
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(n);
-  }
-  return n.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
 }
 
 export function formatPct(value) {

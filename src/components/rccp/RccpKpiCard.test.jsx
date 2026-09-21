@@ -35,13 +35,30 @@ describe('KpiCard badge + progress bar', () => {
 });
 
 describe('KpiCard compact value', () => {
-  it('shows compact quantity next to the % badge', () => {
+  it('shows the full quantity on compact tiles', () => {
     const { getByText, queryByText } = renderWithFluent(
       <KpiCard compact kpiKey="open" label="Total open" qty={333230} hash pct="96.6%" />,
     );
-    expect(getByText('333.2K')).toBeTruthy();
-    expect(queryByText('333,230')).toBeNull();
+    expect(getByText('333,230')).toBeTruthy();
+    expect(queryByText('333.2K')).toBeNull();
     expect(getByText('96.6%')).toBeTruthy();
+  });
+
+  it('hides the days-late detail on compact tiles', () => {
+    const { getByText, queryByText } = renderWithFluent(
+      <KpiCard
+        compact
+        kpiKey="openLate"
+        label="Open and late"
+        qty={328205}
+        hash
+        aside="1,431 items"
+        detail="Ø 222 days late"
+      />,
+    );
+    expect(getByText('328,205')).toBeTruthy();
+    expect(getByText('1,431 items')).toBeTruthy();
+    expect(queryByText('Ø 222 days late')).toBeNull();
   });
 });
 
@@ -69,5 +86,20 @@ describe('KpiCard full-size layout', () => {
     const badge = container.querySelector('[data-kpi-pct-badge]');
     expect(badge?.parentElement?.textContent).toContain('1,432 items');
     expect(badge?.parentElement?.textContent).toContain('96.6%');
+  });
+
+  it('keeps the days-late detail on full-size cards', () => {
+    const { getByText } = renderWithFluent(
+      <KpiCard
+        kpiKey="openLate"
+        label="Open and late"
+        qty={328205}
+        hash
+        aside="1,431 items"
+        detail="Ø 222 days late"
+      />,
+    );
+    expect(getByText('328,205')).toBeTruthy();
+    expect(getByText('Ø 222 days late')).toBeTruthy();
   });
 });

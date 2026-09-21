@@ -2,14 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { formatDays, formatItems, formatPct, formatQty } from './kpiQtyFormat';
 
 describe('formatQty', () => {
-  it('keeps full grouped numbers by default', () => {
+  it('keeps full grouped numbers', () => {
     expect(formatQty(333230)).toBe('333,230');
-  });
-
-  it('uses compact notation for split-panel tiles', () => {
-    expect(formatQty(333230, true)).toBe('333.2K');
-    expect(formatQty(328205.3, true)).toBe('328.2K');
-    expect(formatQty(50, true)).toBe('50');
+    expect(formatQty(328205.3)).toBe('328,205.3');
+    expect(formatQty(50)).toBe('50');
   });
 });
 
