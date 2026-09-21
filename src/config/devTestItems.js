@@ -4,6 +4,15 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'open-order-formula-filter-v1-71-1',
+    title: 'Open order in formules en filters (v1.71.1)',
+    checks: [
+      'Formule IF((status)=\'Open order\';\'yes\';\'no\') toont yes op open orders (niet no)',
+      'Een formule die alleen (status) kopieert toont Open order, niet Backorder',
+      'Kolomfilter contains "open order" vindt zowel de statuskolom als een formulekolom met die waarde',
+    ],
+  },
+  {
     id: 'perf-reload-spinner-v1-71-1',
     title: 'Spinner bij herladen Performance & Planning (v1.71.1)',
     checks: [
