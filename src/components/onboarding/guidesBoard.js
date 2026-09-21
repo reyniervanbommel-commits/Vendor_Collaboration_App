@@ -127,6 +127,7 @@ export const BOARD_GUIDES = [
         cheatsheet: [
           ['(columnKey)', 'value of a column'],
           ['IF(test; then; else)', 'condition'],
+          ['a AND b · a OR b', 'combine conditions'],
           ['ROUND(n; decimals)', 'round a number'],
           ['ABS(n)', 'absolute value'],
           ['MIN(a; b) · MAX(a; b)', 'smallest · largest'],

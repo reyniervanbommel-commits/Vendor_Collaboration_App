@@ -14,6 +14,21 @@ export const FORMULA_FUNCTIONS_HELP = [
     description: 'Returns one value if the condition is true, another if false.',
   },
   {
+    name: 'AND(condition;condition;...)',
+    snippet: 'AND(;)',
+    description: 'True when all conditions are true; stops at the first false one. Also: (a)>5 AND (b)<10.',
+  },
+  {
+    name: 'OR(condition;condition;...)',
+    snippet: 'OR(;)',
+    description: 'True when at least one condition is true; stops at the first true one. Also: (a)>5 OR (b)<10.',
+  },
+  {
+    name: 'TRUE() / FALSE()',
+    snippet: 'TRUE()',
+    description: 'A fixed yes or no, useful as a default inside IF, AND or OR.',
+  },
+  {
     name: 'AFRONDEN(number;decimals)',
     snippet: 'AFRONDEN(;0)',
     description: 'Rounds a number, e.g. divide days by 7 and round to get whole weeks.',

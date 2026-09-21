@@ -4,6 +4,19 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'formula-and-or-v1-71-0',
+    title: 'AND/OR in de formule-kolom (v1.71.0)',
+    checks: [
+      'Nieuwe formulekolom, result type Text: IF((qty)>0 AND (status)=\'Open\';\'ok\';\'no\') valideert groen en toont ok op regels die aan beide voorwaarden voldoen',
+      'Dezelfde voorwaarde als functie geschreven — IF(AND((qty)>0;(status)=\'Open\');\'ok\';\'no\') — geeft exact hetzelfde resultaat',
+      'Result type Yes/No met (qty)>0 AND (qty)<100 toont een Yes/No-cel, niet de tekst "true"',
+      'OR werkt in beide vormen; EN en OF doen hetzelfde als AND en OR',
+      'AND((b)<>0;(a)/(b)>1) met b = 0 geeft No in plaats van een foutmelding over deling door nul',
+      'De functielijst in de dialog toont chips voor AND, OR en TRUE/FALSE; een onbekende functienaam geeft een tip waarin And en Or staan',
+      'Bestaande formulekolommen zonder AND/OR tonen onveranderde waarden',
+    ],
+  },
+  {
     id: 'kpi-tile-layout-v1-70-5',
     title: 'KPI-tegel layout op de PO-tabel (v1.70.5)',
     checks: [
