@@ -33,3 +33,41 @@ describe('KpiCard badge + progress bar', () => {
     expect(getByText('40.0%')).toBeTruthy();
   });
 });
+
+describe('KpiCard compact value', () => {
+  it('shows compact quantity next to the % badge', () => {
+    const { getByText, queryByText } = renderWithFluent(
+      <KpiCard compact kpiKey="open" label="Total open" qty={333230} hash pct="96.6%" />,
+    );
+    expect(getByText('333.2K')).toBeTruthy();
+    expect(queryByText('333,230')).toBeNull();
+    expect(getByText('96.6%')).toBeTruthy();
+  });
+});
+
+describe('KpiCard full-size layout', () => {
+  it('renders a two-line title slot', () => {
+    const { container, getByText } = renderWithFluent(
+      <KpiCard kpiKey="onTime" label="On time delivery" qty={4687} hash pct="1.4%" />,
+    );
+    expect(container.querySelector('[data-kpi-label]')).toBeTruthy();
+    expect(getByText('On time delivery')).toBeTruthy();
+  });
+
+  it('shows the full quantity and the badge', () => {
+    const { getByText } = renderWithFluent(
+      <KpiCard kpiKey="delivered" label="Total delivered" qty={11635} hash pct="3.4%" />,
+    );
+    expect(getByText('11,635')).toBeTruthy();
+    expect(getByText('3.4%')).toBeTruthy();
+  });
+
+  it('places the % badge on the items row', () => {
+    const { container } = renderWithFluent(
+      <KpiCard kpiKey="open" label="Total open" qty={50} hash aside="1,432 items" pct="96.6%" />,
+    );
+    const badge = container.querySelector('[data-kpi-pct-badge]');
+    expect(badge?.parentElement?.textContent).toContain('1,432 items');
+    expect(badge?.parentElement?.textContent).toContain('96.6%');
+  });
+});

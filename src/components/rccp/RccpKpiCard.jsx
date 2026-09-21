@@ -4,7 +4,10 @@ import { KPI_PIE_GRAY, KPI_PIE_GRAY_LIGHT, KPI_STYLE_KEYS } from '../../utils/kp
 import { buildKpiFormulaText } from './rccpKpiFormulas';
 import KpiFormulaFold from './KpiFormulaFold';
 import { kpiPiePercent } from './kpiPctPieUtils';
+import { formatQty, hasQty } from './kpiQtyFormat';
 import { useKpiCardStyle } from './useKpiCardStyles';
+
+export { formatDays, formatItems, formatPct, formatQty } from './kpiQtyFormat';
 
 const useStyles = makeStyles({
   wrap: {
@@ -26,6 +29,7 @@ const useStyles = makeStyles({
     ...shorthands.borderRadius(tokens.borderRadiusXLarge),
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'flex-start',
     ...shorthands.gap(tokens.spacingVerticalS),
   },
   // Kleinere, dichter uitgelijnde variant voor het split-panel (max 8 tegels naast de grafiek).
@@ -38,19 +42,17 @@ const useStyles = makeStyles({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    justifyContent: 'flex-start',
     minWidth: 0,
   },
-  // Titel + teller + aside/detail blijven als groep verticaal gecentreerd in de ruimte boven
-  // de balk — dankzij `margin: auto` op déze groep (niet op de balk) staat de balk altijd
-  // onderaan de kaart, terwijl de teller/badge in het midden komt te staan, ook als de
-  // kaart hoger wordt.
+  // Titel blijft bovenaan. Geen vertical centering: tegels zonder balk zouden anders
+  // de titel in het midden zetten en die lopen dan uit de pas met tegels mét balk.
   middleGroup: {
     display: 'flex',
     flexDirection: 'column',
     ...shorthands.gap(tokens.spacingVerticalXS),
     minWidth: 0,
-    marginTop: 'auto',
-    marginBottom: 'auto',
+    flexShrink: 0,
   },
   clickable: { cursor: 'pointer' },
   selected: {
@@ -58,39 +60,54 @@ const useStyles = makeStyles({
   },
   headerRow: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     ...shorthands.gap(tokens.spacingHorizontalS),
+    flexShrink: 0,
   },
   labelGroup: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     minWidth: 0,
+    width: '100%',
     ...shorthands.gap(tokens.spacingHorizontalXXS),
   },
-  label: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase400, fontWeight: tokens.fontWeightRegular },
-  labelCompact: { fontSize: tokens.fontSizeBase300 },
-  // Pil rechts, op dezelfde hoogte als de teller (zie valueRow: justifyContent space-between).
-  // Alleen op tegels met een %.
+  label: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightRegular,
+    lineHeight: tokens.lineHeightBase400,
+    minHeight: `calc(${tokens.lineHeightBase400} * 2)`,
+    height: `calc(${tokens.lineHeightBase400} * 2)`,
+    overflowX: 'hidden',
+    overflowY: 'hidden',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    flexShrink: 0,
+  },
+  labelCompact: {
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase300,
+    minHeight: `calc(${tokens.lineHeightBase300} * 2)`,
+    height: `calc(${tokens.lineHeightBase300} * 2)`,
+  },
+  // Pil rechts op de items-regel. Padding bewust krap zodat 96.6% niet de teller wegdrukt.
   badge: {
     flexShrink: 0,
-    // Bewust een vaste witte kleur (niet colorNeutralBackground1, die in dark mode donker
-    // wordt) — de badge-achtergrond is altijd een verzadigde accentkleur, dus de tekst moet
-    // hier altijd wit blijven, ongeacht het thema.
     color: '#ffffff',
-    fontSize: tokens.fontSizeBase400,
+    fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
     whiteSpace: 'nowrap',
-    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalL),
+    ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalS),
     ...shorthands.borderRadius(tokens.borderRadiusCircular),
   },
   badgeCompact: {
-    fontSize: tokens.fontSizeBase200,
-    ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalM),
+    fontSize: tokens.fontSizeBase100,
+    ...shorthands.padding('1px', tokens.spacingHorizontalXS),
   },
   valueRow: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
     flexWrap: 'nowrap',
     ...shorthands.gap(tokens.spacingHorizontalS),
   },
@@ -102,11 +119,16 @@ const useStyles = makeStyles({
     ...shorthands.gap(tokens.spacingHorizontalXS),
   },
   value: {
-    fontSize: tokens.fontSizeBase600,
-    fontWeight: tokens.fontWeightBold,
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightSemibold,
     width: 'auto',
+    minWidth: 0,
   },
-  valueCompact: { fontSize: tokens.fontSizeBase400 },
+  valueCompact: {
+    fontSize: tokens.fontSizeBase300,
+    overflowX: 'hidden',
+    textOverflow: 'ellipsis',
+  },
   hash: {
     fontSize: tokens.fontSizeBase400,
     fontWeight: tokens.fontWeightRegular,
@@ -120,19 +142,26 @@ const useStyles = makeStyles({
     width: 'auto',
   },
   detail: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  // Compacte variant: aside + detail samen op een eigen regel, links uitgelijnd onder de
-  // waarde — zo blijven de cijfers in het smalle split-paneel netjes onder elkaar staan.
-  metaRowCompact: {
+  metaRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'nowrap',
+    minWidth: 0,
+    minHeight: tokens.lineHeightBase200,
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  metaText: {
     display: 'flex',
     alignItems: 'baseline',
     flexWrap: 'wrap',
+    minWidth: 0,
     ...shorthands.gap(tokens.spacingHorizontalXS),
   },
-  // Balk onderaan de kaart (referentie-ontwerp) — alleen op tegels met een %. `middleGroup`
-  // hierboven centreert zichzelf via `margin: auto` in de ruimte vóór deze balk, die daardoor
-  // altijd tegen de onderkant van de kaart blijft staan.
+  // Balk onderaan de kaart. `marginTop: auto` vult de ruimte onder titel/teller,
+  // zodat titels op alle tegels bovenaan blijven staan — ook zonder %.
   barTrack: {
-    marginTop: tokens.spacingVerticalM,
+    marginTop: 'auto',
     width: '100%',
     height: '14px',
     backgroundColor: KPI_PIE_GRAY_LIGHT,
@@ -149,31 +178,6 @@ const useStyles = makeStyles({
     transitionTimingFunction: tokens.curveEasyEase,
   },
 });
-
-function hasQty(value) {
-  return value !== null && value !== undefined;
-}
-
-export function formatQty(value) {
-  if (!hasQty(value)) return '—';
-  return Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
-}
-
-export function formatPct(value) {
-  if (!hasQty(value)) return '';
-  return `${(Number(value) || 0).toFixed(1)}%`;
-}
-
-export function formatDays(value) {
-  if (!hasQty(value)) return '—';
-  const rounded = Math.round(Number(value) * 10) / 10;
-  return `Ø ${rounded} days late`;
-}
-
-export function formatItems(value) {
-  if (!hasQty(value)) return '';
-  return `${formatQty(value)} items`;
-}
 
 function KpiCard({
   kpiKey, label, qty, hash, aside, pct, detail, confirmed, selected, clickable, onActivate, config,
@@ -224,7 +228,12 @@ function KpiCard({
           <div className={styles.middleGroup}>
             <div className={styles.headerRow}>
               <div className={styles.labelGroup}>
-                <Text className={mergeClasses(styles.label, compact && styles.labelCompact)}>{label}</Text>
+                <Text
+                  className={mergeClasses(styles.label, compact && styles.labelCompact)}
+                  data-kpi-label=""
+                >
+                  {label}
+                </Text>
               </div>
             </div>
             <div className={styles.valueRow}>
@@ -232,35 +241,35 @@ function KpiCard({
                 {showMark && markBefore ? (
                   <Text className={mergeClasses(styles.hash, compact && styles.hashCompact)}>{mark}</Text>
                 ) : null}
-                <Text className={mergeClasses(styles.value, compact && styles.valueCompact)}>{formatQty(active.qty)}</Text>
+                <Text
+                  className={mergeClasses(styles.value, compact && styles.valueCompact)}
+                  title={compact ? formatQty(active.qty) : undefined}
+                >
+                  {formatQty(active.qty, compact)}
+                </Text>
                 {showMark && !markBefore ? (
                   <Text className={mergeClasses(styles.hash, compact && styles.hashCompact)}>{mark}</Text>
                 ) : null}
               </div>
-              {showBadge ? (
-                <Text
-                  as="span"
-                  className={mergeClasses(styles.badge, compact && styles.badgeCompact)}
-                  style={{ backgroundColor: accentColor }}
-                  data-kpi-pct-badge=""
-                >
-                  {active.pct}
-                </Text>
-              ) : null}
             </div>
-            {compact ? (
-              (active.aside || active.detail) && (
-                <div className={styles.metaRowCompact}>
+            {(active.aside || active.detail || showBadge) ? (
+              <div className={styles.metaRow}>
+                <div className={styles.metaText}>
                   {active.aside ? <Text className={styles.aside}>{active.aside}</Text> : null}
                   {active.detail ? <Text className={styles.detail}>{active.detail}</Text> : null}
                 </div>
-              )
-            ) : (
-              <>
-                {active.aside ? <Text className={styles.aside}>{active.aside}</Text> : null}
-                {active.detail ? <Text className={styles.detail}>{active.detail}</Text> : null}
-              </>
-            )}
+                {showBadge ? (
+                  <Text
+                    as="span"
+                    className={mergeClasses(styles.badge, compact && styles.badgeCompact)}
+                    style={{ backgroundColor: accentColor }}
+                    data-kpi-pct-badge=""
+                  >
+                    {active.pct}
+                  </Text>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           {showBadge ? (
             <div
