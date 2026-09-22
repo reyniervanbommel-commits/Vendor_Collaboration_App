@@ -4,6 +4,15 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'perf-kpi-tiles-match-po-strip-v1-71-6',
+    title: 'KPI-tegels op Performance gelijk aan de PO-tabel (v1.71.6)',
+    checks: [
+      'Performance & Planning: de KPI-tegels hebben dezelfde breedte en uitlijning als de tegels onderaan de PO-tabel (KPIs-tab)',
+      'De procentpil staat op beide plekken iets boven de balk, niet ertegenaan',
+      'De tegels onderaan de PO-tabel zijn onveranderd',
+    ],
+  },
+  {
     id: 'open-order-formula-filter-v1-71-1',
     title: 'Open order in formules en filters (v1.71.1)',
     checks: [
