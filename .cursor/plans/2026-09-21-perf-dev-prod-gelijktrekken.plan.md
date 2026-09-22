@@ -252,6 +252,58 @@ Gemeten om te weten wat C1/C2 op PROD gaan kosten zodra `develop` promoveert.
 
 ---
 
+## 5h. W16 uitgevoerd op DEV — 22-09 12:35Z ✅
+
+`vendorportal-dev-db` van **Basic (5 DTU) naar S2 (50 DTU)**. Duur: 2 min 23 s, status Online, geen handmatige tussenkomst. PROD nog niet — zie §9.
+
+Vier runs ná de upgrade, nadat de verbindingen en lookup-caches gesetteld waren:
+
+| Run | `app` | `tb_read_details` |
+|---|---|---|
+| 1 | 5.956 ms | 3.454 ms |
+| 2 | 6.188 ms | 4.258 ms |
+| 3 | 4.604 ms | 3.204 ms |
+| 4 | 3.877 ms | 2.573 ms |
+
+| | Basic | S2 | Winst |
+|---|---|---|---|
+| `app` (mediaan) | 9.189 ms | **~5.280 ms** | **1,7×** |
+| `tb_read_details` | 7.250 ms | **~3.329 ms** | **2,2×** |
+
+**De keten op DEV tot nu toe:** 47.060 → 9.189 (fix-optie 1) → ~5.280 ms (S2). Samen **8,9× sneller**, en DEV is nu ruim sneller dan PROD (11.681 ms op Basic).
+
+**Kanttekening bij de eerste ronde:** direct ná de tier-wissel was run 1 juist 22,8 s, met `tb_lookups` op 11.655 ms. De verbindingsreset had de lookup-cache leeggemaakt. Niet representatief, wel leerzaam: het laat zien hoe duur een koude lookup-read is.
+
+**Wat hierdoor de volgende post wordt:** `tb_lookups` schommelt tussen 0 en 2.200 ms, puur afhankelijk van de 30-secondenklok — precies wat W14 beschrijft. En `tb_build_rows` (1.181–2.303 ms) is nu relatief groot; dat is Node-werk, geen SQL, en hoort bij W10/W11.
+
+**DTU-metrics:** te vertraagd om al iets te zeggen over het verbruik ónder S2 (laatste datapunt liep achter op de metingen). Bovendien is een percentage relatief aan de tier — 90% op 5 DTU is iets heel anders dan 90% op 50 DTU. Over een dag opnieuw bekijken.
+
+---
+
+## 5i. W16 uitgevoerd op PROD — 22-09 12:47Z ✅ *doel B: eerste harde winst*
+
+Uitgevoerd op een moment dat PROD aantoonbaar stil lag: 0% DTU en **0 nieuwe verbindingen** in de 25 minuten ervoor. Duur 1 min 52 s, status Online, health daarna 200 in 209 ms.
+
+| Run | `app` | `tb_read_details` | `tb_build_rows` |
+|---|---|---|---|
+| 1 *(koud, lookup-cache leeg)* | 23.929 ms | 18.859 ms | 3.394 ms |
+| 2 | 5.956 ms | 2.553 ms | 2.992 ms |
+| 3 | 5.988 ms | 2.363 ms | 3.275 ms |
+| 4 | 6.203 ms | 2.802 ms | 3.019 ms |
+
+| | Basic | S2 | Winst |
+|---|---|---|---|
+| `app` (mediaan) | 11.681 ms | **~5.988 ms** | **2,0×** |
+| `tb_read_details` | 4.629 ms | **~2.553 ms** | **1,8×** |
+
+Payload en rijaantal onveranderd (2.668 KB, 2.190 orders).
+
+**`tb_build_rows` is nu de grootste post op PROD** (2.992–3.275 ms), groter dan `tb_read_details`. Dat is Node-werk: het opbouwen van 2.190 rijen. SQL is daarmee niet langer de bottleneck op productie — dat verschuift het zwaartepunt naar W10/W11 en maakt W12 minder urgent dan het leek.
+
+**Run 1 bevestigt W1 en W14.** Na de verbindingsreset was de eerste read 23,9 s, waarvan 15,4 s lookups. Exact hetzelfde patroon als op DEV. Dat is precies wat de eerste gebruiker na een deploy, een herstart of de nachtsync van 03:00 vandaag nog steeds betaalt. **Doel B is dus half gehaald:** de warme read is 2× sneller, de koude eerste read van de dag is dat niet.
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -536,7 +588,10 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 21-09 | **W0b gebouwd (§5d)** → `mark()` in `timing.js` + `tb_detail_plan[_mode]`; 7 nieuwe tests groen, 133 tests op het gewijzigde leespad groen; versie v1.71.2 |
 | 21-09 | **W0b afgelezen (§5e)** → modus is **`fields`**, niet `aggregate`. De 44 s zit in de `JSON_VALUE`-projectie. `aggregate` wordt geblokkeerd door één header-filter `ProductType eq …` op de items-tabel, dus de snelle tak van `56b98bd` draaide hier nooit. C5 bevestigd: `tb_detail_plan` ≈ `tb_lookups` |
 | 22-09 | **Fix-optie 1 gebouwd en gemeten (§5f)** → `8d8fde6` / v1.71.3. PO-read van 47 s naar 9,2 s, `tb_read_details` van 45,3 s naar 7,3 s, payload en rijaantal ongewijzigd. Marker staat op `_none`. **Doel A gehaald**: DEV nu sneller dan PROD op wandkloktijd. Fix is tevens voorwaarde voor de promotie van `develop` naar `main` |
-| | *volgende: W16 (SQL-tier van Basic/5 DTU af), daarna W11/W12/W14 op de resterende `tb_read_details` + `tb_build_rows` + `tb_lookups`. W1/W2 (warmup, DEV-scaling) blijven staan voor doel B* |
+| 22-09 | **RCCP-endpoints gemeten (§5g)** → `/rccp/board-kpis` warm 6–8 ms op beide; C1/C2 vallen weg achter de snapshotcache. Geen releaseblokkade. `/rccp/analysis` niet meetbaar zonder parameters (HTTP 400) |
+| 22-09 | **W16 op DEV uitgevoerd (§5h)** → Basic → S2 in 2 min 23 s. `app` 9.189 → ~5.280 ms, `tb_read_details` 7.250 → ~3.329 ms. Keten op DEV nu **8,9× sneller** dan gisteren. **PROD nog niet — wacht op een moment buiten kantooruren** |
+| 22-09 | **W16 op PROD uitgevoerd (§5i)** → Basic → S2 in 1 min 52 s, op een moment met 0 verbindingen. `app` 11.681 → ~5.988 ms (**2,0×**), health 200. `tb_build_rows` is nu de grootste post op PROD, niet SQL |
+| | *volgende: W1 (warmup) — de koude eerste read is nu het enige dat doel B nog blokkeert; daarna W14 (lookups op signatuur) en W10/W11 (rijopbouw). Vóór promotie: functionele/security-check op de 46 commits* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---
