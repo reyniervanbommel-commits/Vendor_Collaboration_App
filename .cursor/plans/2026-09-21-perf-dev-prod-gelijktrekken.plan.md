@@ -201,6 +201,57 @@ Doen: 1 nu, 3 als structurele lijn, 2 alleen met een uitgeschreven correctheidsa
 
 ---
 
+## 5f. Meting 22-09 ná fix-optie 1 ✅ *doel A gehaald*
+
+Commit `8d8fde6` (v1.71.3) op DEV, drie runs, zelfde script en zelfde omstandigheden als §5e.
+
+| | Vóór (§5e) | Ná | Winst |
+|---|---|---|---|
+| `app` (mediaan) | 47.060 ms | **9.189 ms** | **5,1×** |
+| `tb_read_details` (mediaan) | 45.334 ms | **7.250 ms** | **6,3×** |
+| Marker | `tb_detail_plan_fields` | **`tb_detail_plan_none`** | nieuwe tak actief |
+| Payload | 1.360 KB | 1.360 KB | ongewijzigd |
+| Rijen | 917 | 917 | ongewijzigd |
+
+Payload en rijaantal zijn identiek, dus de read levert exact hetzelfde op — alleen goedkoper.
+
+**Naast PROD:**
+
+| | DEV ná fix | PROD (main) |
+|---|---|---|
+| `app` | 9.189 ms | 11.681 ms |
+| `tb_read_details` | 7.250 ms | 4.629 ms |
+| orders in response | 917 | 2.190 |
+
+**Doel A is gehaald.** DEV is op wandkloktijd nu sneller dan PROD, terwijl PROD ruim dubbel zoveel orders teruggeeft. Het verschil op `tb_read_details` (7,3 tegen 4,6 s) valt weg tegen de 2,4× grotere orderset van PROD.
+
+**De ontkoppeling van de lookups werkt aantoonbaar.** In run 1 is `tb_lookups` 2.153 ms terwijl `tb_detail_plan` op 1.255 ms blijft; vóór de fix liepen die twee exact gelijk op. Wat `tb_detail_plan` nu nog bepaalt is de traagste van `tb_read_cols` / `tb_links` (run 1: beide 1.255 ms; run 3: beide 1.068 ms; run 2 warm: 35 ms). Dat is inherent aan de rollup-check en hoort bij W8 als er nog iets te halen valt.
+
+**Belangrijk voor doel B en de promotie naar PROD:** `main` heeft de `JSON_VALUE`-tak niet, dus PROD had deze bug niet. Maar commit `56b98bd` gaat mee zodra `develop` naar `main` promoveert. **Zonder deze fix zou PROD bij de eerstvolgende promotie van 4,6 s naar tientallen seconden gaan.** Geverifieerd op 22-09: PROD heeft **exact hetzelfde items-syncfilter** als DEV — `ProductType eq …` op header-niveau — dus `resolveCollapsedRollupPlan()` zou daar net zo goed meteen `null` teruggeven en in de `fields`-tak belanden. Deze fix is dus geen DEV-reparatie maar een voorwaarde voor de volgende release.
+
+**Wat nu de grootste post is:** `tb_read_details` blijft met 5,9–7,4 s de zwaarste, gevolgd door `tb_build_rows` (1,3–2,1 s) en `tb_lookups` (0–2,2 s). Dat is precies het terrein van W11 (projectie per view), W12 (vaste kolommen met index) en W14 (lookups op signatuur in plaats van een klok van 30 s). W16 (van Basic/5 DTU af) tilt ze alle drie.
+
+---
+
+## 5g. Meting 22-09 — RCCP-endpoints, vóór de promotie
+
+Gemeten om te weten wat C1/C2 op PROD gaan kosten zodra `develop` promoveert.
+
+| | DEV (develop) | PROD (main) |
+|---|---|---|
+| `/rccp/board-kpis` koud | 10.304 ms | — (was al warm) |
+| `/rccp/board-kpis` warm | **6 ms** | **8 ms** |
+| Payload | 171 KB (916 orders) | 202 KB (2.190 orders) |
+| `confirmed`-set aanwezig | **ja** | nee |
+
+**De snapshotcache werkt uitstekend.** Warm 6–8 ms op beide; dat bevestigt de 8–13 ms uit de code-comment. De koude 10,3 s op DEV zit vrijwel volledig in `rccp_board_kpis_read` / `kpi_po_read` (9,1 s) — dat is de PO-read, niet de KPI-berekening.
+
+**C1/C2 vallen mee.** De labels `rccp_board_kpis` en `rccp_board_kpis_confirmed` halen de top-8 niet eens; de dubbele walk kost dus minder dan `tb_lookup_items` (816 ms) en verdwijnt achter de cache. De payload-kant: DEV 0,19 KB per order mét confirmed, PROD 0,09 KB zonder. Op PROD betekent dat ~202 → ~400 KB. Niet mooi (W5 blijft zinvol), maar geen blokkade.
+
+**Niet gemeten:** `/rccp/analysis` geeft HTTP 400 zonder verplichte parameters. Gebruikt wel dezelfde snapshot, dus vermoedelijk hetzelfde patroon — koud duur, warm bijna gratis. C3 (client-aggregatie bij filterklik) is evenmin gemeten; dat valt buiten alle Network-calls en vraagt `perf-board-actions`.
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -254,7 +305,34 @@ Beide blokkeren een dure beslissing verderop.
 
 Dit is geen verklaring die de regressie uit §5c wegneemt — die is gemeten op identieke tier — maar het is wel de **multiplier**: bij een DTU-plafond wordt een query die 2× meer werk doet niet 2× maar een orde trager, omdat hij tegen het plafond aanloopt in plaats van door te rekenen. Het verklaart ook waarom PROD met 10–12 s zelf niet snel is.
 
-Voorstel: PROD naar minimaal **Standard S2 (50 DTU)** of General Purpose serverless, en DEV gelijktrekken zodat metingen vergelijkbaar blijven. Meet vóór en ná met dezelfde scripts — dit is de enige ingreep in dit plan die geen regel code kost.
+**Bewijs (22-09, `az monitor metrics`, max per 5 min):** `vendorportal-dev-db` raakte tijdens de metingen **100%** DTU (10:33Z), daarna 82% en 91%. `vendorportal-prod-db` stond op 0–4% — maar dat betekent alleen dat er op dat moment niemand op PROD werkte, niet dat PROD ruim bemeten is. Om PROD's plafond te kennen moet er tijdens de ochtendpiek gemeten worden.
+
+**Retail-prijzen North Europe** (Azure retail prices API, 22-09; CSP-tarief kan afwijken):
+
+| SKU | DTU | USD/dag | USD/maand (30,4 d) |
+|---|---|---|---|
+| Basic *(huidig)* | 5 | 0,161 | ~4,90 |
+| S0 | 10 | 0,4839 | ~14,70 |
+| S1 | 20 | 0,9677 | ~29,40 |
+| **S2** | **50** | **2,42** | **~73,60** |
+| S3 | 100 | 4,8387 | ~147,10 |
+
+**Voorstel: beide naar S2.** DEV gelijktrekken met PROD is geen luxe maar de voorwaarde om nog iets te kunnen meten — §5c leunde er volledig op dat de tiers identiek waren.
+
+```
+az sql db update --name vendorportal-prod-db --server sql-vp-ne-20260628 \
+  --resource-group vanbommel-vendorportal --service-objective S2
+az sql db update --name vendorportal-dev-db  --server sql-vp-ne-20260628 \
+  --resource-group vanbommel-vendorportal --service-objective S2
+```
+
+Meerkosten ~$137/maand voor beide samen. **Omkeerbaar experiment:** terugschalen is hetzelfde commando met `--service-objective Basic`, en je betaalt per dag. Een week proefdraaien kost een paar dollar.
+
+Aandachtspunten:
+- Een tier-wissel reset bestaande verbindingen; plan hem buiten kantooruren.
+- Basic heeft een cap van 2 GB, S2 250 GB — de limiet verdwijnt ook.
+- **Geen serverless met auto-pause op PROD.** Dat pauzeert de database bij inactiviteit en werkt doel B direct tegen: elke hervatting is weer een koude start. Voor DEV is het wel een overweging.
+- Verwacht geen 10× winst uit een 10× DTU-verhoging. PROD doet 10–12 s bij een vrijwel onbelaste database, dus een deel van het werk is gewoon werk. De tier haalt de rantsoenering weg, niet de omvang van de read — daarvoor zijn W11/W12/W14.
 
 **Volgorde:** dit is geen excuus om W11/W12/W15 over te slaan. Een tier-upgrade maakt een blob-scan sneller, niet goedkoop. Maar het is wel de snelste winst voor doel B en het maakt alle volgende metingen minder ruizig.
 
@@ -457,7 +535,8 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 21-09 | **SQL-tier uitgelezen** → DEV én PROD op **Basic/5 DTU**. Nieuw werkpakket **W16**; verklaart waarom ook PROD 10–12 s doet |
 | 21-09 | **W0b gebouwd (§5d)** → `mark()` in `timing.js` + `tb_detail_plan[_mode]`; 7 nieuwe tests groen, 133 tests op het gewijzigde leespad groen; versie v1.71.2 |
 | 21-09 | **W0b afgelezen (§5e)** → modus is **`fields`**, niet `aggregate`. De 44 s zit in de `JSON_VALUE`-projectie. `aggregate` wordt geblokkeerd door één header-filter `ProductType eq …` op de items-tabel, dus de snelle tak van `56b98bd` draaide hier nooit. C5 bevestigd: `tb_detail_plan` ≈ `tb_lookups` |
-| | *volgende: fix-optie 1 uit §5e bouwen (terugvallen op de blob als `aggregate` niet kan), meten, dan W16 (SQL-tier) en W12* |
+| 22-09 | **Fix-optie 1 gebouwd en gemeten (§5f)** → `8d8fde6` / v1.71.3. PO-read van 47 s naar 9,2 s, `tb_read_details` van 45,3 s naar 7,3 s, payload en rijaantal ongewijzigd. Marker staat op `_none`. **Doel A gehaald**: DEV nu sneller dan PROD op wandkloktijd. Fix is tevens voorwaarde voor de promotie van `develop` naar `main` |
+| | *volgende: W16 (SQL-tier van Basic/5 DTU af), daarna W11/W12/W14 op de resterende `tb_read_details` + `tb_build_rows` + `tb_lookups`. W1/W2 (warmup, DEV-scaling) blijven staan voor doel B* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---

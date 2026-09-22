@@ -4,6 +4,14 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'date-wm-chain-icon-in-menu-v1-71-7',
+    title: 'Ketting-icoon alleen in het kolommenu (v1.71.7)',
+    checks: [
+      'Een Date W/M-kolom toont geen ketting-icoon in de kolomkop zelf',
+      'Het kolommenu van die kolom toont het ketting-icoon; hover noemt de bron-datumkolom',
+    ],
+  },
+  {
     id: 'perf-kpi-tiles-match-po-strip-v1-71-6',
     title: 'KPI-tegels op Performance gelijk aan de PO-tabel (v1.71.6)',
     checks: [
@@ -28,7 +36,7 @@ export const devTestItems = [
       'PO-tabel, tab Performance & Planning: na een filter of celwijziging verschijnt een Fluent-spinner over grafiek en matrix tot het herladen klaar is',
       'De bestaande grafiek en tabel blijven zichtbaar onder de spinner (geen lege flits)',
       'Kolomfilter op status: "Open order" en "Backorder" vinden dezelfde rijen',
-      'Een Date W/M-kolom toont een ketting-icoon; hover noemt de bron-datumkolom',
+      'Het kolommenu van een Date W/M-kolom toont een ketting-icoon; hover noemt de bron-datumkolom. De kolomkop zelf toont dat icoon niet',
     ],
   },
   {
