@@ -304,6 +304,97 @@ Payload en rijaantal onveranderd (2.668 KB, 2.190 orders).
 
 ---
 
+## 5j. W1 gebouwd en geverifieerd — 22-09 ✅ *met een nuance die de volgorde verandert*
+
+Commit `6129444` (v1.71.8). De boot-warmup draaide aantoonbaar; containerlog van DEV:
+
+```
+12:59:42Z  "Board-caches opgewarmd", reason: "startup"
+```
+
+Eerste calls ná de deploy, dus precies de situatie van "eerste bezoeker van de dag":
+
+| Endpoint | Vóór W1 (koud) | Ná W1 (eerste call) |
+|---|---|---|
+| `/rccp/board-kpis` | 10.304 ms | **1.139 ms** |
+| `/api/data/purchase-orders` | — | 6.661 ms |
+
+**De warmup werkt: 9× sneller voor de eerste bezoeker op de RCCP/BI-kant.** Maar de verwachting was 6–8 ms, en dat werd 1.139 ms. Twee dingen die dat verklaren, en allebei sturen ze het vervolg:
+
+**1. Er zitten twee cachelagen onder `/rccp/board-kpis`, niet één.** De 6–8 ms uit §5g was een hit op een response-cache op revisie (`rccp_board_kpis_rev`). W1 vult de *snapshot*, niet die response-cache. Wat overblijft — ~1,1 s — is de KPI-berekening zelf over 916 orders, en dat is precies de dubbele walk van C1/C2. **W4 en W5 worden daarmee concreet meetbaar: ze moeten van die 1,1 s af.**
+
+**2. De PO-tabel-route profiteert niet, en dat is by design.** `/api/data/purchase-orders` gaat rechtstreeks naar `TableDataService.read()` en raakt `BoardSnapshotCache` nooit. Die route heeft geen koude/warme asymmetrie — hij leest altijd vers, ~6 s.
+
+**Waar de 23,9 s koude read op PROD dan vandaan kwam:** niet van de board-snapshot, maar van de **lookup-enrichment** (`tb_lookups` 15.381 ms). Die cache heeft een TTL van 30 seconden. De warmup vult hem wel, maar 30 seconden later is hij alweer verlopen — in de verificatie hierboven was hij dat na 100 s dus ook.
+
+**Dat maakt W14 de kritieke volgende stap voor doel B.** Zolang de lookup-cache op een klok van 30 s loopt in plaats van op de content-signatuur, is elke read die meer dan een halve minuut na de vorige komt opnieuw deels koud — en dat is overdag de normale situatie. Geen warmup lost dat op; alleen de invalidatiestrategie.
+
+---
+
+## 5k. W14 geverifieerd — 22-09 ✅ *met een vervolg*
+
+Vier PO-reads op DEV, met bewust 45 s pauze tussen call 2 en 3 (onder de oude regels was de
+lookup-cache dan verlopen):
+
+| | `tb_lookups` | `tb_lookup_sig` | `tb_read_details` |
+|---|---|---|---|
+| call 1 | 1.157 ms | 1.157 ms | 4.265 ms |
+| call 2 | 1.059 ms | 1.059 ms | 4.278 ms |
+| *45 s pauze* | | | |
+| call 3 | 1.090 ms | 1.090 ms | 4.106 ms |
+| call 4 | 590 ms | 590 ms | 3.198 ms |
+
+**`tb_lookups` is in alle vier de calls exact gelijk aan `tb_lookup_sig`.** De volledige
+doeltabel-read gebeurt dus niet meer — wat overblijft is alleen de signatuurcheck. Ook ná de pauze
+van 45 seconden, waar de oude klok de cache zou hebben weggegooid. Dat is precies wat W14 moest
+bereiken.
+
+**Maar de signatuurquery is duurder dan gehoopt: 590–1.157 ms.** Een `COUNT(*)` plus `MAX()` over
+de doeltabellen is geen puntquery. Netto-effect:
+
+- reads binnen 30 s van elkaar: vóór 0 ms, nu ~1 s → **slechter**
+- reads verder uit elkaar (overdag de regel): vóór 2.200–15.400 ms, nu ~1 s → **veel beter**
+
+**Vervolg (in dezelfde lijn gebouwd):** de signatuur hooguit één keer per 30 s ophalen
+(`LOOKUP_SIGNATURE_CHECK_MS`). De klok bepaalt dan hoe vaak we *kijken*, de inhoud of we
+*herladen*. Binnen dat venster is de check gratis, daarbuiten kost hij ~1 s in plaats van een
+volledige read. Het ergste gevolg van een gemiste wijziging is hooguit een halve minuut oude
+lookup-labels — hetzelfde risico als de oude TTL, maar zonder de kosten.
+
+---
+
+## 5l. Meting 22-09 — W4/W5 gewogen, en verworpen ten gunste van lazy
+
+Payload-samenstelling van `/rccp/board-kpis` op DEV (916 orders):
+
+| Onderdeel | Omvang | Aandeel |
+|---|---|---|
+| **totaal** | **171 KB** | 100% |
+| `sku` (2×) | 25 KB | 15% |
+| `orders` (2×) | 146 KB | 85% |
+
+**Dat verwerpt W5.** Een gedeelde sku-index bespaart de helft van 25 KB — ~7% van de payload. Voor
+een wijziging die server én client raakt is dat niet de moeite. Mijn eerdere inschatting
+("halveert de payload-groei") was fout: de verdubbeling zit in `orders`, en die waarden verschillen
+écht — die zijn niet te delen.
+
+**En het verwerpt W4 ten gunste van lazy laden.** Ik had "confirmed lui berekenen" eerder afgewezen
+omdat het een roundtrip kost bij het omzetten van de toggle. Dat argument houdt geen stand: onder
+dit endpoint zit een response-cache op revisie (`rccp_board_kpis_rev`), gemeten op 8–13 ms. Die ene
+roundtrip is eenmalig, daarna gratis. En de toggle staat standaard op `requested`.
+
+| Aanpak | Payload | CPU | Client | Risico |
+|---|---|---|---|---|
+| W5 (sku delen) | −7% | 0 | wijziging nodig | klein |
+| W4 (één walk) | 0 | ~−40% | geen | **refactor van de heetste functie** |
+| **Lazy confirmed** | **−50%** | **−50%** | lost W6 mee op | klein |
+
+Gebouwd: `?dateMode=confirmed` op de route, `includeConfirmed` in `boardKpis()`, cache-key erop
+uitgebreid, en client-side `getPoBoardKpis(refreshKey, dateMode)` met de `dateMode` uit de bestaande
+toggles. **W4, W5 en W6 vervallen daarmee.**
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -591,7 +682,10 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 22-09 | **RCCP-endpoints gemeten (§5g)** → `/rccp/board-kpis` warm 6–8 ms op beide; C1/C2 vallen weg achter de snapshotcache. Geen releaseblokkade. `/rccp/analysis` niet meetbaar zonder parameters (HTTP 400) |
 | 22-09 | **W16 op DEV uitgevoerd (§5h)** → Basic → S2 in 2 min 23 s. `app` 9.189 → ~5.280 ms, `tb_read_details` 7.250 → ~3.329 ms. Keten op DEV nu **8,9× sneller** dan gisteren. **PROD nog niet — wacht op een moment buiten kantooruren** |
 | 22-09 | **W16 op PROD uitgevoerd (§5i)** → Basic → S2 in 1 min 52 s, op een moment met 0 verbindingen. `app` 11.681 → ~5.988 ms (**2,0×**), health 200. `tb_build_rows` is nu de grootste post op PROD, niet SQL |
-| | *volgende: W1 (warmup) — de koude eerste read is nu het enige dat doel B nog blokkeert; daarna W14 (lookups op signatuur) en W10/W11 (rijopbouw). Vóór promotie: functionele/security-check op de 46 commits* |
+| 22-09 | **W1 gebouwd en geverifieerd (§5j)** → `6129444` / v1.71.8. Boot-warmup bevestigd in het containerlog; `/rccp/board-kpis` voor de eerste bezoeker van 10.304 → 1.139 ms. Nuance: de resterende 1,1 s is de dubbele KPI-walk (→ W4/W5), en de 23,9 s koude PO-read kwam van de **lookup-cache** (30 s TTL), niet van de board-snapshot |
+| 22-09 | **W14 gebouwd en geverifieerd (§5k)** → `302bc92` / v1.71.9. `tb_lookups` = `tb_lookup_sig` in alle calls: de volledige doeltabel-read is weg, ook ná 45 s pauze. Signatuurquery kost zelf 0,6–1,2 s → vervolg: hooguit één check per 30 s |
+| 22-09 | **W4/W5 gemeten en verworpen (§5l)** → payload is 85% `orders`, 15% `sku`; W5 zou 7% besparen. Lazy `confirmed` levert −50% payload én −50% CPU en lost W6 mee op. **W4, W5, W6 vervallen** |
+| | *volgende: W10/W11 (`tb_build_rows` 3,0–3,3 s op PROD, nu de grootste post), daarna W9 (CI-gate). Vóór promotie: functionele/security-check op de ~49 commits* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---

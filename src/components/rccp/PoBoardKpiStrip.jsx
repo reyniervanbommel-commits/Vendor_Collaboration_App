@@ -12,7 +12,7 @@ function PoBoardKpiStrip({ orders, selectedKey, onKpiFilter, refreshKey, dateMod
   const styles = useStyles();
   const {
     loading, error, configured, kpis, kpisConfirmed, matchByKey, config, buildOverlay,
-  } = usePoBoardKpis({ orders, refreshKey });
+  } = usePoBoardKpis({ orders, refreshKey, dateMode });
 
   const handleSelect = useCallback((key) => {
     onKpiFilter?.(key, matchByKey[key] || new Set(), { qtyOverlay: buildOverlay(key) });
