@@ -4311,6 +4311,13 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
 // dat er ooit een schrijfweg bijkomt die de signatuur niet raakt; hij verloopt in de praktijk
 // nooit vóór een sync dat al doet.
 const LOOKUP_ENRICHMENT_TTL_MS = 12 * 60 * 60 * 1000;
+
+// Hoe vaak we die signatuur opnieuw ophalen. Gemeten op DEV: de aggregatie kost 0,6-1,2 s — veel
+// goedkoper dan de lookup-reads die ze overslaat, maar niet gratis genoeg om bij élke board-read
+// te draaien. Binnen dit venster vertrouwen we de cache zonder te kijken. De klok bepaalt dus hoe
+// vaak we controleren, de inhoud of we herladen; het ergste gevolg van een gemiste wijziging is
+// hooguit een halve minuut oude lookup-labels.
+const LOOKUP_SIGNATURE_CHECK_MS = 30 * 1000;
 const lookupEnrichmentCache = new Map();
 
 // In-flight loads per tabel, zodat gelijktijdige koude aanvragen (board-read + /columns + bi/meta
@@ -4321,12 +4328,18 @@ const lookupEnrichmentInflight = new Map();
 async function loadLookupEnrichmentCached(table) {
   const cached = lookupEnrichmentCache.get(table.id);
   if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) {
+    // Net gecontroleerd: niet opnieuw kijken. Dit scheelt de signatuurquery bij reads die kort
+    // op elkaar volgen, zonder de verrijking zelf te laten verlopen.
+    if (Date.now() - (cached.checkedAt || 0) < LOOKUP_SIGNATURE_CHECK_MS) return cached.value;
     // Eén lichte aggregatie tegen de volledige doeltabel-reads die we ermee overslaan. Mislukt
     // hij, dan houden we de cache aan in plaats van terug te vallen op de dure read: een
     // haperende signatuurquery mag niet elke board-read seconden duurder maken.
     const signature = await time('tb_lookup_sig', () => loadLookupTargetSignature(cached.targetTableIds))
       .catch(() => cached.signature);
-    if (signature === cached.signature) return cached.value;
+    if (signature === cached.signature) {
+      cached.checkedAt = Date.now();
+      return cached.value;
+    }
   }
   const pending = lookupEnrichmentInflight.get(table.id);
   if (pending) return pending;
@@ -4337,8 +4350,9 @@ async function loadLookupEnrichmentCached(table) {
       // De signatuur hoort bij de zojuist gelezen inhoud. Lukt hij niet, dan bewaren we null en
       // valt de volgende aanroep terug op herladen — veilig, alleen niet goedkoop.
       const signature = await loadLookupTargetSignature(targetTableIds).catch(() => null);
+      const now = Date.now();
       lookupEnrichmentCache.set(table.id, {
-        value, loadedAt: Date.now(), signature, targetTableIds,
+        value, loadedAt: now, checkedAt: now, signature, targetTableIds,
       });
       return value;
     } finally {
