@@ -174,6 +174,33 @@ Na de eerstvolgende DEV-deploy staat in de Server-Timing-header welke leestak dr
 
 ---
 
+## 5e. Meting 21-09 ná deploy — oorzaak aangewezen 🎯
+
+Drie runs op DEV met de W0b-instrumentatie erop (v1.71.2), ná de deploy en ná de e2e-job.
+
+| | Run 1 | Run 2 | Run 3 |
+|---|---|---|---|
+| `app` | 46.435 ms | 46.176 ms | 47.836 ms |
+| `tb_read_details` | 44.330 ms | 44.368 ms | 45.540 ms |
+| `tb_detail_plan` | 940 ms | 1.095 ms | 1.596 ms |
+| **`tb_detail_plan_fields`** | **aanwezig** | **aanwezig** | **aanwezig** |
+
+**De modus is `fields`.** De SQL-rollup (`aggregate`) draait niet en heeft hier nooit gedraaid. De 44 seconden gaan volledig naar `buildDetailProjectionSql()`: één `JSON_VALUE(data_json, '$.veld')` per veld — soms een `COALESCE` van twee — over alle 73.177 detailrijen.
+
+**Waarom `aggregate` afvalt:** de items-tabel heeft één sync-filterregel, `ProductType eq …` op **header**-niveau. `itemsLineFilterConfigured()` kijkt alleen óf er een default filter op items staat, niet of die per PO-regel effect heeft, en geeft dus `true`. Daarop stopt `resolveCollapsedRollupPlan()` meteen (`collapsedDetailRollup.js:70`). Dat filter bestaat al sinds juli (`2026-07-22-items-d365-sync-filter.plan.md`), dus de snelle tak van commit `56b98bd` is op deze configuratie **nooit actief geweest** — alleen de trage.
+
+**Bevestiging van C5:** `tb_detail_plan` (940–1.596 ms) loopt vrijwel exact gelijk op met `tb_lookups` (940–1.595 ms). Het plannen wacht dus volledig op de lookup-enrichment, en de detail-read wacht op het plan. Reëel, maar klein naast de 44 s.
+
+### Fix-opties, op volgorde van risico
+
+1. **`fields` laten vallen en terugvallen op de volledige blob** *(aanbevolen — dit is W8, nu concreet)*. Kan `aggregate` niet, lees dan `data_json` zoals `main` doet, in plaats van de projectie. PROD bewijst de uitkomst: 4,6 s in plaats van 44 s bij hetzelfde volume en dezelfde tier. De projectie bespaart bytes over de SQL-verbinding maar kost een orde aan parsewerk in de database — op Basic/5 DTU funest. Diff: één returnpunt in `planCollapsedDetailRead()`, bij voorkeur achter een schakelaar zodat beide takken te meten blijven.
+2. **`itemsLineFilterConfigured()` preciezer maken** zodat een *header*-filter op items de aggregatie niet blokkeert. Grotere winst (SQL rekent de rollup, er komen bijna geen rijen terug), maar dit raakt correctheid: er moet eerst vaststaan dat zo'n filter inderdaad geen PO-regels uit scope haalt. Niet doen vóór die analyse — zie §5 punt 2.
+3. **W12** (vaste kolommen met index naast de JSON). Structureel de juiste oplossing en maakt zowel de projectie als het filteren goedkoop, maar het grootste werk.
+
+Doen: 1 nu, 3 als structurele lijn, 2 alleen met een uitgeschreven correctheidsanalyse.
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -429,7 +456,8 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 21-09 | **M2 gedaan (§5c)** → PROD 4,6 s tegen DEV 45,3 s op `tb_read_details`, bij 70.675 vs 73.177 detailrijen, **zelfde SQL-server en -tier**. Regressie in `develop` bewezen; bron vermoedelijk commit `56b98bd` |
 | 21-09 | **SQL-tier uitgelezen** → DEV én PROD op **Basic/5 DTU**. Nieuw werkpakket **W16**; verklaart waarom ook PROD 10–12 s doet |
 | 21-09 | **W0b gebouwd (§5d)** → `mark()` in `timing.js` + `tb_detail_plan[_mode]`; 7 nieuwe tests groen, 133 tests op het gewijzigde leespad groen; versie v1.71.2 |
-| | *volgende: DEV-deploy → `tb_detail_plan_<mode>` aflezen → gerichte fix op de detail-query (W8 of terugdraaien van `56b98bd`)* |
+| 21-09 | **W0b afgelezen (§5e)** → modus is **`fields`**, niet `aggregate`. De 44 s zit in de `JSON_VALUE`-projectie. `aggregate` wordt geblokkeerd door één header-filter `ProductType eq …` op de items-tabel, dus de snelle tak van `56b98bd` draaide hier nooit. C5 bevestigd: `tb_detail_plan` ≈ `tb_lookups` |
+| | *volgende: fix-optie 1 uit §5e bouwen (terugvallen op de blob als `aggregate` niet kan), meten, dan W16 (SQL-tier) en W12* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---

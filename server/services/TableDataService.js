@@ -3677,12 +3677,27 @@ async function planCollapsedDetailRead(input) {
   return plan;
 }
 
+// Mag de read terugvallen op de 'fields'-projectie (JSON_VALUE per veld, buildDetailProjectionSql)?
+// Standaard niet. Gemeten op Azure, 21-09-2026: die projectie kost 44 s waar dezelfde read met de
+// volledige data_json 4,6 s kost — ~73k detailregels, identieke SQL-server en -tier (zie
+// .cursor/plans/2026-09-21-perf-dev-prod-gelijktrekken.plan.md, §5c en §5e). SQL Server parst de
+// blob dan per rij per veld; Node parst hem één keer per rij en houdt bovendien alle velden over.
+// De schakelaar blijft bestaan zodat beide takken meetbaar zijn zonder de code terug te draaien.
+function fieldsProjectionEnabled() {
+  const raw = String(process.env.PO_DETAIL_FIELDS_PROJECTION || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true';
+}
+
 async function resolveCollapsedDetailPlan({
   table, colsPromise, linksPromise, enrichmentPromise, syncStatePromise, viewedPromise,
 }) {
   try {
-    const [[, detailCols], runtimeLinks, enrichment, itemsFilterActive] = await Promise.all([
-      colsPromise, linksPromise, enrichmentPromise, itemsLineFilterConfigured(table),
+    // De rollup heeft alleen kolommen, koppelingen en de items-filtercheck nodig. De
+    // lookup-enrichment is uitsluitend voor de veldprojectie — staat die uit, dan wachten we er
+    // ook niet op. Dat scheelt de detail-read de hele lookup-tijd (gemeten 0,9-1,6 s), want die
+    // read wacht op dit plan.
+    const [[, detailCols], runtimeLinks, itemsFilterActive] = await Promise.all([
+      colsPromise, linksPromise, itemsLineFilterConfigured(table),
     ]);
 
     const rollupPlan = resolveCollapsedRollupPlan({ detailColumns: detailCols, runtimeLinks, itemsFilterActive });
@@ -3698,7 +3713,8 @@ async function resolveCollapsedDetailPlan({
       };
     }
 
-    return planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment });
+    if (!fieldsProjectionEnabled()) return null;
+    return planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment: await enrichmentPromise });
   } catch (err) {
     logger.warn('Leesplan voor collapsed detail-read mislukt; volledige data_json gelezen', {
       error: err.message,
@@ -5784,5 +5800,7 @@ module.exports = {
   buildLookupTargetAliases,
   combineODataFilters,
   buildOneOfFilterClause,
+  fieldsProjectionEnabled,
+  planCollapsedDetailFields,
   FETCH_ADAPTERS,
 };

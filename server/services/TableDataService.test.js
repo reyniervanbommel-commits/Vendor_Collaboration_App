@@ -40,6 +40,7 @@ const {
   buildLookupTargetAliases,
   combineODataFilters,
   buildOneOfFilterClause,
+  fieldsProjectionEnabled,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -1101,5 +1102,39 @@ describe('TableDataService.FETCH_ADAPTERS', () => {
   it('registreert product-receipt-lines op genericMasterD365Fetch', () => {
     expect(typeof FETCH_ADAPTERS['product-receipt-lines']).toBe('function');
     expect(typeof FETCH_ADAPTERS['product-attribute-values']).toBe('function');
+  });
+});
+
+// De JSON_VALUE-projectie kostte op Azure 44 s waar de volledige data_json 4,6 s kost bij ~73k
+// detailregels (plan 2026-09-21, §5c/§5e). Daarom is die tak standaard uit en alleen met een
+// expliciete env-schakelaar terug te zetten, zodat beide routes meetbaar blijven.
+describe('TableDataService.fieldsProjectionEnabled', () => {
+  const original = process.env.PO_DETAIL_FIELDS_PROJECTION;
+
+  afterEach(() => {
+    if (original === undefined) delete process.env.PO_DETAIL_FIELDS_PROJECTION;
+    else process.env.PO_DETAIL_FIELDS_PROJECTION = original;
+  });
+
+  it('staat standaard uit zonder env-variabele', () => {
+    delete process.env.PO_DETAIL_FIELDS_PROJECTION;
+    expect(fieldsProjectionEnabled()).toBe(false);
+  });
+
+  it('gaat aan bij "1"', () => {
+    process.env.PO_DETAIL_FIELDS_PROJECTION = '1';
+    expect(fieldsProjectionEnabled()).toBe(true);
+  });
+
+  it('gaat aan bij "true", ongeacht hoofdletters en spaties', () => {
+    process.env.PO_DETAIL_FIELDS_PROJECTION = '  TRUE ';
+    expect(fieldsProjectionEnabled()).toBe(true);
+  });
+
+  it('blijft uit bij "0", "false" en een lege waarde', () => {
+    for (const value of ['0', 'false', '', 'ja']) {
+      process.env.PO_DETAIL_FIELDS_PROJECTION = value;
+      expect(fieldsProjectionEnabled()).toBe(false);
+    }
   });
 });
