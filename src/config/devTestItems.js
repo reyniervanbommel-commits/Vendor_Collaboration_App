@@ -4,6 +4,14 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'rccp-week-matrix-all-vendors-v1-72-1',
+    title: 'Weekmatrix telt alle leveranciers (v1.72.1)',
+    checks: [
+      'PO-tabel, tab All, Performance & Planning op week: de matrix toont dezelfde weken met load als de grafiek',
+      'Een filter op één item blijft dezelfde aantallen tonen in grafiek en matrix',
+    ],
+  },
+  {
     id: 'date-wm-chain-icon-in-menu-v1-71-7',
     title: 'Ketting-icoon alleen in het kolommenu (v1.71.7)',
     checks: [

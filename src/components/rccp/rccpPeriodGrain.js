@@ -36,12 +36,33 @@ export function monthBucketFromIsoWeek(year, week) {
   };
 }
 
+function sumQty(group, field) {
+  return group.reduce((sum, cell) => sum + (Number(cell[field]) || 0), 0);
+}
+
+/** Same measure and week from several vendors becomes one summed cell. */
+function mergeVendorCells(group) {
+  if (group.length < 2) return group[0];
+  const worst = worstStatus(group);
+  return {
+    ...worst,
+    confirmedQty: sumQty(group, 'confirmedQty'),
+    availableQty: sumQty(group, 'availableQty'),
+    remainingQty: sumQty(group, 'remainingQty'),
+  };
+}
+
 function buildCellMap(cells) {
-  const map = new Map();
+  const grouped = new Map();
   for (const cell of cells || []) {
     const token = cell.periodMonth || cell.isoWeek;
-    map.set(`${cell.measureKey}|${cell.periodYear}|${token}`, cell);
+    const key = `${cell.measureKey}|${cell.periodYear}|${token}`;
+    const list = grouped.get(key);
+    if (list) list.push(cell);
+    else grouped.set(key, [cell]);
   }
+  const map = new Map();
+  for (const [key, group] of grouped) map.set(key, mergeVendorCells(group));
   return map;
 }
 
@@ -116,14 +137,11 @@ function worstStatus(cells) {
 }
 
 function sumCellGroup(group, bucket) {
-  const worst = worstStatus(group);
   return {
-    ...worst,
+    ...mergeVendorCells(group),
     periodYear: bucket.year,
     isoWeek: bucket.month,
     periodMonth: bucket.month,
-    confirmedQty: group.reduce((sum, cell) => sum + (Number(cell.confirmedQty) || 0), 0),
-    availableQty: group.reduce((sum, cell) => sum + (Number(cell.availableQty) || 0), 0),
   };
 }
 
