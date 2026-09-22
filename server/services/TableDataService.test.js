@@ -41,6 +41,7 @@ const {
   combineODataFilters,
   buildOneOfFilterClause,
   fieldsProjectionEnabled,
+  buildLookupSignature,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -1136,5 +1137,57 @@ describe('TableDataService.fieldsProjectionEnabled', () => {
       process.env.PO_DETAIL_FIELDS_PROJECTION = value;
       expect(fieldsProjectionEnabled()).toBe(false);
     }
+  });
+});
+
+// De lookup-verrijking leest complete doeltabellen en kostte op PROD 15,4 s toen de cache leeg
+// was. Tot v1.71.8 gooide een klok van 30 s die verrijking weg; nu bepaalt de inhoud van de
+// doeltabellen of hij nog klopt. Deze signatuur is die inhoudsvergelijking.
+describe('TableDataService.buildLookupSignature', () => {
+  const rows = [
+    { table_id: 7, row_count: 120, max_synced: '2026-09-22T03:00:00.000Z', max_changed: '2026-09-21T09:00:00.000Z' },
+    { table_id: 9, row_count: 4300, max_synced: '2026-09-22T03:00:00.000Z', max_changed: null },
+  ];
+
+  it('is deterministisch voor dezelfde inhoud', () => {
+    expect(buildLookupSignature(rows)).toBe(buildLookupSignature([...rows]));
+  });
+
+  it('is onafhankelijk van de rij-volgorde', () => {
+    expect(buildLookupSignature([...rows].reverse())).toBe(buildLookupSignature(rows));
+  });
+
+  it('behandelt Date en ISO-string identiek', () => {
+    const withDates = rows.map((row) => ({
+      ...row,
+      max_synced: row.max_synced ? new Date(row.max_synced) : null,
+      max_changed: row.max_changed ? new Date(row.max_changed) : null,
+    }));
+    expect(buildLookupSignature(withDates)).toBe(buildLookupSignature(rows));
+  });
+
+  it('wijzigt wanneer een doeltabel rijen wint of verliest', () => {
+    expect(buildLookupSignature([{ ...rows[0], row_count: 121 }, rows[1]]))
+      .not.toBe(buildLookupSignature(rows));
+  });
+
+  it('wijzigt na een sync van een doeltabel', () => {
+    expect(buildLookupSignature([{ ...rows[0], max_synced: '2026-09-23T03:00:00.000Z' }, rows[1]]))
+      .not.toBe(buildLookupSignature(rows));
+  });
+
+  it('wijzigt wanneer de inhoud van een doelrij verandert', () => {
+    expect(buildLookupSignature([{ ...rows[0], max_changed: '2026-09-22T11:00:00.000Z' }, rows[1]]))
+      .not.toBe(buildLookupSignature(rows));
+  });
+
+  it('wijzigt wanneer er een doeltabel bij komt', () => {
+    const extra = [...rows, { table_id: 11, row_count: 1, max_synced: null, max_changed: null }];
+    expect(buildLookupSignature(extra)).not.toBe(buildLookupSignature(rows));
+  });
+
+  it('geeft een vaste waarde voor een lege set', () => {
+    expect(buildLookupSignature([])).toBe('leeg');
+    expect(buildLookupSignature(null)).toBe('leeg');
   });
 });

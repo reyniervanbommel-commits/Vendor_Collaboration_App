@@ -2780,6 +2780,9 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
 
   return {
     synthetic,
+    // Waaruit deze lookup is opgebouwd — loadLookupEnrichmentCached leidt hier zijn
+    // cache-signatuur uit af.
+    targetTableId: Number(targetTable.id),
     enrichedLookup: {
       ...lk,
       sourceFieldKey: resolvedSourceField,
@@ -2840,7 +2843,49 @@ async function loadLookupEnrichment(table) {
     enriched.push(result.enrichedLookup);
   }
 
-  return { lookups: enriched, masterCols, detailCols };
+  // De doeltabellen waarvan deze verrijking is afgeleid. loadLookupEnrichmentCached gebruikt ze
+  // om te bepalen of de cache nog klopt: wijzigt geen van die tabellen, dan is de verrijking nog
+  // geldig, hoe oud hij ook is.
+  const targetTableIds = [...new Set(
+    loaded.map((result) => result?.targetTableId).filter((id) => Number.isFinite(id))
+  )];
+
+  return { lookups: enriched, masterCols, detailCols, targetTableIds };
+}
+
+// Goedkope inhouds-signatuur van de lookup-doeltabellen: rijaantal plus de laatste sync- en
+// wijzigingstijd per tabel. Een aggregatie over de geïndexeerde (table_id, scope), geen blob-scan
+// — dus ordes goedkoper dan de volledige lookup-reads die hij overbodig maakt.
+async function loadLookupTargetSignature(targetTableIds) {
+  const ids = (Array.isArray(targetTableIds) ? targetTableIds : []).filter((id) => Number.isFinite(id));
+  if (!ids.length) return 'geen-doeltabellen';
+  const pool = await getPool();
+  const request = pool.request();
+  const params = ids.map((id, i) => {
+    request.input(`lookupTarget${i}`, sql.BigInt, id);
+    return `@lookupTarget${i}`;
+  });
+  const result = await request.query(`
+    SELECT table_id, COUNT(*) AS row_count, MAX(synced_at) AS max_synced, MAX(content_changed_at) AS max_changed
+    FROM dbo.tb_cache WITH (NOLOCK)
+    WHERE table_id IN (${params.join(', ')}) AND scope = 'master'
+    GROUP BY table_id
+  `);
+  return buildLookupSignature(result.recordset);
+}
+
+// Puur, zodat het deterministisch te testen is: volgorde-onafhankelijk en ongevoelig voor het
+// verschil tussen een Date en zijn ISO-string.
+function buildLookupSignature(rows) {
+  const parts = (Array.isArray(rows) ? rows : [])
+    .map((row) => [
+      String(row?.table_id ?? ''),
+      String(row?.row_count ?? 0),
+      row?.max_synced ? new Date(row.max_synced).toISOString() : '',
+      row?.max_changed ? new Date(row.max_changed).toISOString() : '',
+    ].join(':'))
+    .sort();
+  return parts.join('|') || 'leeg';
 }
 
 function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
@@ -4253,10 +4298,19 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
 // gefilterd op één order in plaats van de hele tabel.
 // ---------------------------------------------------------------------------
 
-// De lookup-verrijking leest complete doeltabellen (vendors/items) en kost honderden ms.
-// Voor het openklappen van één order is dat te duur en een paar seconden oude
-// lookup-labels zijn ongevaarlijk; de board-read zelf blijft ongecached.
-const LOOKUP_ENRICHMENT_TTL_MS = 30 * 1000;
+// De lookup-verrijking leest complete doeltabellen (vendors/items/receipt-lines) en kost op
+// productie seconden — gemeten 22-09: 15,4 s toen de cache leeg was.
+//
+// Tot v1.71.8 gooide een klok van 30 seconden die verrijking weg. Overdag is de normale situatie
+// dat er meer dan een halve minuut tussen twee reads zit, dus betaalde bijna elke bezoeker de
+// volledige lookup-read opnieuw — ook als vendors en items de hele dag niet waren veranderd.
+//
+// Nu bepaalt de inhoud of de cache nog klopt, niet de leeftijd: dezelfde aanpak als
+// BoardSnapshotCache ("unlimited-until-revision"). Wijzigt geen van de doeltabellen, dan blijft
+// de verrijking geldig. De ruime TTL hieronder is alleen een vangnet voor het theoretische geval
+// dat er ooit een schrijfweg bijkomt die de signatuur niet raakt; hij verloopt in de praktijk
+// nooit vóór een sync dat al doet.
+const LOOKUP_ENRICHMENT_TTL_MS = 12 * 60 * 60 * 1000;
 const lookupEnrichmentCache = new Map();
 
 // In-flight loads per tabel, zodat gelijktijdige koude aanvragen (board-read + /columns + bi/meta
@@ -4266,13 +4320,26 @@ const lookupEnrichmentInflight = new Map();
 
 async function loadLookupEnrichmentCached(table) {
   const cached = lookupEnrichmentCache.get(table.id);
-  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) {
+    // Eén lichte aggregatie tegen de volledige doeltabel-reads die we ermee overslaan. Mislukt
+    // hij, dan houden we de cache aan in plaats van terug te vallen op de dure read: een
+    // haperende signatuurquery mag niet elke board-read seconden duurder maken.
+    const signature = await time('tb_lookup_sig', () => loadLookupTargetSignature(cached.targetTableIds))
+      .catch(() => cached.signature);
+    if (signature === cached.signature) return cached.value;
+  }
   const pending = lookupEnrichmentInflight.get(table.id);
   if (pending) return pending;
   const promise = (async () => {
     try {
       const value = await loadLookupEnrichment(table);
-      lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
+      const targetTableIds = Array.isArray(value?.targetTableIds) ? value.targetTableIds : [];
+      // De signatuur hoort bij de zojuist gelezen inhoud. Lukt hij niet, dan bewaren we null en
+      // valt de volgende aanroep terug op herladen — veilig, alleen niet goedkoop.
+      const signature = await loadLookupTargetSignature(targetTableIds).catch(() => null);
+      lookupEnrichmentCache.set(table.id, {
+        value, loadedAt: Date.now(), signature, targetTableIds,
+      });
       return value;
     } finally {
       lookupEnrichmentInflight.delete(table.id);
@@ -5802,5 +5869,6 @@ module.exports = {
   buildOneOfFilterClause,
   fieldsProjectionEnabled,
   planCollapsedDetailFields,
+  buildLookupSignature,
   FETCH_ADAPTERS,
 };
