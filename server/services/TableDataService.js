@@ -3218,27 +3218,76 @@ function buildValuesFromColumns(cols, sourceJson, custom) {
 
 // Eén detailregel projecteren naar de board-vorm. ctx bundelt de gedeelde lookups die
 // zowel de board-read als de per-order details-read opbouwen.
-function buildDetailRow(d, ctx) {
+// Welke detailkolommen een ingeklapt bord écht nodig heeft: `itemNumber` voor de
+// productImageSummary in buildDetailRollup, plus de lijnkolom van elke gekoppelde header-kolom.
+// Geeft null zodra één daarvan géén direct bronveld is — een formule-, lookup-, custom- of
+// product-attribuutkolom heeft juist het werk nodig dat de lichte weg overslaat.
+function resolveLightDetailColumns({ detailCols = [], runtimeLinks = null } = {}) {
+  const byKey = new Map();
+  for (const column of detailCols) {
+    const key = String(column?.key || '').trim().toLowerCase();
+    if (key) byKey.set(key, column);
+  }
+  const isDirectSource = (column) => Boolean(column)
+    && column.source === 'source'
+    && !isFormulaColumn(column)
+    && String(column?.options?.kind || '') !== 'product-attribute';
+
+  const needed = new Map();
+  const itemColumn = byKey.get('itemnumber');
+  if (itemColumn) {
+    if (!isDirectSource(itemColumn)) return null;
+    needed.set('itemnumber', itemColumn);
+  }
+  for (const group of ['lineTotalHeaderLinks', 'lineValueHeaderLinks']) {
+    for (const link of (Array.isArray(runtimeLinks?.[group]) ? runtimeLinks[group] : [])) {
+      const key = String(link?.lineColumnKey || '').trim().toLowerCase();
+      if (!key) continue;
+      const column = byKey.get(key);
+      if (!isDirectSource(column)) return null;
+      needed.set(key, column);
+    }
+  }
+  return [...needed.values()];
+}
+
+/**
+ * @param {object} d - ruwe tb_cache-detailrij
+ * @param {object} ctx - detailContext
+ * @param {{ light?: boolean }} [options] - `light`: de regel gaat niet mee in de response en dient
+ *   alleen als input voor buildDetailRollup en de gekoppelde header-kolommen. Dan blijven lookups,
+ *   product-attributen, formules, history en track-marks achterwege — bij een ingeklapt bord is dat
+ *   werk dat direct daarna wordt weggegooid, en dat voor elke van de ~73k regels. De vlaggen
+ *   hieronder blijven bewust in dezelfde functie, zodat licht en volledig nooit uiteen kunnen lopen.
+ */
+function buildDetailRow(d, ctx, { light = false } = {}) {
   const {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
   } = ctx;
   const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
   const detailJson = parseJson(d.data_json);
-  const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
-  const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
-  applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
-  const pavExtras = applyProductAttributePivot(
-    detailValues,
-    detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
-    ctx.pavPivot,
-    ctx.pavColumns,
+  const detailValues = buildValuesFromColumns(
+    light ? (lightDetailCols || detailCols) : detailCols,
+    detailJson,
+    detailCustom,
   );
-  if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
-    applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+  let pavExtras = null;
+  if (!light) {
+    const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
+    applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+    pavExtras = applyProductAttributePivot(
+      detailValues,
+      detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
+      ctx.pavPivot,
+      ctx.pavColumns,
+    );
+    if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
+      applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+    }
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
   }
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
   const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
   const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
   const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -3252,6 +3301,17 @@ function buildDetailRow(d, ctx) {
   const hasRemovalChange = Boolean(ledgerState?.isRemoved)
     || (!hasLedgerWindow && isRemovedAtSource);
   const isRemoved = isRemovedAtSource || Boolean(ledgerState?.isRemoved);
+  if (light) {
+    // Precies wat buildDetailRollup en applyRuntimeLinkedHeaderValues lezen, niets meer.
+    return {
+      values: detailValues,
+      isNew,
+      isChanged,
+      isRemoved,
+      hasRemovalChange,
+      changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
+    };
+  }
   const detailHistory = historyByCell.get(cellKey);
   const detailTrackMarks = trackMarks.trackMarksByCell.get(cellKey);
   return {
@@ -3970,8 +4030,16 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   const { orderChanges, lineChanges, lineChangesByOrder } = buildD365ChangeState(d365LedgerRows);
 
   const valuesFor = buildValuesFromColumns;
+  // Gaan de sublijnen niet mee in de response, dan dienen ze alleen als input voor de rollup en de
+  // gekoppelde header-kolommen. Dat scheelt per regel de lookups, product-attributen, formules,
+  // history en track-marks — bij ~73k regels de grootste post in tb_build_rows. Null betekent dat
+  // een van die kolommen berekend of opgezocht is; dan bouwen we de volledige rij, zoals altijd.
+  const lightDetailCols = includeDetails ? null : resolveLightDetailColumns({ detailCols, runtimeLinks });
+  const useLightDetails = Boolean(lightDetailCols);
+  mark(`tb_detail_rows_${useLightDetails ? 'light' : 'full'}`);
+
   const detailContext = {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
     compiledDetailFormulas, formulaToday, pavPivot, pavColumns,
   };
@@ -4044,7 +4112,7 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
         if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
       }
       details = rawDetailRows.map((d) => {
-        const detail = buildDetailRow(d, detailContext);
+        const detail = buildDetailRow(d, detailContext, { light: useLightDetails });
         if (detail.isNew || detail.isChanged) hasLineChanges = true;
         return detail;
       });
@@ -5884,5 +5952,6 @@ module.exports = {
   fieldsProjectionEnabled,
   planCollapsedDetailFields,
   buildLookupSignature,
+  resolveLightDetailColumns,
   FETCH_ADAPTERS,
 };

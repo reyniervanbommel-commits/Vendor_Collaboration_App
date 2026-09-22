@@ -42,6 +42,7 @@ const {
   buildOneOfFilterClause,
   fieldsProjectionEnabled,
   buildLookupSignature,
+  resolveLightDetailColumns,
   FETCH_ADAPTERS,
 } = require('./TableDataService');
 
@@ -1189,5 +1190,81 @@ describe('TableDataService.buildLookupSignature', () => {
   it('geeft een vaste waarde voor een lege set', () => {
     expect(buildLookupSignature([])).toBe('leeg');
     expect(buildLookupSignature(null)).toBe('leeg');
+  });
+});
+
+// Bij een ingeklapt bord gaan de detailregels niet mee in de response; ze voeden alleen de rollup
+// en de gekoppelde header-kolommen. Deze resolver bepaalt of die smalle weg veilig is.
+describe('TableDataService.resolveLightDetailColumns', () => {
+  const sourceCol = (key, extra = {}) => ({ key, source: 'source', sourceField: key, ...extra });
+  const itemNumber = sourceCol('itemNumber');
+
+  it('houdt itemNumber over als er geen koppelingen zijn', () => {
+    const result = resolveLightDetailColumns({ detailCols: [itemNumber, sourceCol('quantity')] });
+    expect(result.map((c) => c.key)).toEqual(['itemNumber']);
+  });
+
+  it('neemt de lijnkolom van een total-koppeling mee', () => {
+    const result = resolveLightDetailColumns({
+      detailCols: [itemNumber, sourceCol('lineAmount'), sourceCol('ongebruikt')],
+      runtimeLinks: { lineTotalHeaderLinks: [{ headerColumnKey: 'total', lineColumnKey: 'lineAmount' }] },
+    });
+    expect(result.map((c) => c.key).sort()).toEqual(['itemNumber', 'lineAmount']);
+  });
+
+  it('neemt de lijnkolom van een value-koppeling mee en ontdubbelt', () => {
+    const result = resolveLightDetailColumns({
+      detailCols: [itemNumber, sourceCol('status')],
+      runtimeLinks: {
+        lineTotalHeaderLinks: [{ headerColumnKey: 'a', lineColumnKey: 'status' }],
+        lineValueHeaderLinks: [{ headerColumnKey: 'b', lineColumnKey: 'status' }],
+      },
+    });
+    expect(result.map((c) => c.key).sort()).toEqual(['itemNumber', 'status']);
+  });
+
+  it('weigert zodra een gekoppelde lijnkolom een formule is', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [itemNumber, sourceCol('berekend', { formulaExpr: '[a] + [b]' })],
+      runtimeLinks: { lineTotalHeaderLinks: [{ headerColumnKey: 'x', lineColumnKey: 'berekend' }] },
+    })).toBeNull();
+  });
+
+  it('weigert zodra een gekoppelde lijnkolom uit een lookup komt', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [itemNumber, { key: 'vendorName', source: 'lookup' }],
+      runtimeLinks: { lineValueHeaderLinks: [{ headerColumnKey: 'x', lineColumnKey: 'vendorName' }] },
+    })).toBeNull();
+  });
+
+  it('weigert zodra een gekoppelde lijnkolom een custom-kolom is', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [itemNumber, { key: 'eigenVeld', source: 'custom' }],
+      runtimeLinks: { lineTotalHeaderLinks: [{ headerColumnKey: 'x', lineColumnKey: 'eigenVeld' }] },
+    })).toBeNull();
+  });
+
+  it('weigert zodra een gekoppelde lijnkolom een product-attribuut is', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [itemNumber, sourceCol('kleur', { options: { kind: 'product-attribute' } })],
+      runtimeLinks: { lineValueHeaderLinks: [{ headerColumnKey: 'x', lineColumnKey: 'kleur' }] },
+    })).toBeNull();
+  });
+
+  it('weigert zodra itemNumber zelf berekend is', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [sourceCol('itemNumber', { formulaExpr: '[a]' })],
+    })).toBeNull();
+  });
+
+  it('weigert bij een koppeling naar een kolom die niet bestaat', () => {
+    expect(resolveLightDetailColumns({
+      detailCols: [itemNumber],
+      runtimeLinks: { lineTotalHeaderLinks: [{ headerColumnKey: 'x', lineColumnKey: 'bestaatNiet' }] },
+    })).toBeNull();
+  });
+
+  it('werkt zonder itemNumber-kolom', () => {
+    expect(resolveLightDetailColumns({ detailCols: [sourceCol('quantity')] })).toEqual([]);
   });
 });
