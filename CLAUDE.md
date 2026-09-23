@@ -110,12 +110,17 @@ perf-`regression`-modus dan over. Bij twijfel: behandel als feature/risicovol.
 3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
    routes, SQL via parameters. `final-check-feature` roept `security-review` aan op de diff.
 4. **Testen** — nieuwe of gewijzigde pure/business-logica in `server/services/`, `server/middleware/`,
-   `server/utils/`, `src/utils/` of `src/hooks/` (de kernmappen) → verwacht een `.test.js`/`.test.jsx`
-   ernaast, co-located zoals de rest van de repo (zie bestaande tests als voorbeeld). Dunne
-   route-glue en styling-componenten zijn hiervan uitgezonderd. Geen harde CI-gate — een
-   niet-blokkerende CI-job (`test-coverage-hint`, `scripts/check-core-test-coverage.js`) signaleert
-   kernbestanden zonder test in de PR-jobsummary, zodat het niet op menselijk onthouden hoeft te
-   steunen.
+ `server/utils/`, `src/utils/` of `src/hooks/` (de kernmappen) → verwacht een `.test.js`/`.test.jsx`
+ ernaast, co-located zoals de rest van de repo (zie bestaande tests als voorbeeld). Dunne
+ route-glue en styling-componenten zijn hiervan uitgezonderd. Geen harde CI-gate — een
+ niet-blokkerende CI-job (`test-coverage-hint`, `scripts/check-core-test-coverage.js`) signaleert
+ kernbestanden zonder test in de PR-jobsummary, zodat het niet op menselijk onthouden hoeft te
+ steunen.
+ **Lokaal draai je niet de hele suite**: `npm run test:changed` (alleen tests die de gewijzigde
+ modules importeren), of `npm run test:node` / `npm run test:dom` voor één project. `npm test`
+ alleen bij een gedeelde util, dependency-upgrade of wijziging in de Vitest-config. De volledige
+ suite mét coverage draait toch in CI. Zie `.cursor/rules/kwaliteitspoort.mdc` → "Welke tests
+ draai je lokaal".
 
 Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`. Ná de wijziging: skill
 `final-check-feature` (roept `ui-design-review`, `perf-review`, `security-review`,

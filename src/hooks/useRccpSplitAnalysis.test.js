@@ -148,7 +148,7 @@ describe('useRccpSplitAnalysis', () => {
 
     await waitFor(() => expect(apiRequest.mock.calls.length).toBeGreaterThan(1), { timeout: 15000 });
     expect(result.current.analysis).toBe(first);
-    expect(result.current.loading).toBe(false);
+    expect(result.current.loading).toBe(true);
 
     const second = { ...first, chart: [{ key: 'b' }] };
     await act(async () => { resolveSecond(second); });

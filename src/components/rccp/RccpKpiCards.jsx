@@ -9,11 +9,13 @@ const useStyles = makeStyles({
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(168px, 1fr))',
     alignItems: 'stretch',
-    ...shorthands.gap(tokens.spacingHorizontalM),
+    ...shorthands.gap(tokens.spacingVerticalL, tokens.spacingHorizontalL),
   },
 });
 
-function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config }) {
+function RccpKpiCards({
+  kpis, kpisConfirmed = null, selectedKey = '', onSelect, clickableKeys, config, dateMode = 'requested',
+}) {
   const styles = useStyles();
   const handleActivate = useCallback((key) => {
     onSelect?.(key);
@@ -24,6 +26,10 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
     ? new Set(clickableKeys || PO_BOARD_CLICKABLE_KPI_KEYS)
     : new Set();
   const uniqueLateItems = kpis.lateDeliveryItemCount;
+  // C/R-omdraaibare kant: elke tegel krijgt (indien beschikbaar) een confirmed-datum-basis
+  // bundel met dezelfde vorm als de props die de tegel normaal krijgt. Capacity-KPI's
+  // hebben geen datum-basis, dus die tegels krijgen geen confirmed-variant.
+  const c = kpisConfirmed;
   return (
     <KpiCardStyleProvider>
     <div className={styles.row} data-tour="rccp-kpis">
@@ -32,10 +38,12 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         label="Total ordered"
         qty={kpis.totalOrdered}
         hash
+        confirmed={c ? { qty: c.totalOrdered, hash: true } : null}
         selected={selectedKey === 'ordered'}
         clickable={clickableSet.has('ordered')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="delivered"
@@ -43,10 +51,12 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         qty={kpis.totalDelivered}
         hash
         pct={formatPct(kpis.deliveredPercent)}
+        confirmed={c ? { qty: c.totalDelivered, hash: true, pct: formatPct(c.deliveredPercent) } : null}
         selected={selectedKey === 'delivered'}
         clickable={clickableSet.has('delivered')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="open"
@@ -55,10 +65,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         hash
         aside={formatItems(kpis.openItemCount)}
         pct={formatPct(kpis.openPercent)}
+        confirmed={c ? {
+          qty: c.totalOpen, hash: true, aside: formatItems(c.openItemCount), pct: formatPct(c.openPercent),
+        } : null}
         selected={selectedKey === 'open'}
         clickable={clickableSet.has('open')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="lateDelivery"
@@ -67,10 +81,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         hash
         aside={formatItems(uniqueLateItems)}
         pct={formatPct(kpis.lateDeliveryPercent)}
+        confirmed={c ? {
+          qty: c.lateDeliveryUnits, hash: true, aside: formatItems(c.lateDeliveryItemCount), pct: formatPct(c.lateDeliveryPercent),
+        } : null}
         selected={selectedKey === 'lateDelivery'}
         clickable={clickableSet.has('lateDelivery')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="onTime"
@@ -79,10 +97,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         hash
         aside={formatItems(kpis.onTimeItemCount)}
         pct={formatPct(kpis.onTimePercent)}
+        confirmed={c ? {
+          qty: c.onTimeUnits, hash: true, aside: formatItems(c.onTimeItemCount), pct: formatPct(c.onTimePercent),
+        } : null}
         selected={selectedKey === 'onTime'}
         clickable={clickableSet.has('onTime')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="openLate"
@@ -91,10 +113,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         hash
         aside={formatItems(kpis.openLateItemCount)}
         detail={formatDays(kpis.openLateAvgDays)}
+        confirmed={c ? {
+          qty: c.openLateUnits, hash: true, aside: formatItems(c.openLateItemCount), detail: formatDays(c.openLateAvgDays),
+        } : null}
         selected={selectedKey === 'openLate'}
         clickable={clickableSet.has('openLate')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="lateItems"
@@ -102,10 +128,12 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         qty={kpis.lateDeliveryAvgDays}
         hash="Ø"
         aside="days late"
+        confirmed={c ? { qty: c.lateDeliveryAvgDays, hash: 'Ø', aside: 'days late' } : null}
         selected={selectedKey === 'lateItems'}
         clickable={clickableSet.has('lateItems')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="unconfirmed"
@@ -114,10 +142,14 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         hash
         aside={formatItems(kpis.unconfirmedItemCount)}
         pct={formatPct(kpis.unconfirmedPercent)}
+        confirmed={c ? {
+          qty: c.unconfirmedUnits, hash: true, aside: formatItems(c.unconfirmedItemCount), pct: formatPct(c.unconfirmedPercent),
+        } : null}
         selected={selectedKey === 'unconfirmed'}
         clickable={clickableSet.has('unconfirmed')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="capacityShortfall"
@@ -128,6 +160,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         clickable={clickableSet.has('capacityShortfall')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
       <KpiCard
         kpiKey="overloadedWeeks"
@@ -138,6 +171,7 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
         clickable={clickableSet.has('overloadedWeeks')}
         onActivate={handleActivate}
         config={config}
+        dateMode={dateMode}
       />
     </div>
     </KpiCardStyleProvider>
@@ -145,4 +179,3 @@ function RccpKpiCards({ kpis, selectedKey = '', onSelect, clickableKeys, config 
 }
 
 export default memo(RccpKpiCards);
-

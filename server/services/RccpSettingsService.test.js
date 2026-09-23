@@ -155,6 +155,18 @@ describe('RccpSettingsService.validateConfig confirmedDateColumnKey', () => {
   });
 });
 
+describe('RccpSettingsService.validateConfig showCapacityRows', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+  };
+
+  it('shows capacity rows unless the setting is turned off', () => {
+    expect(validateConfig(base).config.showCapacityRows).toBe(true);
+    expect(validateConfig({ ...base, showCapacityRows: false }).config.showCapacityRows).toBe(false);
+  });
+});
+
 describe('RccpSettingsService.validateConfig itemPickerColumnKeys', () => {
   const base = {
     dateColumnKey: 'requestedDeliveryDate',
@@ -184,6 +196,65 @@ describe('RccpSettingsService.validateConfig itemPickerColumnKeys', () => {
       itemPickerColumnKeys: ['product-name', 'searchName'],
     });
     expect(config.itemPickerColumnKeys).toEqual(['searchName']);
+  });
+});
+
+describe('RccpSettingsService.validateConfig splitPanelKpiKeys', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+    quantityMeasures: [
+      { columnKey: 'quantity', label: 'Quantity', chartType: 'line', color: '#D13438', showInChart: true },
+    ],
+  };
+
+  it('defaults to ordered, open and lateDelivery', () => {
+    const { valid, config } = validateConfig(base);
+    expect(valid).toBe(true);
+    expect(config.splitPanelKpiKeys).toEqual(['ordered', 'open', 'lateDelivery']);
+  });
+
+  it('keeps up to 10 chosen keys in order', () => {
+    const { config } = validateConfig({
+      ...base,
+      splitPanelKpiKeys: ['onTime', 'unconfirmed', 'openLate'],
+    });
+    expect(config.splitPanelKpiKeys).toEqual(['onTime', 'unconfirmed', 'openLate']);
+  });
+
+  it('drops duplicates and caps the list at 10 entries', () => {
+    const { config } = validateConfig({
+      ...base,
+      splitPanelKpiKeys: [
+        'ordered', 'ordered', 'open', 'lateDelivery', 'onTime', 'openLate',
+        'lateItems', 'unconfirmed', 'delivered', 'capacityShortfall', 'overloadedWeeks',
+      ],
+    });
+    expect(config.splitPanelKpiKeys).toEqual([
+      'ordered', 'open', 'lateDelivery', 'onTime', 'openLate',
+      'lateItems', 'unconfirmed', 'delivered', 'capacityShortfall', 'overloadedWeeks',
+    ]);
+  });
+
+  it('ignores unknown keys', () => {
+    const { config } = validateConfig({
+      ...base,
+      splitPanelKpiKeys: ['ordered', 'not-a-real-kpi'],
+    });
+    expect(config.splitPanelKpiKeys).toEqual(['ordered']);
+  });
+
+  it('accepts capacity KPI keys too (shown but not clickable in the panel)', () => {
+    const { config } = validateConfig({
+      ...base,
+      splitPanelKpiKeys: ['ordered', 'capacityShortfall', 'overloadedWeeks'],
+    });
+    expect(config.splitPanelKpiKeys).toEqual(['ordered', 'capacityShortfall', 'overloadedWeeks']);
+  });
+
+  it('allows an empty selection (no tiles shown)', () => {
+    const { config } = validateConfig({ ...base, splitPanelKpiKeys: [] });
+    expect(config.splitPanelKpiKeys).toEqual([]);
   });
 });
 

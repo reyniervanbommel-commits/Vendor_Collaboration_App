@@ -66,6 +66,10 @@ function PurchaseOrderHeaderCellContent({
   const onCorrect = actions.onCorrect;
   const onUpdateStatusOptions = actions.onUpdateStatusOptions;
   const isAdmin = actions.isAdmin === true;
+  const isStaffUser = actions.isStaff !== false;
+  // Vendors mogen een custom kolom alleen bewerken als de admin dat expliciet heeft aangezet
+  // (Data model > Editable by vendor). Staff kan custom kolommen altijd bewerken.
+  const canEditCustomColumn = isStaffUser || column.vendorEditable === true;
   const showHistoryIndicators = actions.showHistoryIndicators !== false;
   const onCorrectAllLines = actions.onCorrectAllLines;
   const resolvedDatePeriodModes = datePeriodDisplayModes || actions.datePeriodDisplayModes || {};
@@ -153,6 +157,9 @@ function PurchaseOrderHeaderCellContent({
 
   if (column.source === 'custom' && !isFormulaColumn && !isDatePeriodColumn(column) && !linkedLineTotalColumnKey) {
     if (isStatusColumn(column)) {
+      if (!canEditCustomColumn) {
+        return formatCellValue(rawValue, column.dataType, column);
+      }
       return (
         <StatusCell
           value={rawValue}
@@ -202,6 +209,12 @@ function PurchaseOrderHeaderCellContent({
     }
 
     if (!isPushedIsoDate) {
+      if (!canEditCustomColumn) {
+        const readOnlyDisplay = formatCellValue(rawValue, column.dataType, column);
+        return isChangedCell && !cellBackgroundColor
+          ? <span className={styles.changedCell}>{readOnlyDisplay}</span>
+          : readOnlyDisplay;
+      }
       return (
         <span className={isChangedCell && !cellBackgroundColor ? styles.changedCell : undefined}>
           <EditableCell

@@ -1,7 +1,5 @@
-import { ROLES } from '../../constants/roles';
-import { STAFF, t } from './tourSelectors';
+import { COLUMN_MENU_MISSING, STAFF, t } from './tourSelectors';
 
-const COLUMN_MENU_MISSING = 'No column menu is visible right now. Open the Master plan board and make sure orders are loaded.';
 
 function openColumnMenuStep(body) {
   return {
@@ -33,85 +31,6 @@ const addColumnStep = {
 
 /** How-to guides on the Master plan board (staff). */
 export const BOARD_GUIDES = [
-  {
-    id: 'guideViewTabs',
-    kind: 'guide',
-    version: 1,
-    route: '/',
-    roles: STAFF,
-    icon: 'tabs',
-    title: 'Create view tabs',
-    description: 'Split a view into tabs, by hand or one per value of a column.',
-    steps: [
-      {
-        id: 'open-view-menu',
-        anchor: t('po-view-title'),
-        placement: 'bottom',
-        title: 'Open the view menu',
-        body: 'Tabs belong to a saved view. Click the view name to open its menu.',
-        action: true,
-        hint: 'Click the view name',
-        advanceOn: { appears: t('view-menu-new-tab') },
-      },
-      {
-        id: 'new-tab',
-        anchor: t('view-menu-new-tab'),
-        placement: 'right',
-        title: 'Add a blank tab',
-        body: 'Choose Tab to create an empty tab. Filters you set while a tab is active are stored on that tab.',
-        action: true,
-        hint: 'Click Tab',
-        advanceOn: { appears: t('new-tab-dialog') },
-        resumeTo: 'open-view-menu',
-        missingText: 'The Tabs section only appears when a saved view is active. Select a view (or use Save as new view…) and start the guide again.',
-      },
-      {
-        id: 'name-tab',
-        anchor: t('new-tab-dialog'),
-        placement: 'right',
-        title: 'Name your tab',
-        body: 'Use a clear name such as “Next 4 weeks” and click Add tab. Nothing changes until you do — Cancel leaves everything as it was.',
-        advanceOn: { disappears: true },
-        hint: 'Click Add tab or Cancel to continue',
-        action: true,
-      },
-      {
-        id: 'tab-bar',
-        anchor: t('po-view-tab-bar'),
-        placement: 'bottom',
-        optional: true,
-        title: 'Your tab bar',
-        body: 'Switch tabs here and hover a tab to see its filters.',
-      },
-      {
-        id: 'delete-tab',
-        anchor: t('po-view-tab-bar'),
-        placement: 'bottom',
-        optional: true,
-        title: 'Delete a tab with right-click',
-        bullets: [
-          { term: 'This tab only', text: 'removes just the tab you right-clicked' },
-          { term: 'All tabs with the same … filter', text: 'removes the whole group created from one column' },
-          { term: 'Group color', text: 'changes the color of that group instead' },
-        ],
-        body: 'Right-click any tab except All. Deleting a tab doesn’t delete any orders — save the view to keep the change.',
-      },
-      {
-        id: 'tabs-from-column',
-        anchor: t('po-view-title'),
-        placement: 'bottom',
-        title: 'One tab per value',
-        body: 'Want a tab per vendor or per status? Open the view menu and choose Tabs from column… Pick a column and a group color, and a tab is created for every unique value.',
-      },
-      {
-        id: 'save',
-        anchor: t('po-view-title'),
-        placement: 'bottom',
-        title: 'Save your changes',
-        body: 'A yellow dot next to the view name means unsaved changes. Choose Manage view › Update current view. On a tab you can save for “This tab only” or for “All tabs with the same filter”.',
-      },
-    ],
-  },
   {
     id: 'guideAddColumn',
     kind: 'guide',
@@ -157,14 +76,6 @@ export const BOARD_GUIDES = [
         placement: 'bottom',
         title: 'Hide or delete',
         body: 'Hide column collapses a column into a narrow stub — click the stub to show it again. Your own columns can be removed with Delete column.',
-      },
-      {
-        id: 'd365',
-        anchor: t('nav-admin'),
-        roles: [ROLES.ADMIN],
-        placement: 'right',
-        title: 'Columns from D365',
-        body: 'Fields coming from D365 are managed in Settings › Data model. Switch on “Visible in table” to show a field on the board.',
       },
     ],
   },
@@ -216,6 +127,7 @@ export const BOARD_GUIDES = [
         cheatsheet: [
           ['(columnKey)', 'value of a column'],
           ['IF(test; then; else)', 'condition'],
+          ['a AND b · a OR b', 'combine conditions'],
           ['ROUND(n; decimals)', 'round a number'],
           ['ABS(n)', 'absolute value'],
           ['MIN(a; b) · MAX(a; b)', 'smallest · largest'],

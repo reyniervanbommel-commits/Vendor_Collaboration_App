@@ -11,7 +11,7 @@ export const KPI_FORMULAS = {
   onTime: 'delivered where receipt date ≤ requested delivery date\n1-1-1900 and missing receipt dates are excluded\nitems = unique item numbers\n% = on time / ordered × 100',
   openLate: 'open where requested delivery ISO week < current ISO week\nitems = unique item numbers on those lines\nØ days late = average of (today − requested delivery date)',
   planned1900: 'open + delivered where requested delivery date is 1-1-1900\n(D365 empty date)\nitems = unique item numbers on those lines',
-  unconfirmed: 'open + delivered on lines without a confirmed date\nitems = unique item numbers on those lines\n% = unconfirmed / ordered × 100',
+  unconfirmed: 'open where line has no confirmed date\nitems = unique item numbers on those lines\n% = unconfirmed / ordered × 100',
   capacityShortfall: 'sum of (open load − capacity)\nin weeks where load > capacity\nnot available on the purchase-order board',
   overloadedWeeks: 'count of weeks where open load > capacity\nnot available on the purchase-order board',
 };
@@ -47,13 +47,15 @@ function resolveMeasureLabel(config, measureKey, fallbackLabel) {
  * de week-plaatsing in de capaciteitsgrafiek, niet de late/on-time-vergelijking.
  * @param {string} kpiKey
  * @param {object|null|undefined} config RCCP-config (bijv. `analysis.config` of het board-kpis payload-config)
+ * @param {string} [dateMode] 'requested' (default) of 'confirmed' — welke datumkolom als
+ *   "planned"-basis dient. Zie de C/R-omdraaibare kant van de KPI-tegel.
  * @returns {string}
  */
-export function buildKpiFormulaText(kpiKey, config) {
+export function buildKpiFormulaText(kpiKey, config, dateMode = 'requested') {
   const open = resolveMeasureLabel(config, config?.openMeasureKey, 'open');
   const delivered = resolveMeasureLabel(config, config?.deliveredMeasureKey, 'delivered');
   const ordered = `${open} + ${delivered}`;
-  const requestedDate = 'requested delivery date';
+  const requestedDate = dateMode === 'confirmed' ? 'confirmed date' : 'requested delivery date';
 
   const formulas = {
     ordered: `${ordered}\non visible purchase-order lines`,
@@ -64,7 +66,7 @@ export function buildKpiFormulaText(kpiKey, config) {
     onTime: `${delivered} where receipt date ≤ ${requestedDate}\n1-1-1900 and missing receipt dates are excluded\nitems = unique item numbers\n% = on time / ${ordered} × 100`,
     openLate: `${open} where ${requestedDate} ISO week < current ISO week\nitems = unique item numbers on those lines\nØ days late = average of (today − ${requestedDate})`,
     planned1900: `${ordered} where ${requestedDate} is 1-1-1900\n(D365 empty date)\nitems = unique item numbers on those lines`,
-    unconfirmed: `${ordered} on lines without a confirmed date\nitems = unique item numbers on those lines\n% = unconfirmed / ${ordered} × 100`,
+    unconfirmed: `${open} where line has no confirmed date\nitems = unique item numbers on those lines\n% = unconfirmed / ${ordered} × 100`,
     capacityShortfall: `sum of (${open} load − capacity)\nin weeks where load > capacity\nnot available on the purchase-order board`,
     overloadedWeeks: `count of weeks where ${open} load > capacity\nnot available on the purchase-order board`,
   };

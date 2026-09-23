@@ -37,6 +37,13 @@ function isSupplierAllowedDataRequest(req) {
   // Suppliers mogen een eigen comment plaatsen op een order binnen hun scope. De
   // rij-scope wordt server-side afgedwongen in RowRemarksService.context().
   if (method === 'POST' && rel === '/purchase-orders/remarks') return true;
+
+  // Waarde opslaan / D365-write-back: de padcheck hier is alleen de eerste laag. De echte
+  // handhaving (kolom vendor_editable=1 én rij binnen eigen vendor-scope) gebeurt in de route/
+  // TableDataService (assertSupplierPurchaseOrderRow + column.vendorEditable check).
+  if (method === 'PUT' && rel === '/purchase-orders/value') return true;
+  if (method === 'POST' && rel === '/purchase-orders/correct') return true;
+  if (method === 'POST' && rel === '/purchase-orders/correct-all-details') return true;
   if (method === 'POST' && rel === '/purchase-orders/viewed') return true;
 
   return false;

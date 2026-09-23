@@ -50,6 +50,7 @@ describe('PurchaseOrderColumnFilterValuePicker — single mode', () => {
     expect(screen.getByRole('option', { name: 'Open order' })).toBeTruthy();
     fireEvent.click(screen.getByRole('option', { name: 'Open order' }));
     expect(onChange).toHaveBeenLastCalledWith('Backorder');
+    expect(screen.getByRole('textbox').value).toBe('Open order');
   });
 
   it('neemt bij plakken alleen de eerste regel over', () => {

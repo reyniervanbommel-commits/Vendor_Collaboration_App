@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPoHeaderHoverModel } from './poHeaderHoverModel';
+import { buildPoHeaderHoverModel, getPoHeaderConnectionTargets } from './poHeaderHoverModel';
 
 const vendorColumn = { key: 'vendor', label: 'Vendor account', dataType: 'text', source: 'd365' };
 
@@ -35,10 +35,35 @@ describe('buildPoHeaderHoverModel', () => {
     }).text).toBe('is between: 10 and 20');
   });
 
-  it('summarizes color filters without scanning rows', () => {
+    it('summarizes color filters without scanning rows', () => {
     expect(buildPoHeaderHoverModel({
       column: { key: 'status', label: 'Status', dataType: 'status' },
       filter: { operator: 'colorIs', colors: ['#c02f64', '#6161ff'] },
     }).text).toBe('color is: 2 colors');
+  });
+});
+
+describe('getPoHeaderConnectionTargets', () => {
+  it('koppelt een Date W/M-kolom aan de bron-datumkolom', () => {
+    expect(getPoHeaderConnectionTargets({
+      columnKey: 'deliveryWeek',
+      column: {
+        key: 'deliveryWeek',
+        dataType: 'date_period',
+        options: { sourceColumnKey: 'requestedDeliveryDate' },
+      },
+      columns: [
+        { key: 'requestedDeliveryDate', label: 'Requested delivery date' },
+        { key: 'deliveryWeek', label: 'Date W/M' },
+      ],
+    })).toEqual(['Date column "Requested delivery date"']);
+  });
+
+  it('laat gewone kolommen zonder koppeling', () => {
+    expect(getPoHeaderConnectionTargets({
+      columnKey: 'vendor',
+      column: { key: 'vendor', dataType: 'text' },
+      columns: [{ key: 'vendor', label: 'Vendor' }],
+    })).toEqual([]);
   });
 });

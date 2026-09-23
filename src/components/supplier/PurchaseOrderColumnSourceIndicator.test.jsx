@@ -35,4 +35,14 @@ describe('PurchaseOrderColumnSourceIndicator', () => {
     fireEvent.click(screen.getByTestId('column-connection-icon'));
     expect(screen.queryByText(/Subitem column/i)).toBeNull();
   });
+
+  it('toont ketting met date W/M-bron in de tooltip', () => {
+    renderIndicator({
+      connectionTargets: ['Date column "Requested delivery date"'],
+    });
+    expect(screen.getByTestId('column-connection-icon')).toBeTruthy();
+    expect(screen.getByTestId('column-source-cluster').getAttribute('data-tooltip')).toBe(
+      'Purchase orders · Amount\nConnected to date column "Requested delivery date"'
+    );
+  });
 });

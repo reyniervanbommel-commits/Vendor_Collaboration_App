@@ -32,6 +32,8 @@ const IDLE_PREFETCH_MS = 150;
  *   reloadToken?: number, useCache?: boolean, debounceMs?: number, keepPrevious?: boolean
  * }} options
  * @returns {{ byMode: object, analysis: object|null, loading: boolean, error: string, patch: Function, refetch: Function }}
+ * loading is true until the fresh primary mode is in — including while keepPrevious still
+ * shows the previous analysis (split-view overlay spinner).
  */
 export function useRccpAnalysisModes({
   vendorAccount,
@@ -161,11 +163,14 @@ export function useRccpAnalysisModes({
   const previous = store.key === scopeKey ? store.prevByMode : store.byMode;
   const byMode = (Object.keys(fresh).length || !keepPrevious) ? fresh : previous;
   const analysis = byMode[primaryMode] || null;
+  // loading blijft true zolang de verse primary mode nog niet binnen is — ook als keepPrevious
+  // de oude grafiek toont. De split-view zet daar een overlay-spinner op, zonder te unmounten.
+  const loading = Boolean(active && !fresh[primaryMode] && !error);
 
   return {
     byMode,
     analysis,
-    loading: Boolean(active && !fresh[primaryMode] && !analysis && !error),
+    loading,
     error,
     patch,
     refetch,

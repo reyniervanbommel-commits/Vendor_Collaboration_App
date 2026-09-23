@@ -3,6 +3,7 @@ import {
   Popover,
   PopoverSurface,
   PopoverTrigger,
+  Switch,
   Text,
   makeStyles,
   mergeClasses,
@@ -13,6 +14,8 @@ import { brandColor, interaction } from '../../styles/brandTokens';
 import { KPI_STYLE_KEYS } from '../../utils/kpiCardStyles';
 import KpiCardStyleFields from './KpiCardStyleFields';
 import { useKpiCardStyle } from './useKpiCardStyles';
+import { useSplitPanelKpiToggle } from '../../hooks/useSplitPanelKpiToggle';
+import { RccpHoverHint } from './rccpFieldLabel';
 import { AuthContext } from '../../context/AuthContext';
 
 const HIT_SIZE = '32px';
@@ -116,6 +119,14 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     whiteSpace: 'pre-line',
   },
+  toggleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalXXS),
+  },
+  toggleDivider: {
+    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
+  },
 });
 
 /**
@@ -128,9 +139,16 @@ function KpiFormulaFold({ formula, kpiKey }) {
   const auth = useContext(AuthContext);
   const userRole = auth?.user?.role;
   const canEditCardStyle = userRole === 'employee' || userRole === 'admin';
+  // De split-panel-toggle wijzigt een gedeelde instelling (RCCP_CONFIG, geldt voor alle
+  // gebruikers/views) — bewust strenger dan de kaart-kleur hierboven, die per gebruiker is.
+  const isAdmin = userRole === 'admin';
   const formulaId = `kpi-formula-${kpiKey}`;
   const showStyle = KPI_STYLE_KEYS.includes(kpiKey) && canEditCardStyle;
   const { style, updateStyle } = useKpiCardStyle(kpiKey);
+  const splitPanel = useSplitPanelKpiToggle(kpiKey, isAdmin);
+  const handleSplitPanelToggle = useCallback((_, data) => {
+    splitPanel.toggle(Boolean(data.checked));
+  }, [splitPanel]);
   const stopCardClick = useCallback((event) => {
     event.stopPropagation();
   }, []);
@@ -157,6 +175,17 @@ function KpiFormulaFold({ formula, kpiKey }) {
       </PopoverTrigger>
       <PopoverSurface className={styles.surface} onClick={stopCardClick}>
         {showStyle ? <KpiCardStyleFields style={style} onChange={updateStyle} /> : null}
+        {isAdmin ? (
+          <div className={mergeClasses(styles.toggleRow, styles.toggleDivider)}>
+            <Switch
+              checked={splitPanel.checked}
+              disabled={splitPanel.saving}
+              onChange={handleSplitPanelToggle}
+              label="Show in PO table panel"
+            />
+            <RccpHoverHint info="Adds this KPI as a small tile next to the chart in the PO table's Performance & Planning tab. Same choice for everyone." />
+          </div>
+        ) : null}
         <Text className={styles.title} id={formulaId}>Formula</Text>
         <Text className={styles.formula}>{formula}</Text>
       </PopoverSurface>

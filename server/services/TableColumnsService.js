@@ -718,6 +718,30 @@ async function setVisibleAtDelete(columnId, flag, userId) {
   return mapColumnRow(result.recordset[0]);
 }
 
+// Vendor-editrechten (admin, Data model): mag een vendor (leverancier) deze kolom bewerken in de
+// PO Table? Los van `writable` (D365-write-back) — dat blijft uitsluitend een staff-mechaniek.
+// Geen trigger-gevoelige OUTPUT-query nodig; gewoon updaten en de kolom opnieuw ophalen.
+async function setVendorEditable(columnId, flag, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (existing.dataType === 'remarks') {
+    throw Object.assign(new Error('The Remarks column has its own comment flow and cannot be made vendor-editable'), { status: 400 });
+  }
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('flag', sql.Bit, flag ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET vendor_editable = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      WHERE id = @id
+    `);
+  const updated = await getColumnById(columnId);
+  if (!updated) throw Object.assign(new Error('Column not found'), { status: 404 });
+  return updated;
+}
+
 /**
  * Kan RCCP deze kolom technisch uitlezen?
  *
@@ -797,5 +821,6 @@ module.exports = {
   setColumnVisibility,
   setVisibleAtDelete,
   setWriteBackConfig,
+  setVendorEditable,
   resolveRccpQuantityEligibility,
 };

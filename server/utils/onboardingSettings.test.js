@@ -39,14 +39,14 @@ describe('normalizeOnboarding', () => {
         hacker: { version: 1, status: 'completed' },
         poBoard: { version: 0, status: 'completed' },
         rccp: { version: 1, status: 'done' },
-        settings: { version: '3', status: 'completed', at: '<script>', step: 12, steps: 4 },
+        guideDatePeriod: { version: '3', status: 'completed', at: '<script>', step: 12, steps: 4 },
         guideRemarks: { version: 1, status: 'skipped', step: -1, steps: 5000 },
       },
     });
     expect(result).toEqual({
       welcomeSeenAt: null,
       tours: {
-        settings: entry({ version: 3, status: 'completed', step: 4, steps: 4 }),
+        guideDatePeriod: entry({ version: 3, status: 'completed', step: 4, steps: 4 }),
         guideRemarks: entry({ version: 1, status: 'skipped' }),
       },
     });

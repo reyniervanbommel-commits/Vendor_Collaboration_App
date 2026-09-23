@@ -112,6 +112,7 @@ export default function AdminDataModel() {
             cache={selectedModel.cache}
             onReimportBaseline={selectedModel.reimportBaseline}
             baselineBusy={selectedModel.togglingKey === 'baseline-import'}
+            onSyncFiltersSaved={selectedModel.reload}
           />
           <DataPreviewTables
             tableKey={selectedTab}
@@ -123,6 +124,7 @@ export default function AdminDataModel() {
             onToggleVisibility={selectedModel.toggleVisibility}
             onToggleVisibleAtDelete={selectedModel.toggleVisibleAtDelete}
             onToggleWriteback={selectedModel.toggleWriteback}
+            onToggleVendorEditable={selectedModel.toggleVendorEditable}
             onSetColumnToggleState={selectedModel.setColumnToggleState}
             onDeleteColumn={selectedModel.deleteColumn}
             onDiscoverFields={selectedModel.discoverFields}

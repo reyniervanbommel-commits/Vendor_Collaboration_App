@@ -17,6 +17,15 @@ const VALID_PERIOD_MODES = Object.freeze(['week', 'month']);
 const VALID_CHART_TYPES = Object.freeze(['line', 'bar']);
 const MEASURE_COLORS = Object.freeze(['#D13438', '#0078D4', '#8764B8', '#CA5010', '#107C10', '#5C2D91']);
 const CAPACITY_MEASURE_KEY = '__capacity__';
+// KPI-tegels die de admin per stuk mag aan-/uitzetten voor het rechterdeel van de
+// Performance & Planning-tab op de PO-tabel-pagina (zie #AB:315 — split-panel KPI tiles).
+// Alle 10 kaarten uit RccpKpiCards zijn kiesbaar; capaciteits-KPI's hebben geen per-order
+// match-set, dus een klik daarop filtert de PO-tabel niet (zie RccpSplitKpiPanel).
+const SPLIT_PANEL_KPI_KEYS = Object.freeze([
+  'ordered', 'delivered', 'open', 'lateDelivery', 'onTime', 'openLate',
+  'lateItems', 'unconfirmed', 'capacityShortfall', 'overloadedWeeks',
+]);
+const SPLIT_PANEL_KPI_LIMIT = SPLIT_PANEL_KPI_KEYS.length;
 // Synthetische measure-sleutel voor de "overcapaciteit"-regel (capaciteit min de openstaande
 // measure). Geen tb_columns-kolom; alleen een afgeleide matrix/chart-regel.
 const OVERCAPACITY_MEASURE_KEY = '__overcapacity__';
@@ -117,11 +126,13 @@ function defaultConfig() {
     orderedMeasureKey: SLOT_DEFAULT_KEYS.ordered,
     showCapacityLine: true,
     showWarningLine: true,
+    showCapacityRows: true,
     matrixColorFill: true,
     confirmedColor: '#8A8886',
     chartWeekRanges: [],
     excludedStatuses: ['Canceled', 'Closed'],
     itemPickerColumnKeys: [],
+    splitPanelKpiKeys: ['ordered', 'open', 'lateDelivery'],
     thresholds: { greenMax: 80, orangeMax: 100 },
     duplicatePolicy: 'update',
     periodMode: 'week',
@@ -166,6 +177,22 @@ function normalizeQuantityMeasures(raw) {
 function normalizeStringArray(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((v) => String(v || '').trim()).filter(Boolean))];
+}
+
+// Max 3 tegels, alleen geldige KPI-sleutels, geen duplicaten. Onbekende sleutels (bv. van een
+// oudere/nieuwere client) worden stilzwijgend genegeerd zodat opslaan nooit faalt.
+function normalizeSplitPanelKpiKeys(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+  const keys = [];
+  for (const entry of list) {
+    const key = String(entry || '').trim();
+    if (!key || !SPLIT_PANEL_KPI_KEYS.includes(key) || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(key);
+    if (keys.length >= SPLIT_PANEL_KPI_LIMIT) break;
+  }
+  return keys;
 }
 
 const ITEM_NUMBER_COLUMN_KEYS = new Set(['itemnumber', 'itemid', 'item_id']);
@@ -234,6 +261,7 @@ function validateConfig(raw) {
 
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
+  const showCapacityRows = raw.showCapacityRows !== false;
   const matrixColorFill = raw.matrixColorFill !== false;
   const confirmedColor = isHexColor(raw.confirmedColor)
     ? String(raw.confirmedColor).toLowerCase()
@@ -242,6 +270,7 @@ function validateConfig(raw) {
   const chartWeekRanges = normalizeChartWeekRanges(raw);
   const excludedStatuses = normalizeStringArray(raw.excludedStatuses ?? base.excludedStatuses);
   const itemPickerColumnKeys = normalizeItemPickerColumnKeys(raw);
+  const splitPanelKpiKeys = normalizeSplitPanelKpiKeys(raw.splitPanelKpiKeys ?? base.splitPanelKpiKeys);
   const duplicatePolicy = String(raw.duplicatePolicy ?? base.duplicatePolicy);
   if (!VALID_DUPLICATE_POLICIES.includes(duplicatePolicy)) {
     return { valid: false, error: 'duplicatePolicy must be update or skip' };
@@ -272,11 +301,13 @@ function validateConfig(raw) {
       orderedMeasureKey,
       showCapacityLine,
       showWarningLine,
+      showCapacityRows,
       matrixColorFill,
       confirmedColor,
       chartWeekRanges,
       excludedStatuses,
       itemPickerColumnKeys,
+      splitPanelKpiKeys,
       thresholds: { greenMax, orangeMax },
       duplicatePolicy,
       periodMode,
@@ -376,7 +407,10 @@ module.exports = {
   OVERCAPACITY_MEASURE_KEY,
   WARNING_MEASURE_KEY,
   SLOT_DEFAULT_KEYS,
+  SPLIT_PANEL_KPI_KEYS,
+  SPLIT_PANEL_KPI_LIMIT,
   defaultConfig,
+  normalizeSplitPanelKpiKeys,
   normalizeQuantityMeasures,
   normalizeChartWeekRanges,
   normalizeItemPickerColumnKeys,

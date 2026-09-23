@@ -10,6 +10,7 @@ import {
   isDateColumn,
   isNumberColumn,
 } from './purchaseOrderColumnFilterMenuConstants';
+import { resolveDatePeriodSourceKey } from '../../utils/datePeriodColumnUtils';
 
 function stringifyFilterValue(value) {
   if (Array.isArray(value)) return value.join(', ');
@@ -44,8 +45,15 @@ function lineColumnLabel(lineColumns, columnKey) {
   return lineColumns.find((lineColumn) => lineColumn.key === columnKey)?.label || columnKey;
 }
 
+function headerColumnLabel(columns, columnKey) {
+  return (Array.isArray(columns) ? columns : [])
+    .find((column) => column?.key === columnKey)?.label || columnKey;
+}
+
 export function getPoHeaderConnectionTargets({
   columnKey,
+  column,
+  columns = [],
   linkedLineTotalByHeaderKey = {},
   linkedLineValueByHeaderKey = {},
   lineColumns = [],
@@ -58,6 +66,12 @@ export function getPoHeaderConnectionTargets({
   const linkedValueMeta = linkedLineValueByHeaderKey[columnKey];
   if (linkedValueMeta?.lineColumnKey) {
     targets.push(`Subitem column "${lineColumnLabel(lineColumns, linkedValueMeta.lineColumnKey)}" (values)`);
+  }
+  const resolvedColumn = column
+    || (Array.isArray(columns) ? columns.find((entry) => entry?.key === columnKey) : null);
+  const sourceKey = resolveDatePeriodSourceKey(resolvedColumn);
+  if (sourceKey) {
+    targets.push(`Date column "${headerColumnLabel(columns, sourceKey)}"`);
   }
   return targets;
 }

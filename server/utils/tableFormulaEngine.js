@@ -1,5 +1,10 @@
 'use strict';
 
+const {
+  purchStatusValuesEquivalent,
+  resolvePurchStatusRefValue,
+} = require('./purchStatusDisplay');
+
 const MAX_FORMULA_LENGTH = 2000;
 const MAX_TOKENS = 1024;
 const MAX_EVAL_DEPTH = 64;
@@ -14,6 +19,12 @@ const TOKEN_TYPES = {
   SEMI: 'SEMI',
   EOF: 'EOF',
 };
+
+// Logische operatoren zijn woorden, geen tekens: de tokenizer levert ze als
+// IDENT aan. Dat kan geen botsing geven met een kolomreferentie, want die staat
+// altijd tussen haakjes — `(and)` blijft dus gewoon de kolom `and`.
+const LOGICAL_AND_WORDS = new Set(['AND', 'EN']);
+const LOGICAL_OR_WORDS = new Set(['OR', 'OF']);
 
 class FormulaSyntaxError extends Error {
   constructor(message, position = null) {
@@ -154,7 +165,35 @@ function createParser(tokens) {
   }
 
   function parseExpression() {
-    return parseComparison();
+    return parseOr();
+  }
+
+  // `AND`/`OR` op deze positie is altijd de operator, nooit het begin van een
+  // call: een call kan niet direct op een volledige expressie volgen. De
+  // functievorm `AND(...)` wordt daardoor uitsluitend in parsePrimary herkend
+  // (IDENT gevolgd door `(` op een operand-positie).
+  function isLogicalOperator(token, words) {
+    return token.type === TOKEN_TYPES.IDENT && words.has(String(token.value).toUpperCase());
+  }
+
+  function parseOr() {
+    let node = parseAnd();
+    while (isLogicalOperator(current(), LOGICAL_OR_WORDS)) {
+      consume(TOKEN_TYPES.IDENT);
+      const right = parseAnd();
+      node = { type: 'binary', op: 'OR', left: node, right };
+    }
+    return node;
+  }
+
+  function parseAnd() {
+    let node = parseComparison();
+    while (isLogicalOperator(current(), LOGICAL_AND_WORDS)) {
+      consume(TOKEN_TYPES.IDENT);
+      const right = parseComparison();
+      node = { type: 'binary', op: 'AND', left: node, right };
+    }
+    return node;
   }
 
   function parseComparison() {
@@ -324,8 +363,11 @@ function toBoolean(value) {
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
     if (!normalized) return false;
-    if (['true', 'waar', 'ja', '1'].includes(normalized)) return true;
-    if (['false', 'onwaar', 'nee', '0'].includes(normalized)) return false;
+    // 'yes'/'no' horen hier net zo goed als 'ja'/'nee': de UI is Engels en het
+    // resultaattype heet letterlijk Yes/No. Zonder 'no' zou een tekstkolom met
+    // waarde "No" als waar tellen zodra hij als voorwaarde wordt gebruikt.
+    if (['true', 'waar', 'ja', 'yes', 'y', '1'].includes(normalized)) return true;
+    if (['false', 'onwaar', 'nee', 'no', 'n', '0'].includes(normalized)) return false;
     return true;
   }
   return true;
@@ -343,7 +385,7 @@ function compareValues(left, right, op) {
   } else {
     const leftText = left === null || left === undefined ? '' : String(left);
     const rightText = right === null || right === undefined ? '' : String(right);
-    cmp = leftText.localeCompare(rightText);
+    cmp = purchStatusValuesEquivalent(leftText, rightText) ? 0 : leftText.localeCompare(rightText);
   }
 
   if (op === '=') return cmp === 0;
@@ -422,11 +464,81 @@ function networkDaysBetween(startDate, endDate) {
   return sign * workdays;
 }
 
-// Functie-dispatchtabel voor formule-calls. Elke functie krijgt de reeds
-// geëvalueerde argumentwaarden (geen AST-nodes) en het evaluatiecontext
-// (o.a. `today`). Nieuwe functies toevoegen = hier één entry toevoegen; de
-// tokenizer/parser ondersteunen willekeurige `NAAM(...)`-calls al generiek.
+// Functies die hun argumenten *niet* vooraf geëvalueerd willen krijgen, omdat
+// ze een tak mogen overslaan. Ze krijgen de AST-nodes plus een `evaluate`-
+// callback in plaats van waarden (`lazy: true`). Daardoor blijft
+// FORMULA_FUNCTIONS de enige plek waar staat welke functies bestaan en hoeveel
+// argumenten ze aannemen — ook voor IF, dat hiervoor een losse tak in evalNode
+// had.
+const IF_FUNCTION = {
+  minArgs: 3,
+  maxArgs: 3,
+  lazy: true,
+  apply: (argNodes, context, evaluate) => (toBoolean(evaluate(argNodes[0]))
+    ? evaluate(argNodes[1])
+    : evaluate(argNodes[2])),
+};
+
+// Short-circuit: stopt bij het eerste onware argument. Dit wijkt bewust af van
+// Excel, dat álle argumenten uitrekent. Hier zou een fout in een later argument
+// (bijv. deling door nul) de héle cel ongeldig maken in plaats van alleen dat
+// argument — zie evaluateCompiledFormula.
+const AND_FUNCTION = {
+  minArgs: 1,
+  maxArgs: 64,
+  lazy: true,
+  apply: (argNodes, context, evaluate) => {
+    for (const argNode of argNodes) {
+      if (!toBoolean(evaluate(argNode))) return false;
+    }
+    return true;
+  },
+};
+
+const OR_FUNCTION = {
+  minArgs: 1,
+  maxArgs: 64,
+  lazy: true,
+  apply: (argNodes, context, evaluate) => {
+    for (const argNode of argNodes) {
+      if (toBoolean(evaluate(argNode))) return true;
+    }
+    return false;
+  },
+};
+
+// Functie-dispatchtabel voor formule-calls. Elke functie krijgt standaard de
+// reeds geëvalueerde argumentwaarden (geen AST-nodes) en het evaluatiecontext
+// (o.a. `today`); met `lazy: true` juist de nodes plus een evaluate-callback.
+// Nieuwe functies toevoegen = hier één entry toevoegen; de tokenizer/parser
+// ondersteunen willekeurige `NAAM(...)`-calls al generiek.
 const FORMULA_FUNCTIONS = {
+  ALS: IF_FUNCTION,
+  IF: IF_FUNCTION,
+  AND: AND_FUNCTION,
+  EN: AND_FUNCTION,
+  OR: OR_FUNCTION,
+  OF: OR_FUNCTION,
+  WAAR: {
+    minArgs: 0,
+    maxArgs: 0,
+    apply: () => true,
+  },
+  ONWAAR: {
+    minArgs: 0,
+    maxArgs: 0,
+    apply: () => false,
+  },
+  TRUE: {
+    minArgs: 0,
+    maxArgs: 0,
+    apply: () => true,
+  },
+  FALSE: {
+    minArgs: 0,
+    maxArgs: 0,
+    apply: () => false,
+  },
   TODAY: {
     minArgs: 0,
     maxArgs: 0,
@@ -486,7 +598,7 @@ function evalNode(node, rowValues, depth = 0, context = {}) {
     if (!Object.prototype.hasOwnProperty.call(rowValues || {}, key)) {
       throw new Error(`Unknown column reference '${key}'`);
     }
-    return rowValues[key];
+    return resolvePurchStatusRefValue(key, rowValues[key]);
   }
   if (node.type === 'unary') {
     const value = evalNode(node.argument, rowValues, depth + 1, context);
@@ -495,25 +607,33 @@ function evalNode(node, rowValues, depth = 0, context = {}) {
     throw new Error(`Unknown unary operator '${node.op}'`);
   }
   if (node.type === 'call') {
-    if (node.name === 'ALS' || node.name === 'IF') {
-      if (!Array.isArray(node.args) || node.args.length !== 3) {
-        throw new Error('IF expects exactly 3 arguments');
-      }
-      const condition = evalNode(node.args[0], rowValues, depth + 1, context);
-      return toBoolean(condition)
-        ? evalNode(node.args[1], rowValues, depth + 1, context)
-        : evalNode(node.args[2], rowValues, depth + 1, context);
+    // `node.name` komt uit de formule van de gebruiker, dus alleen eigen sleutels
+    // van de tabel tellen — nooit iets van Object.prototype. Zelfde patroon als de
+    // kolomreferentie-lookup hierboven.
+    if (!Object.prototype.hasOwnProperty.call(FORMULA_FUNCTIONS, node.name)) {
+      throw new Error(`Unknown function '${node.name}'`);
     }
     const fn = FORMULA_FUNCTIONS[node.name];
-    if (!fn) throw new Error(`Unknown function '${node.name}'`);
-    const argCount = Array.isArray(node.args) ? node.args.length : 0;
-    if (argCount < fn.minArgs || argCount > fn.maxArgs) {
+    const argNodes = Array.isArray(node.args) ? node.args : [];
+    if (argNodes.length < fn.minArgs || argNodes.length > fn.maxArgs) {
       throw new Error(`${node.name} expects ${fn.minArgs === fn.maxArgs ? fn.minArgs : `${fn.minArgs}-${fn.maxArgs}`} argument(s)`);
     }
-    const args = (node.args || []).map((arg) => evalNode(arg, rowValues, depth + 1, context));
+    if (fn.lazy) {
+      return fn.apply(argNodes, context, (argNode) => evalNode(argNode, rowValues, depth + 1, context));
+    }
+    const args = argNodes.map((arg) => evalNode(arg, rowValues, depth + 1, context));
     return fn.apply(args, context);
   }
   if (node.type === 'binary') {
+    // Vóór de operanden: de rechterkant mag niet uitgerekend worden zodra de
+    // linkerkant de uitkomst al bepaalt (zelfde short-circuit als AND()/OR()).
+    if (node.op === 'AND' || node.op === 'OR') {
+      const leftBool = toBoolean(evalNode(node.left, rowValues, depth + 1, context));
+      if (node.op === 'AND' && !leftBool) return false;
+      if (node.op === 'OR' && leftBool) return true;
+      return toBoolean(evalNode(node.right, rowValues, depth + 1, context));
+    }
+
     const left = evalNode(node.left, rowValues, depth + 1, context);
     const right = evalNode(node.right, rowValues, depth + 1, context);
 

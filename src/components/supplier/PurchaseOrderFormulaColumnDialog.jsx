@@ -195,7 +195,12 @@ export default function PurchaseOrderFormulaColumnDialog({
                 />
               </Field>
 
-              <Field label="Result type" required data-tour="formula-result-type">
+              <Field
+                label="Result type"
+                required
+                hint="Pick Yes/No for a plain condition without IF, such as (a)>5 AND (b)<10."
+                data-tour="formula-result-type"
+              >
                 <Dropdown
                   value={DATA_TYPE_LABELS[resultType]}
                   selectedOptions={[resultType]}
@@ -212,7 +217,7 @@ export default function PurchaseOrderFormulaColumnDialog({
               <Field
                 label="Formula"
                 required
-                hint="Example: IF((a)>(b);'Too late';(a)+(b)). Also see Today and Round below."
+                hint="Example: IF((a)>(b) AND (c)>0;'Too late';(a)+(b)). Combine conditions with AND / OR."
                 data-tour="formula-expression"
               >
                 <Textarea

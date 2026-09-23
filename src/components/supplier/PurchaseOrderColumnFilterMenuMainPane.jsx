@@ -218,9 +218,6 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
         handleHideColumn={handleHideColumn}
         canSetColumnTextStyle={canSetColumnTextStyle}
         canSetColumnFormatRules={canSetColumnFormatRules}
-        canToggleWriteback={canToggleWriteback}
-        handleToggleWriteback={handleToggleWriteback}
-        writable={writable}
         canConfigureDatePeriodDisplay={canConfigureDatePeriodDisplay}
         datePeriodDisplayMode={datePeriodDisplayMode}
         onSelectDatePeriodDisplayMode={onSelectDatePeriodDisplayMode}

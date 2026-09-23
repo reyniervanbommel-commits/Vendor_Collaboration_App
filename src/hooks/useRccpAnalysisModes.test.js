@@ -98,6 +98,21 @@ describe('useRccpAnalysisModes', () => {
     expect(result.current.loading).toBe(true);
   });
 
+  it('stays loading while keepPrevious still shows the previous analysis', async () => {
+    const { result, rerender } = renderHook(
+      ({ vendorAccount }) => useRccpAnalysisModes({
+        vendorAccount, isoWindow: WINDOW, modes: 'requested', keepPrevious: true,
+      }),
+      { initialProps: { vendorAccount: 'V1' } },
+    );
+    await waitFor(() => expect(result.current.analysis).toEqual({ mode: 'requested' }));
+
+    apiRequest.mockImplementation(() => new Promise(() => {}));
+    rerender({ vendorAccount: 'V2' });
+    expect(result.current.analysis).toEqual({ mode: 'requested' });
+    expect(result.current.loading).toBe(true);
+  });
+
   it('reports a failed load and stays out of a retry loop', async () => {
     apiRequest.mockRejectedValue(new Error('boom'));
     const { result } = renderHook(() => useRccpAnalysisModes({

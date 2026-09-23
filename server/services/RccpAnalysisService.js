@@ -493,6 +493,16 @@ async function analyze({
   const kpis = { ...poKpiPair.windowed, ...capacityKpis };
   const kpisAll = { ...poKpiPair.all, ...capacityKpis };
 
+  // Confirmed-datum-basis (i.p.v. requested delivery date) — voedt de omdraaibare
+  // C/R-kant van de KPI-tegels. Zelfde structuur als hierboven, andere datumkolom.
+  const poKpiPairConfirmed = await time('rccp_kpis_confirmed', () => buildRccpPoKpisPair(poRows, config, window, {
+    now,
+    vendorAccount: effectiveVendor,
+    planningDateMode: 'confirmed',
+  }));
+  const kpisConfirmed = { ...poKpiPairConfirmed.windowed, ...capacityKpis };
+  const kpisAllConfirmed = { ...poKpiPairConfirmed.all, ...capacityKpis };
+
   return {
     config,
     window,
@@ -506,6 +516,8 @@ async function analyze({
     diagnostics,
     kpis,
     kpisAll,
+    kpisConfirmed,
+    kpisAllConfirmed,
     dataWindow: pickDataWindow(dataRangeByVendor, effectiveVendor),
     chart: mergeSegmentsIntoChart(chart, segmentsByWeek),
   };
@@ -518,10 +530,11 @@ async function analyze({
 const BOARD_KPI_CACHE_LIMIT = 8;
 const boardKpiCache = new Map();
 
-function boardKpiCacheKey(supplierAccount, revision, config, now) {
+function boardKpiCacheKey(supplierAccount, revision, config, now, includeConfirmed) {
   return [
     supplierAccount || '',
     revision || '',
+    includeConfirmed ? 'c' : 'r',
     config.openMeasureKey || '',
     config.deliveredMeasureKey || '',
     config.dateColumnKey || '',
@@ -543,14 +556,19 @@ function rememberBoardKpis(key, payload) {
   }
 }
 
-async function boardKpis({ supplierAccount = null } = {}) {
+// De confirmed-datumbasis voedt alleen de C/R-omgeklapte kant van de KPI-tegels, en die toggle
+// staat standaard op 'requested'. Hem onvoorwaardelijk meeleveren kostte een tweede volledige walk
+// over alle PO-regels én verdubbelde de response: gemeten 22-09 op DEV is de payload 171 KB,
+// waarvan 146 KB de twee orders-maps. Daarom alleen op verzoek. De eerste klik op Confirmed kost
+// daardoor één roundtrip; dankzij boardKpiCache is elke volgende gratis.
+async function boardKpis({ supplierAccount = null, includeConfirmed = false } = {}) {
   const config = await settingsService.getConfig();
   const { revision, parts } = await time('rccp_board_kpis_rev', () => tableDataService.getRevision({
     tableKey: PO_TABLE_KEY,
     supplierAccount: supplierAccount || null,
   }));
   const now = new Date();
-  const cacheKey = boardKpiCacheKey(supplierAccount, revision, config, now);
+  const cacheKey = boardKpiCacheKey(supplierAccount, revision, config, now, includeConfirmed);
   const cached = boardKpiCache.get(cacheKey);
   if (cached) return cached;
 
@@ -564,8 +582,17 @@ async function boardKpis({ supplierAccount = null } = {}) {
     now,
     vendorAccount: supplierAccount || null,
   }));
+  // Confirmed-datum-basis — voedt de omdraaibare C/R-kant van de PO-board KPI-tegels.
+  const compactConfirmed = includeConfirmed
+    ? await time('rccp_board_kpis_confirmed', () => buildRccpPoKpiByOrder(poRows, config, {
+      now,
+      vendorAccount: supplierAccount || null,
+      planningDateMode: 'confirmed',
+    }))
+    : null;
   const payload = {
     ...compact,
+    ...(compactConfirmed ? { confirmed: compactConfirmed } : {}),
     configured: Boolean(
       String(config.openMeasureKey || '').trim() || String(config.deliveredMeasureKey || '').trim(),
     ),

@@ -12,7 +12,6 @@ import {
   Options24Regular,
 } from '@fluentui/react-icons';
 import SidebarNavItem from '../shared/SidebarNavItem';
-import { getVisibleSettingsSections } from '../../utils/settingsAudience';
 
 const ICONS = {
   general: Options24Regular,
@@ -63,12 +62,11 @@ function SettingsNavButton({ item, active, onSelect }) {
 
 const MemoSettingsNavButton = memo(SettingsNavButton);
 
-function AdminSettingsSidebar({ userRole, activeTab, onSelect }) {
+function AdminSettingsSidebar({ sections, activeTab, onSelect }) {
   const styles = useStyles();
-  const sections = getVisibleSettingsSections(userRole);
 
   return (
-    <aside className={styles.sidebar} data-tour="settings-sidebar">
+    <aside className={styles.sidebar}>
       {sections.map((section) => (
         <React.Fragment key={section.id}>
           <Text as="h2" className={styles.sectionHeading}>{section.heading}</Text>

@@ -66,12 +66,12 @@ export default function PurchaseOrderCreateTabsDialog({
 
   return (
     <Dialog open={open} onOpenChange={(_, data) => onOpenChange(data.open)}>
-      <DialogSurface>
+      <DialogSurface data-tour="create-tabs-dialog">
         <DialogBody>
           <DialogTitle>Create tabs from a column</DialogTitle>
           <DialogContent>
             <div className={styles.form}>
-              <Field label="Column" hint="One tab per unique value in the current view.">
+              <Field label="Column" hint="One tab per unique value in the current view." data-tour="create-tabs-column">
                 <Select value={columnKey} onChange={handleColumnChange}>
                   {columns.map((column) => (
                     <option key={column.key} value={column.key}>{column.label || column.key}</option>
@@ -85,7 +85,7 @@ export default function PurchaseOrderCreateTabsDialog({
                   </MessageBarBody>
                 </MessageBar>
               ) : null}
-              <Field label="Group color">
+              <Field label="Group color" data-tour="create-tabs-color">
                 <ColorPalettePicker
                   selectedColor={color}
                   onSelect={setColor}
@@ -96,7 +96,7 @@ export default function PurchaseOrderCreateTabsDialog({
               <Field hint={`${count} tab${count === 1 ? '' : 's'} will be added (existing values are skipped).`} />
             </div>
           </DialogContent>
-          <DialogActions>
+          <DialogActions data-tour="create-tabs-actions">
             <Button appearance="secondary" onClick={() => onOpenChange(false)}>Skip</Button>
             <Button appearance="primary" onClick={handleSubmit} disabled={!columnKey || count === 0}>
               Create tabs

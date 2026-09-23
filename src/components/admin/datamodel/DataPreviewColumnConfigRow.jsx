@@ -53,6 +53,7 @@ export default function DataPreviewColumnConfigRow({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
+  onToggleVendorEditable,
   onDeleteColumn,
   relationBadgeLabel = 'Header-Line link key',
 }) {
@@ -61,6 +62,7 @@ export default function DataPreviewColumnConfigRow({
   const handleVisibility = useCallback(() => onToggleVisibility(column), [onToggleVisibility, column]);
   const handleVisibleAtDelete = useCallback(() => onToggleVisibleAtDelete(column), [onToggleVisibleAtDelete, column]);
   const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
+  const handleVendorEditable = useCallback(() => onToggleVendorEditable(column), [onToggleVendorEditable, column]);
   const handleDelete = useCallback(() => {
     if (column.source !== 'custom') return;
     setDeleteConfirmOpen(true);
@@ -75,6 +77,7 @@ export default function DataPreviewColumnConfigRow({
   const visibilityBusy = togglingKey === `vis-${column.id}`;
   const visibleAtDeleteBusy = togglingKey === `vad-${column.id}`;
   const writebackBusy = togglingKey === `wb-${column.id}`;
+  const vendorEditableBusy = togglingKey === `ve-${column.id}`;
   const deletingBusy = togglingKey === `del-${column.id}`;
   const bulkBusy = typeof togglingKey === 'string' && togglingKey.startsWith('bulk-');
   const rowClassName = mergeClasses(
@@ -163,6 +166,27 @@ export default function DataPreviewColumnConfigRow({
                   : 'Key or system field: write-back is not allowed'
               }
             >
+              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
+            </span>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.vendorEditableAllowed ? (
+            <span className={styles.cellCenter}>
+              <Switch
+                checked={column.vendorEditable}
+                disabled={vendorEditableBusy || bulkBusy}
+                onChange={handleVendorEditable}
+                aria-label={`Editable by vendor for ${column.label}`}
+              />
+              {column.vendorEditable ? (
+                <Badge appearance="tint" color="success" size="small">Enabled</Badge>
+              ) : (
+                <Badge appearance="tint" color="informative" size="small">Available</Badge>
+              )}
+            </span>
+          ) : (
+            <span title="Key or system field: not editable by vendors">
               <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
             </span>
           )}

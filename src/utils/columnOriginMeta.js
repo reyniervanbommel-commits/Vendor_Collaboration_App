@@ -112,8 +112,12 @@ function quotedName(text) {
   return trimText(match?.[1]);
 }
 
+export function isDateColumnConnectionTarget(target) {
+  return trimText(target).startsWith('Date column "');
+}
+
 /**
- * Tooltip voor het ketting-icoon (header↔line), los van de databron.
+ * Tooltip voor het ketting-icoon (header↔line of Date W/M-bron), los van de databron.
  * @param {object} [column]
  * @param {string[]} [connectionTargets]
  * @returns {string}
@@ -126,6 +130,9 @@ export function getColumnConnectionTooltip(column, connectionTargets = []) {
   const isLine = column?.level === 'line';
   if (targets.length === 1) {
     const name = quotedName(targets[0]) || 'column';
+    if (isDateColumnConnectionTarget(targets[0])) {
+      return `Connected to date column "${name}"`;
+    }
     return isLine
       ? `Connected to header column "${name}"`
       : `Connected to line column "${name}"`;

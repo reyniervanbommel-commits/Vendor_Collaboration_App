@@ -5,7 +5,7 @@ export function getFormulaValidationTip(message) {
     return 'Check parentheses and use IF(condition;true;false).';
   }
   if (text.includes('unknown function')) {
-    return 'Use one of the function buttons (Today, If, Round, Abs, Max, Min, Netwerkdagen) or check the spelling.';
+    return 'Use one of the function buttons (Today, If, And, Or, True, False, Round, Abs, Max, Min, Netwerkdagen) or check the spelling.';
   }
   if (text.includes('expects') && text.includes('argument')) {
     return 'Check the number of arguments for this function, e.g. Round(number;decimals).';

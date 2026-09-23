@@ -282,16 +282,97 @@ function recordMatchesSyncRules(rules, headerRecord, lineRecords) {
   return rules.every((rule) => evaluateSyncRule(rule, headerRecord, lineRecords));
 }
 
+// ---------------------------------------------------------------------------
+// Sync filter LAYERS (work item #325): meerdere additieve (OR) filter-lagen i.p.v.
+// één vervangende regel-lijst. Elke laag AND-matcht zijn eigen regels (bestaande
+// recordMatchesSyncRules-logica); lagen worden OR-gecombineerd.
+// ---------------------------------------------------------------------------
+const MAX_LAYERS = 3;
+const DEFAULT_LAYER_NAME = 'Layer 1';
+
+function makeLayerId(index) {
+  return `layer-${index + 1}`;
+}
+
+function normalizeLayerEntry(entry, index) {
+  const safe = entry && typeof entry === 'object' ? entry : {};
+  const rules = Array.isArray(safe.rules) ? safe.rules : [];
+  return {
+    id: String(safe.id || makeLayerId(index)).trim() || makeLayerId(index),
+    name: String(safe.name || `Layer ${index + 1}`).trim() || `Layer ${index + 1}`,
+    active: safe.active !== false,
+    rules,
+  };
+}
+
+/**
+ * Normaliseert opgeslagen sync-filterdata naar { layers: [...] }.
+ * Accepteert legacy platte regel-array (-> automatisch "Layer 1"), { layers: [...] }, of niets.
+ * Valideert max MAX_LAYERS actieve lagen en dat een actieve laag minstens 1 regel heeft.
+ * Gooit een 400-fout bij overtreding (zelfde patroon als compileSyncRules).
+ */
+function normalizeSyncLayers(raw) {
+  let layers;
+  if (Array.isArray(raw)) {
+    layers = raw.length ? [{ id: makeLayerId(0), name: DEFAULT_LAYER_NAME, active: true, rules: raw }] : [];
+  } else if (raw && typeof raw === 'object' && Array.isArray(raw.layers)) {
+    layers = raw.layers.map((entry, index) => normalizeLayerEntry(entry, index));
+  } else {
+    layers = [];
+  }
+
+  const activeLayers = layers.filter((layer) => layer.active);
+  if (activeLayers.length > MAX_LAYERS) {
+    throw badRequest(`Maximum ${MAX_LAYERS} active filter layers`);
+  }
+  const emptyActive = activeLayers.find((layer) => !layer.rules.length);
+  if (emptyActive) {
+    throw badRequest(`Layer "${emptyActive.name}" is active but has no filter rules`);
+  }
+  return { layers };
+}
+
+/**
+ * OR over actieve lagen; elke laag AND-matcht zijn eigen regels.
+ * Geen actieve lagen -> true (ongefilterd, zoals de legacy lege-regels-lijst).
+ */
+function recordMatchesAnyLayer(layers, headerRecord, lineRecords) {
+  const list = Array.isArray(layers) ? layers.filter((layer) => layer && layer.active) : [];
+  if (!list.length) return true;
+  return list.some((layer) => recordMatchesSyncRules(layer.rules, headerRecord, lineRecords));
+}
+
+/**
+ * Compileert alle actieve lagen naar één afgeplatte lijst D365-$filter-strings (elke string wordt
+ * los als aparte D365-call gebruikt; resultaten worden op orderkey gededupliceerd door de caller —
+ * zie purchaseOrdersFetch). Geen actieve lagen -> [''] (ongefilterd).
+ */
+function compileSyncLayerChunks(layers, chunkSize = D365_FILTER_CHUNK_SIZE) {
+  const list = Array.isArray(layers) ? layers.filter((layer) => layer && layer.active) : [];
+  if (!list.length) return [''];
+  const chunks = [];
+  for (const layer of list) {
+    for (const chunk of compileSyncRulesChunks(layer.rules, chunkSize)) {
+      chunks.push(chunk);
+    }
+  }
+  return chunks.length ? chunks : [''];
+}
+
 module.exports = {
   OPERATORS,
   VALUE_TYPES,
   LEVELS,
   MAX_RULES,
   MAX_ONEOF_VALUES,
+  MAX_LAYERS,
   D365_FILTER_CHUNK_SIZE,
   compileSyncRules,
   compileSyncRulesChunks,
   firstSyncFilterChunk,
   parseSyncRules,
   recordMatchesSyncRules,
+  normalizeSyncLayers,
+  recordMatchesAnyLayer,
+  compileSyncLayerChunks,
 };

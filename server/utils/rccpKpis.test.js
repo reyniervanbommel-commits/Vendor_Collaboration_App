@@ -296,6 +296,40 @@ describe('rccpKpis', () => {
     expect(byOrder.sku).toContain('SKU-9');
   });
 
+  it('uses the confirmed date as the planned-date basis when planningDateMode is confirmed', () => {
+    const config = { ...baseConfig, confirmedDateColumnKey: 'confirmedDeliveryDate' };
+    // Confirmed date lands far outside the requested-date `window`.
+    const confirmedDate = '2027-01-06T00:00:00.000Z';
+    const line = row({ line: { confirmedDeliveryDate: confirmedDate } });
+
+    const requestedBasis = buildRccpPoKpis([line], config, window, {
+      now: nowCurrent, vendorAccount: 'V001', planningDateMode: 'requested',
+    });
+    expect(requestedBasis.totalOrdered).toBe(14);
+
+    const confirmedBasisInWindow = buildRccpPoKpis([line], config, window, {
+      now: nowCurrent, vendorAccount: 'V001', planningDateMode: 'confirmed',
+    });
+    // The confirmed date falls outside `window`, so the line drops out of the confirmed-basis totals.
+    expect(confirmedBasisInWindow.totalOrdered).toBe(0);
+
+    const confirmedBasisAll = buildRccpPoKpis([line], config, window, {
+      now: nowCurrent, vendorAccount: 'V001', planningDateMode: 'confirmed', skipWindow: true,
+    });
+    expect(confirmedBasisAll.totalOrdered).toBe(14);
+
+    const byOrderConfirmed = buildRccpPoKpiByOrder([line], config, {
+      now: nowCurrent, vendorAccount: 'V001', planningDateMode: 'confirmed', window,
+    });
+    // The confirmed date falls outside `window`, so with a window passed in it drops out.
+    expect(byOrderConfirmed.orders['PO-A']).toBeUndefined();
+
+    const byOrderConfirmedNoWindow = buildRccpPoKpiByOrder([line], config, {
+      now: nowCurrent, vendorAccount: 'V001', planningDateMode: 'confirmed',
+    });
+    expect(byOrderConfirmedNoWindow.orders['PO-A'].o).toBe(10);
+  });
+
   it('sums capacity shortfall and overloaded weeks from open load', () => {
     const chart = [
       { key: '2026-W11', openQty: 80, deliveredQty: -40, __capacity__: 100 },

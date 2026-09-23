@@ -16,3 +16,12 @@ Thumbs.db
 .claude/worktrees/
 coverage/
 test-results/
+
+# test-reports/ bevat wél de rapporten zelf (*.md, *.json) — die horen in git.
+# De ad-hoc scripts en screenshots van een testsessie niet.
+test-reports/**/*.js
+test-reports/**/*.png
+
+# Wegwerp-benchmarks/scripts in de repo-root (bv. tmp-agg-bench.mjs).
+tmp-*.mjs
+tmp-*.js

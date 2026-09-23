@@ -129,3 +129,27 @@ describe('biAggregate.aggregateCharts', () => {
     expect(maxByVendor).toEqual({ A: 100, B: 200 });
   });
 });
+
+describe('biAggregate — PurchStatus Open order alias', () => {
+  it('matcht contains/equals Open order op opgeslagen Backorder', () => {
+    expect(matchesFilter('Backorder', { operator: 'contains', value: 'open order' }, 'text')).toBe(true);
+    expect(matchesFilter('Backorder', { operator: 'equals', value: 'Open order' }, 'text')).toBe(true);
+    expect(matchesFilter('Invoiced', { operator: 'contains', value: 'open order' }, 'text')).toBe(false);
+  });
+
+  it('toont Open order als groeplabel voor de statuskolom', () => {
+    const { results } = aggregateCharts({
+      rows: [
+        { values: { status: 'Backorder', amount: 10 } },
+        { values: { status: 'Invoiced', amount: 5 } },
+      ],
+      columns: [
+        { key: 'status', dataType: 'text', d365Field: 'PurchaseOrderStatus' },
+        { key: 'amount', dataType: 'number' },
+      ],
+      charts: [{ type: 'bar', dimension: 'status', measure: 'amount', aggregation: 'sum' }],
+    });
+    const byName = Object.fromEntries(results[0].series.map((s) => [s.name, s.value]));
+    expect(byName).toEqual({ 'Open order': 10, Invoiced: 5 });
+  });
+});

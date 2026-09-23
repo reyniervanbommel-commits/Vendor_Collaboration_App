@@ -71,13 +71,13 @@ function visitUniverseLine(acc, line, nowYear, nowWeek) {
   acc.totalOpen += line.openQty;
   acc.totalDelivered += line.deliveredQty;
   const pairQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
-  if (pairQty > 0) {
-    if (line.hasConfirmedDate) {
-      acc.confirmedUnits += pairQty;
-    } else {
-      acc.unconfirmedUnits += pairQty;
-      addSku(acc.unconfirmedSkus, line.itemNumber);
-    }
+  if (pairQty > 0 && line.hasConfirmedDate) {
+    acc.confirmedUnits += pairQty;
+  }
+  // "Not confirmed" telt alleen nog open regels zonder bevestigde datum (niet meer delivered).
+  if (line.openQty > 0 && !line.hasConfirmedDate) {
+    acc.unconfirmedUnits += line.openQty;
+    addSku(acc.unconfirmedSkus, line.itemNumber);
   }
   const itemNumber = line.itemNumber;
   if (line.openQty > 0) addSku(acc.openSkus, itemNumber);
@@ -156,9 +156,9 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   entry.deliveredQty += line.deliveredQty;
   const sku = String(line.itemNumber || '').trim();
   if (line.openQty > 0 && sku) entry.openSkus.add(sku);
-  const pairQty = (Number(line.openQty) || 0) + (Number(line.deliveredQty) || 0);
-  if (pairQty > 0 && !line.hasConfirmedDate) {
-    entry.unconfirmedUnits += pairQty;
+  // "Not confirmed" telt alleen nog open regels zonder bevestigde datum (niet meer delivered).
+  if (line.openQty > 0 && !line.hasConfirmedDate) {
+    entry.unconfirmedUnits += line.openQty;
     if (sku) entry.unconfirmedSkus.add(sku);
   }
   if (isSentinelDate(line.plannedDate)) {
@@ -189,11 +189,13 @@ function addLineToOrderStats(entry, line, now, nowYear, nowWeek) {
   }
 }
 
-function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow = false }, onLine) {
+function walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow = false, planningDateMode = 'requested' }, onLine) {
   const openKey = String(config.openMeasureKey || '').trim();
   const deliveredKey = String(config.deliveredMeasureKey || '').trim();
-  const dateKey = config.dateColumnKey;
   const confirmedKey = config.confirmedDateColumnKey;
+  // 'confirmed': gebruik de confirmed-datumkolom als "planned"-basis (valt terug op
+  // requested wanneer er geen confirmed date is) — voedt de C/R-omdraaibare KPI-tegels.
+  const dateKey = planningDateMode === 'confirmed' && confirmedKey ? confirmedKey : config.dateColumnKey;
   const receiptKey = String(config.receiptDateColumnKey || '').trim();
   const vendorCol = config.vendorColumnKey;
   const excludedSet = new Set((config.excludedStatuses || []).map((s) => String(s).toLowerCase()));
@@ -303,22 +305,22 @@ function summarizeAcc(acc) {
   };
 }
 
-function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow = false } = {}) {
+function buildRccpPoKpis(rows, config, window, { now, vendorAccount, skipWindow = false, planningDateMode = 'requested' } = {}) {
   const nowYear = getIsoWeekYear(now);
   const nowWeek = getIsoWeek(now);
   const acc = emptyAcc(now);
-  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow }, (line) => {
+  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow, planningDateMode }, (line) => {
     visitUniverseLine(acc, line, nowYear, nowWeek);
   });
   return summarizeAcc(acc);
 }
 
-function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount } = {}) {
+function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount, planningDateMode = 'requested' } = {}) {
   const nowYear = getIsoWeekYear(now);
   const nowWeek = getIsoWeek(now);
   const accWindow = emptyAcc(now);
   const accAll = emptyAcc(now);
-  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow: true }, (line) => {
+  walkRccpPoKpiLines(rows, config, window, { now, vendorAccount, skipWindow: true, planningDateMode }, (line) => {
     visitUniverseLine(accAll, line, nowYear, nowWeek);
     if (line.plannedYear && line.plannedWeek && isIsoWeekInWindow(line.plannedYear, line.plannedWeek, window)) {
       visitUniverseLine(accWindow, line, nowYear, nowWeek);
@@ -327,11 +329,15 @@ function buildRccpPoKpisPair(rows, config, window, { now, vendorAccount } = {}) 
   return { windowed: summarizeAcc(accWindow), all: summarizeAcc(accAll) };
 }
 
-function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount } = {}) {
+function buildRccpPoKpiByOrder(rows, config, { now, vendorAccount, window = null, planningDateMode = 'requested' } = {}) {
   const byOrder = {};
   const nowYear = getIsoWeekYear(now);
   const nowWeek = getIsoWeek(now);
-  walkRccpPoKpiLines(rows, config, WIDE_WINDOW, { now, vendorAccount, skipWindow: true }, (line) => {
+  // Zonder `window` (PO-board-tab): alle orders, geen week-venster.
+  // Met `window` (RCCP-dashboard cross-filter): zelfde venster als de KPI-tegels,
+  // zodat de per-order match-sets 1-op-1 aansluiten op de getoonde totalen.
+  const effectiveWindow = window || WIDE_WINDOW;
+  walkRccpPoKpiLines(rows, config, effectiveWindow, { now, vendorAccount, skipWindow: !window, planningDateMode }, (line) => {
     const entry = byOrder[line.poNumber] || emptyOrderStats();
     addLineToOrderStats(entry, line, now, nowYear, nowWeek);
     byOrder[line.poNumber] = entry;

@@ -133,6 +133,13 @@ describe('getColumnConnectionTooltip', () => {
     )).toBe('Connected to line column "Qty"');
   });
 
+  it('beschrijft de date W/M-bronkolom', () => {
+    expect(getColumnConnectionTooltip(
+      { level: 'header' },
+      ['Date column "Requested delivery date"']
+    )).toBe('Connected to date column "Requested delivery date"');
+  });
+
   it('beschrijft één header-koppeling vanuit de line', () => {
     expect(getColumnConnectionTooltip(
       { level: 'line' },

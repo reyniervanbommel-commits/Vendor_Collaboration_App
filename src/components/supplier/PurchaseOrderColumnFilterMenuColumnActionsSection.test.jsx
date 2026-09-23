@@ -6,8 +6,8 @@ import ViewTabsDialogsProvider from './viewTabs/ViewTabsDialogsProvider';
 
 const styles = new Proxy({}, { get: () => 'cls' });
 
-describe('PurchaseOrderColumnFilterMenuColumnActionsSection order', () => {
-  it('zet Enable sync als eerste actie onder Column', () => {
+describe('PurchaseOrderColumnFilterMenuColumnActionsSection', () => {
+  it('toont geen D365 sync-toggle meer (write-back is alleen instelbaar via Admin > Data model)', () => {
     render(
       <FluentProvider theme={webLightTheme}>
         <ViewTabsDialogsProvider
@@ -22,9 +22,6 @@ describe('PurchaseOrderColumnFilterMenuColumnActionsSection order', () => {
             activeSubmenu=""
             openSubmenu={vi.fn()}
             showColumnSection
-            canToggleWriteback
-            handleToggleWriteback={vi.fn()}
-            writable={false}
             canHideColumn
             handleHideColumn={vi.fn()}
             canCreateFromColumn
@@ -35,9 +32,10 @@ describe('PurchaseOrderColumnFilterMenuColumnActionsSection order', () => {
     );
 
     const labels = screen.getAllByRole('button').map((button) => button.textContent || '');
-    const syncIndex = labels.findIndex((label) => /Enable sync/.test(label));
+    const syncIndex = labels.findIndex((label) => /Enable sync|Disable sync/.test(label));
     const hideIndex = labels.findIndex((label) => /Hide column/.test(label));
-    expect(syncIndex).toBeGreaterThan(-1);
-    expect(syncIndex).toBeLessThan(hideIndex);
+
+    expect(syncIndex).toBe(-1);
+    expect(hideIndex).toBeGreaterThan(-1);
   });
 });

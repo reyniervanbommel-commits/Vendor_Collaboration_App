@@ -8,17 +8,24 @@ const dataRouter = require('./data');
 const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
 const remarksService = require('../services/RowRemarksService');
+const pagePermissions = require('../utils/pagePermissions');
 
 const errorHandler = require('../middleware/errorHandler');
 
 const originalRead = dataService.read;
 const originalGetAsync = settingsService.getAsync;
 const originalSetReaction = remarksService.setReaction;
+const originalHasPagePermission = pagePermissions.hasPagePermission;
+
+beforeEach(() => {
+  pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(false);
+});
 
 afterEach(() => {
   dataService.read = originalRead;
   settingsService.getAsync = originalGetAsync;
   remarksService.setReaction = originalSetReaction;
+  pagePermissions.hasPagePermission = originalHasPagePermission;
 });
 
 function buildApp(user) {
@@ -118,7 +125,7 @@ describe('PUT /:tableKey/remarks/:id/reaction — open voor supplier (read-only 
 });
 
 describe('refresh progress en viewed-rechten', () => {
-  it('geeft employee 403 op GET refresh/progress', async () => {
+  it('geeft een employee zonder d365-refresh-permissie 403 op GET refresh/progress', async () => {
     await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
       const res = await fetch(`${baseUrl}/api/data/purchase-orders/refresh/progress`);
       expect(res.status).toBe(403);

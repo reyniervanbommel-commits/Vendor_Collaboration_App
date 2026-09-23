@@ -95,6 +95,7 @@ function DataPreviewTables({
   onToggleVisibility,
   onToggleVisibleAtDelete,
   onToggleWriteback,
+  onToggleVendorEditable,
   onDeleteColumn,
   onSetColumnToggleState,
   onDiscoverFields,
@@ -151,6 +152,7 @@ function DataPreviewTables({
           onToggleVisibility={onToggleVisibility}
           onToggleVisibleAtDelete={onToggleVisibleAtDelete}
           onToggleWriteback={onToggleWriteback}
+          onToggleVendorEditable={onToggleVendorEditable}
           onDeleteColumn={onDeleteColumn}
           onExportExcel={handleExportExcel}
           onSetColumnToggleState={onSetColumnToggleState}

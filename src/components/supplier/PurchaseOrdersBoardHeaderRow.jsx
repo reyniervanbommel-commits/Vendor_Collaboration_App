@@ -90,6 +90,8 @@ export default function PurchaseOrdersBoardHeaderRow({
         const hasActiveConditionalFormatting = isColumnFormatRuleSetActive(headerColumnFormatRules[column.key]);
         const connectionTargets = getPoHeaderConnectionTargets({
           columnKey: column.key,
+          column,
+          columns,
           linkedLineTotalByHeaderKey,
           linkedLineValueByHeaderKey,
           lineColumns,

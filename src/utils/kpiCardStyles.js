@@ -44,21 +44,3 @@ export function normalizeKpiCardStyles(raw) {
   });
   return next;
 }
-
-/**
- * Pie colors for the 2 KPI slices (this value vs. the other value).
- * No color picked: both slices stay gray, neither is raised. With a color:
- * the chosen side (`colorTarget`, default `value`) gets the picked color and
- * is visually raised above the other slice, which always stays a solid gray
- * (never a tint of the accent color).
- */
-export function resolveKpiPieColors(style) {
-  const accent = style?.color || null;
-  if (!accent) {
-    return { fill: KPI_PIE_GRAY_LIGHT, rest: KPI_PIE_GRAY, elevated: null };
-  }
-  if (style.colorTarget === KPI_COLOR_TARGET_OTHER) {
-    return { fill: KPI_PIE_GRAY, rest: accent, elevated: 'rest' };
-  }
-  return { fill: accent, rest: KPI_PIE_GRAY, elevated: 'fill' };
-}

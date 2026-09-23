@@ -171,6 +171,131 @@ describe('tableFormulaEngine — AFRONDEN/ROUND, ABS, MAX, MIN', () => {
   });
 });
 
+describe('tableFormulaEngine — AND/OR', () => {
+  const evalText = (expression, values, resultType = 'boolean') =>
+    evaluateCompiledFormula(compileFormula(expression), values, { resultType });
+
+  it('AND als functie: waar wanneer alle voorwaarden waar zijn', () => {
+    const compiled = compileFormula('AND((a)>5;(b)<10)');
+    expect(evaluateCompiledFormula(compiled, { a: 9, b: 3 }, { resultType: 'boolean' }).value).toBe(true);
+    expect(evaluateCompiledFormula(compiled, { a: 9, b: 30 }, { resultType: 'boolean' }).value).toBe(false);
+  });
+
+  it('AND als operator geeft hetzelfde resultaat als de functievorm', () => {
+    const values = { a: 9, b: 3 };
+    expect(evalText('AND((a)>5;(b)<10)', values).value).toBe(true);
+    expect(evalText('(a)>5 AND (b)<10', values).value).toBe(true);
+    expect(evalText('(a)>5 AND (b)<10', { a: 1, b: 3 }).value).toBe(false);
+  });
+
+  it('OR als functie en als operator', () => {
+    expect(evalText('OR((a)>5;(b)<10)', { a: 1, b: 3 }).value).toBe(true);
+    expect(evalText('(a)>5 OR (b)<10', { a: 1, b: 3 }).value).toBe(true);
+    expect(evalText('(a)>5 OR (b)<10', { a: 1, b: 30 }).value).toBe(false);
+  });
+
+  it('EN en OF zijn gelijkwaardige aliassen, in beide schrijfwijzen', () => {
+    const values = { a: 9, b: 3 };
+    expect(evalText('EN((a)>5;(b)<10)', values).value).toBe(true);
+    expect(evalText('(a)>5 EN (b)<10', values).value).toBe(true);
+    expect(evalText('OF((a)>5;(b)>100)', values).value).toBe(true);
+    expect(evalText('(a)>5 OF (b)>100', values).value).toBe(true);
+  });
+
+  it('combineert met IF, functie en operator geven hetzelfde antwoord', () => {
+    const values = { status: 'Open', qty: 4 };
+    const viaFunction = evalText("IF(AND((status)='Open';(qty)>0);'ok';'no')", values, 'text');
+    const viaOperator = evalText("IF((status)='Open' AND (qty)>0;'ok';'no')", values, 'text');
+    expect(viaFunction).toEqual({ value: 'ok', error: null });
+    expect(viaOperator).toEqual({ value: 'ok', error: null });
+  });
+
+  it('meer dan twee voorwaarden achter elkaar', () => {
+    expect(evalText('(a)>0 AND (b)>0 AND (c)>0', { a: 1, b: 2, c: 3 }).value).toBe(true);
+    expect(evalText('(a)>0 AND (b)>0 AND (c)>0', { a: 1, b: 2, c: 0 }).value).toBe(false);
+  });
+
+  it('AND bindt sterker dan OR: a OR b AND c = a OR (b AND c)', () => {
+    expect(evalText('FALSE() OR TRUE() AND FALSE()').value).toBe(false);
+    expect(evalText('TRUE() OR TRUE() AND FALSE()').value).toBe(true);
+    expect(evalText('(FALSE() OR TRUE()) AND FALSE()').value).toBe(false);
+  });
+
+  it('vergelijkingen binden sterker dan AND, rekenen sterker dan vergelijken', () => {
+    expect(evalText('(a)+1>2 AND (b)>0', { a: 5, b: 1 }).value).toBe(true);
+    expect(evalText('(a)+1>2 AND (b)>0', { a: 0, b: 1 }).value).toBe(false);
+  });
+
+  it('short-circuit: de rechterkant wordt overgeslagen zodra links beslist', () => {
+    // b = 0 zou "Division by zero" geven als het tweede argument wél werd uitgerekend
+    expect(evalText('AND((b)<>0;(a)/(b)>1)', { a: 12, b: 0 })).toEqual({ value: false, error: null });
+    expect(evalText('(b)<>0 AND (a)/(b)>1', { a: 12, b: 0 })).toEqual({ value: false, error: null });
+    expect(evalText('OR((b)=0;(a)/(b)>1)', { a: 12, b: 0 })).toEqual({ value: true, error: null });
+  });
+
+  it('zonder short-circuit blijft een echte fout wél zichtbaar', () => {
+    const res = evalText('AND((b)=0;(a)/(b)>1)', { a: 12, b: 0 });
+    expect(res.value).toBeNull();
+    expect(res.error).toContain('Division by zero');
+  });
+
+  it('TRUE/FALSE en WAAR/ONWAAR als literals', () => {
+    expect(evalText('TRUE()').value).toBe(true);
+    expect(evalText('FALSE()').value).toBe(false);
+    expect(evalText('WAAR()').value).toBe(true);
+    expect(evalText('ONWAAR()').value).toBe(false);
+  });
+
+  it('verzamelt kolomreferenties uit beide takken, ook de overgeslagen tak', () => {
+    expect(extractFormulaReferences('(a)>5 AND (b)<10').sort()).toEqual(['a', 'b']);
+    expect(extractFormulaReferences('OR((a)>5;(b)<10)').sort()).toEqual(['a', 'b']);
+  });
+
+  it('een kolom die letterlijk (and) heet blijft een kolomreferentie', () => {
+    expect(evalText('(and) AND (b)>0', { and: true, b: 1 }).value).toBe(true);
+    expect(extractFormulaReferences('(and) AND (b)>0').sort()).toEqual(['and', 'b']);
+  });
+
+  it('AND zonder argumenten geeft een nette fout via de dispatchtabel', () => {
+    const res = evalText('AND()', {});
+    expect(res.value).toBeNull();
+    expect(res.error).toContain('AND expects 1-64 argument(s)');
+  });
+
+  it('een naam van Object.prototype is geen functie', () => {
+    for (const name of ['CONSTRUCTOR', 'TOSTRING', 'HASOWNPROPERTY', 'VALUEOF']) {
+      const res = evalText(`${name}()`, {});
+      expect(res.value).toBeNull();
+      expect(res.error).toContain('Unknown function');
+    }
+  });
+
+  it('IF houdt zijn argumentcontrole na de verhuizing naar de dispatchtabel', () => {
+    const res = evalText("IF((a)>1;'ja')", { a: 2 }, 'text');
+    expect(res.value).toBeNull();
+    expect(res.error).toContain('IF expects 3 argument(s)');
+  });
+});
+
+describe('tableFormulaEngine — toBoolean via Yes/No-waarden', () => {
+  const evalBool = (expression, values) =>
+    evaluateCompiledFormula(compileFormula(expression), values, { resultType: 'boolean' }).value;
+
+  it('leest Engelse Yes/No net zo goed als Nederlandse ja/nee', () => {
+    expect(evalBool('AND((flag))', { flag: 'Yes' })).toBe(true);
+    expect(evalBool('AND((flag))', { flag: 'No' })).toBe(false);
+    expect(evalBool('AND((flag))', { flag: 'ja' })).toBe(true);
+    expect(evalBool('AND((flag))', { flag: 'nee' })).toBe(false);
+  });
+
+  it('lege waarde is onwaar, een echte boolean werkt rechtstreeks', () => {
+    expect(evalBool('AND((flag))', { flag: '' })).toBe(false);
+    expect(evalBool('AND((flag))', { flag: null })).toBe(false);
+    expect(evalBool('(flag) AND (other)', { flag: true, other: true })).toBe(true);
+    expect(evalBool('(flag) AND (other)', { flag: true, other: false })).toBe(false);
+  });
+});
+
 describe('tableFormulaEngine — NETWERKDAGEN/NETWORKDAYS (weekend uitgesloten)', () => {
   it('telt alleen de maandag mee tussen vrijdag en de maandag erna', () => {
     // vrijdag 3 juli t/m maandag 6 juli 2026: za+zo tellen niet mee, alleen de maandag = 1 werkdag
@@ -238,5 +363,31 @@ describe('tableFormulaEngine — NETWERKDAGEN/NETWORKDAYS (weekend uitgesloten)'
     const res = evaluateCompiledFormula(compiled, { eind: '2026-07-06T00:00:00.000Z' }, { resultType: 'number' });
     expect(res.value).toBeNull();
     expect(res.error).toContain('must be a date');
+  });
+});
+
+describe('tableFormulaEngine — PurchStatus Backorder als Open order', () => {
+  it('geeft Open order terug wanneer de formule de statuskolom kopieert', () => {
+    const compiled = compileFormula('(status)');
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'Open order', error: null });
+  });
+
+  it('laat IF((status)=\'Open order\';...) slagen voor opgeslagen Backorder', () => {
+    const compiled = compileFormula("IF((status)='Open order';'yes';'no')");
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'yes', error: null });
+  });
+
+  it('herkent ook de opgeslagen enum-literal Backorder', () => {
+    const compiled = compileFormula("IF((status)='Backorder';'yes';'no')");
+    const res = evaluateCompiledFormula(compiled, { status: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'yes', error: null });
+  });
+
+  it('laat andere kolommen met de tekst Backorder ongemoeid', () => {
+    const compiled = compileFormula('(vendor)');
+    const res = evaluateCompiledFormula(compiled, { vendor: 'Backorder' }, { resultType: 'text' });
+    expect(res).toEqual({ value: 'Backorder', error: null });
   });
 });

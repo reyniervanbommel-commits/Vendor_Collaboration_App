@@ -32,6 +32,20 @@ function resolveHideAllowed(column) {
   return !(NON_HIDEABLE_KEYS[column.level] || new Set()).has(column.key);
 }
 
+// Kolommen die nooit door een vendor bewerkt mogen worden, ongeacht de instelling: sleutel- en
+// systeemvelden (los van D365 write-back — dit geldt óók voor custom kolommen).
+const NON_VENDOR_EDITABLE_KEYS = {
+  header: new Set(['orderNumber', 'status', 'createdDateTime']),
+  line: new Set(['lineNumber']),
+};
+
+function resolveVendorEditableAllowed(column) {
+  if (typeof column.vendorEditableAllowed === 'boolean') return column.vendorEditableAllowed;
+  if (['remarks', 'image', 'date_period'].includes(column.dataType)) return false;
+  if (column.formulaExpr) return false;
+  return !(NON_VENDOR_EDITABLE_KEYS[column.level] || new Set()).has(column.key);
+}
+
 function mapAdminColumn(col) {
   if (!col || !BOARD_TB_SOURCE) return col;
   const source = col.source === 'source' ? 'd365' : col.source;
@@ -42,11 +56,13 @@ function mapAdminColumn(col) {
     source,
     d365Field: col.sourceField ?? col.d365Field ?? null,
     writableToD365: Boolean(col.writable ?? col.writableToD365),
+    vendorEditable: Boolean(col.vendorEditable),
   };
   return {
     ...mappedColumn,
     writeBackAllowed: resolveWriteBackAllowed(mappedColumn),
     hideAllowed: resolveHideAllowed(mappedColumn),
+    vendorEditableAllowed: resolveVendorEditableAllowed(mappedColumn),
   };
 }
 
@@ -68,11 +84,11 @@ function mapDataModelPayload(payload) {
 /**
  * Admin-datamodel voor het PO-scherm: laadt entiteiten, relatie, kolommen
  * (inclusief verborgen) en cache-statistieken; levert toggles voor
- * kolom-zichtbaarheid en write-back.
+ * kolom-zichtbaarheid, write-back en vendor-editrechten.
  *
  * Output: { entities, relation, connection, columns, cache, loading, error,
  *           togglingKey, reload, toggleVisibility, toggleWriteback,
- *           setColumnToggleState, deleteColumn }
+ *           toggleVendorEditable, setColumnToggleState, deleteColumn }
  */
 export function useDataModelAdmin(tableKey = 'purchase-orders') {
   const [data, setData] = useState(null);
@@ -189,6 +205,22 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     }
   }, [adminBasePath, applyColumnUpdate]);
 
+  const toggleVendorEditable = useCallback(async (column) => {
+    setTogglingKey(`ve-${column.id}`);
+    setError('');
+    try {
+      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/vendor-editable`, {
+        method: 'PATCH',
+        body: { editable: !column.vendorEditable },
+      });
+      applyColumnUpdate(mapAdminColumn(result.column));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [adminBasePath, applyColumnUpdate]);
+
   const setColumnToggleState = useCallback(async ({ columns: scopedColumns = [], toggleType, enabled }) => {
     if (!Array.isArray(scopedColumns) || !toggleType) return;
     const shouldEnable = Boolean(enabled);
@@ -197,6 +229,7 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
       if (toggleType === 'visibility') return column.hideAllowed && column.isActive !== shouldEnable;
       if (toggleType === 'visibleAtDelete') return column.visibleAtDelete !== shouldEnable;
       if (toggleType === 'writeback') return column.writeBackAllowed && column.writableToD365 !== shouldEnable;
+      if (toggleType === 'vendorEditable') return column.vendorEditableAllowed && column.vendorEditable !== shouldEnable;
       return false;
     });
 
@@ -217,6 +250,13 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
           const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visible-at-delete`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
+          });
+          return mapAdminColumn(result.column);
+        }
+        if (toggleType === 'vendorEditable') {
+          const result = await apiRequest(`${adminBasePath}/columns/${column.id}/vendor-editable`, {
+            method: 'PATCH',
+            body: { editable: shouldEnable },
           });
           return mapAdminColumn(result.column);
         }
@@ -348,7 +388,8 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     toggleVisibility,
     toggleVisibleAtDelete,
     toggleWriteback,
+    toggleVendorEditable,
     setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, setColumnToggleState, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleVendorEditable, setColumnToggleState, deleteColumn]);
 }

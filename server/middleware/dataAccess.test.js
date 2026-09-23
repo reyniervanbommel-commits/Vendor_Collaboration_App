@@ -125,13 +125,32 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(0);
   });
 
-  it('weigert supplier POST op /purchase-orders/correct-all-details met 403', () => {
-    const { res, next } = callMiddleware({
+  it('laat supplier POST op /purchase-orders/correct-all-details door (kolom-scope wordt verderop afgedwongen)', () => {
+    // Padcheck alleen; de echte handhaving (vendor_editable + eigen vendor-scope) gebeurt in de
+    // route (assertSupplierPurchaseOrderRow) en TableDataService (column.vendorEditable check).
+    const { next } = callMiddleware({
       user: { role: 'supplier' },
       path: '/purchase-orders/correct-all-details',
       method: 'POST',
     });
-    expect(res.statusCode).toBe(403);
-    expect(next.calls).toHaveLength(0);
+    expect(next.calls).toHaveLength(1);
+  });
+
+  it('laat supplier PUT op /purchase-orders/value door (kolom-scope wordt verderop afgedwongen)', () => {
+    const { next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/value',
+      method: 'PUT',
+    });
+    expect(next.calls).toHaveLength(1);
+  });
+
+  it('laat supplier POST op /purchase-orders/correct door (kolom-scope wordt verderop afgedwongen)', () => {
+    const { next } = callMiddleware({
+      user: { role: 'supplier' },
+      path: '/purchase-orders/correct',
+      method: 'POST',
+    });
+    expect(next.calls).toHaveLength(1);
   });
 });

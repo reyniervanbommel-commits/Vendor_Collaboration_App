@@ -118,28 +118,9 @@ export default function PurchaseOrderColumnHeader({
   );
 
   if (!isCustom) {
-    if (!isAdmin || !onToggleWriteback || !column.d365Field) return <div className={styles.header}>{columnLabel}</div>;
-    if (column.writeBackAllowed === false) {
-      return <div className={styles.header}>{columnLabel}</div>;
-    }
-    if (!showActionsMenu) {
-      return <div className={styles.header}>{columnLabel}</div>;
-    }
-    return (
-      <div className={styles.header}>
-        {columnLabel}
-        <Menu>
-          <MenuTrigger disableButtonEnhancement>
-            <Button size="small" appearance="subtle" className={styles.menuButton} icon={<MoreVerticalRegular />} aria-label={`Write-back options for ${column.label}`} />
-          </MenuTrigger>
-          <MenuPopover>
-            <MenuList>
-              <MenuItem onClick={() => onToggleWriteback(column.id, !writable)}>{writable ? 'Disable write-back' : 'Allow write-back'}</MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
-      </div>
-    );
+    // Write-back naar D365 is uitsluitend instelbaar via Admin > Data model.
+    // Deze header toont hier alleen het (read-only) D365-icoon, geen toggle-menu.
+    return <div className={styles.header}>{columnLabel}</div>;
   }
 
   return (

@@ -30,15 +30,14 @@ export default function PurchaseOrderColumnFilterValuePicker({
   const [ignoredHint, setIgnoredHint] = useState('');
   const [focused, setFocused] = useState(false);
   const isMulti = mode === 'multi';
-
-  useEffect(() => {
-    if (!isMulti) setInputText(value || '');
-  }, [value, isMulti]);
-
   const chips = isMulti && Array.isArray(value) ? value : [];
   const displayOf = useCallback((raw) => (
     typeof formatDisplay === 'function' ? formatDisplay(raw) : String(raw ?? '')
   ), [formatDisplay]);
+
+  useEffect(() => {
+    if (!isMulti) setInputText(displayOf(value || ''));
+  }, [value, isMulti, displayOf]);
 
   // Suggesties alleen tonen als het veld actief gefocust is, zodat bij reopen van
   // de filtermenu de bestaande waarde in het invoerveld staat zonder dropdown.
@@ -122,12 +121,12 @@ export default function PurchaseOrderColumnFilterValuePicker({
     } else {
       const val = String(suggestionValue);
       commitSingleValue(val);
-      setInputText(val);
+      setInputText(displayOf(val));
       // Auto-apply: filter direct activeren na suggestie-klik (equals-modus).
       onAutoApply?.(val);
     }
     setFocused(false);
-  }, [addMultiValues, commitSingleValue, isMulti, onAutoApply]);
+  }, [addMultiValues, commitSingleValue, displayOf, isMulti, onAutoApply]);
 
   const handleRemoveChip = useCallback((index) => {
     onChange(chips.filter((_, chipIndex) => chipIndex !== index));

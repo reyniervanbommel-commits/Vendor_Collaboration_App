@@ -23,7 +23,7 @@ const {
   normalizeTableKey,
 } = require('../services/RowRemarksValidation');
 const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
-const { requireRole, requireAnyRole } = require('../middleware/auth');
+const { requireRole, requireAnyRole, requirePagePermission } = require('../middleware/auth');
 const { ROLES } = require('../constants/roles');
 const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
 const { getSupplierAccount } = require('../utils/supplierScope');
@@ -219,7 +219,7 @@ router.get('/:tableKey', async (req, res, next) => {
 // body.baseline = true: nulmeting. Haalt alles opnieuw op zonder wijzigingen in het dagboek te
 // zetten — bedoeld na een datamodel-wijziging, zodat de nieuwe uitgangssituatie niet als duizenden
 // "nieuwe" rijen op het bord verschijnt.
-router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/refresh', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const baseline = req.body?.baseline === true;
@@ -232,7 +232,7 @@ router.post('/:tableKey/refresh', requireRole(ROLES.ADMIN), async (req, res, nex
 });
 
 // POST /api/data/:tableKey/refresh/start — start refresh op de achtergrond.
-router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/refresh/start', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const result = await dataService.startRefresh(tableKey, { triggeredByUserId: req.user?.id });
@@ -243,7 +243,7 @@ router.post('/:tableKey/refresh/start', requireRole(ROLES.ADMIN), async (req, re
 });
 
 // GET /api/data/:tableKey/refresh/progress — voortgang van de lopende/laatste bron-refresh.
-router.get('/:tableKey/refresh/progress', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/refresh/progress', requirePagePermission('d365-refresh'), async (req, res, next) => {
   try {
     const { tableKey } = req.params;
     const refreshRunService = require('../services/RefreshRunService');
@@ -273,7 +273,7 @@ router.post('/:tableKey/viewed', viewedRoleGuard, async (req, res, next) => {
   }
 });
 
-router.get('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/board-columns', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     if (req.params.tableKey !== PAV_TABLE_KEY) {
       return res.status(404).json({ error: 'Not found' });
@@ -282,7 +282,7 @@ router.get('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res
   } catch (err) { return next(err); }
 });
 
-router.post('/:tableKey/board-columns', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/board-columns', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     if (req.params.tableKey !== PAV_TABLE_KEY) {
       return res.status(404).json({ error: 'Not found' });
@@ -416,7 +416,8 @@ router.delete('/:tableKey/columns/:id', requireRole(ROLES.ADMIN), async (req, re
 });
 
 // PATCH /api/data/:tableKey/columns/:id/visibility — kolom tonen/verbergen op het bord (is_active). #AB:170
-router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
+// Alleen bereikbaar vanuit Instellingen > Data model, dus achter die permissie (#AB:326).
+router.patch('/:tableKey/columns/:id/visibility', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -428,7 +429,7 @@ router.patch('/:tableKey/columns/:id/visibility', async (req, res, next) => {
 });
 
 // PATCH /api/data/:tableKey/columns/:id/visible-at-delete — zichtbaar in de verborgen-orders-popup. #AB:170
-router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) => {
+router.patch('/:tableKey/columns/:id/visible-at-delete', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -439,8 +440,22 @@ router.patch('/:tableKey/columns/:id/visible-at-delete', async (req, res, next) 
   }
 });
 
+// PATCH /api/data/:tableKey/columns/:id/vendor-editable — mag een vendor deze kolom bewerken? (admin-only)
+router.patch('/:tableKey/columns/:id/vendor-editable', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
+    const column = await columnsService.setVendorEditable(columnId, Boolean(req.body?.editable), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // PATCH /api/data/:tableKey/columns/:id/writeback — write-back-config (writable + mechanisme). #AB:170
-router.patch('/:tableKey/columns/:id/writeback', async (req, res, next) => {
+// Schakelt echte D365-mutaties in; de toggle zit alleen in Instellingen > Data model (het
+// board-kolommenu heeft hem bewust niet), dus achter de datamodel-permissie (#AB:326).
+router.patch('/:tableKey/columns/:id/writeback', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
@@ -462,9 +477,14 @@ router.put('/:tableKey/value', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, detailKey, value } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const saved = await dataService.saveCustomValue(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value },
-      req.user.id,
+      req.user,
     );
     return res.json({ success: true, ...saved });
   } catch (err) {
@@ -473,7 +493,7 @@ router.put('/:tableKey/value', async (req, res, next) => {
 });
 
 // GET /api/data/:tableKey/datamodel — admin: entiteiten, relatie, kolommen, cache-stats, sync-filter. #AB:175
-router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.get('/:tableKey/datamodel', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.getDataModel(req.params.tableKey));
   } catch (err) {
@@ -483,7 +503,7 @@ router.get('/:tableKey/datamodel', requireRole(ROLES.ADMIN), async (req, res, ne
 
 // POST /api/data/:tableKey/discover-fields — admin: ontdek alle beschikbare bronvelden (kleine sample,
 // geen cache-write) en registreer nieuwe velden als beschikbare (inactieve) kolommen om te kiezen. #AB:177
-router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/discover-fields', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
     return res.json(await dataService.discoverSourceFields(req.params.tableKey));
   } catch (err) {
@@ -492,18 +512,24 @@ router.post('/:tableKey/discover-fields', requireRole(ROLES.ADMIN), async (req, 
 });
 
 // PUT /api/data/:tableKey/sync-filters — admin: gestructureerde D365-syncfilterregels opslaan. #AB:174
-router.put('/:tableKey/sync-filters', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.put('/:tableKey/sync-filters', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
-    return res.json(await dataService.saveSyncFilters(req.params.tableKey, req.body?.rules));
+    // { layers: [...] } (#325) moet als object naar normalizeSyncLayers — een kale array wordt
+    // daar als legacy platte régel-lijst gelezen (niet als lagen-lijst). Bugfix: zonder deze
+    // wrap verdween een 2e laag bij herladen (de hele lagen-array werd als "rules" van 1 laag
+    // opgeslagen).
+    const payload = req.body?.layers ? { layers: req.body.layers } : req.body?.rules;
+    return res.json(await dataService.saveSyncFilters(req.params.tableKey, payload));
   } catch (err) {
     return next(err);
   }
 });
 
 // POST /api/data/:tableKey/sync-filters/count — admin: tel hoeveel bron-rijen de filter matcht. #AB:174
-router.post('/:tableKey/sync-filters/count', requireRole(ROLES.ADMIN), async (req, res, next) => {
+router.post('/:tableKey/sync-filters/count', requirePagePermission('datamodel'), async (req, res, next) => {
   try {
-    return res.json(await dataService.countSyncFilter(req.params.tableKey, req.body?.rules));
+    const payload = req.body?.layers ? { layers: req.body.layers } : req.body?.rules;
+    return res.json(await dataService.countSyncFilter(req.params.tableKey, payload));
   } catch (err) {
     return next(err);
   }
@@ -538,9 +564,14 @@ router.post('/:tableKey/correct', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, detailKey, value, basedOnValue } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const result = await dataService.correctField(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, detailKey, value, basedOnValue },
-      req.user.id,
+      req.user,
     );
     return res.json(result);
   } catch (err) {
@@ -556,6 +587,11 @@ router.post('/:tableKey/correct-all-details', async (req, res, next) => {
     const { columnId, partitionKey, recordKey, value } = req.body || {};
     const id = toColumnId(columnId);
     if (!id) return res.status(400).json({ error: 'Invalid column id' });
+    await assertSupplierPurchaseOrderRow(req.user, {
+      tableKey: req.params.tableKey,
+      partitionKey,
+      recordKey,
+    });
     const result = await dataService.correctAllDetailFields(
       { tableKey: req.params.tableKey, columnId: id, partitionKey, recordKey, value },
       req.user,

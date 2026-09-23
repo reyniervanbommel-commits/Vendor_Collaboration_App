@@ -37,15 +37,31 @@ const params = {
 };
 
 describe('correctAllDetailFields auth', () => {
-  it('throws 403 for supplier role before any SQL', async () => {
+  it('throws 403 for an unknown role before any SQL', async () => {
     const deps = baseDeps({
       getTableByKey: vi.fn(() => {
         throw new Error('SQL should not run');
       }),
     });
-    await expect(correctAllDetailFields(params, { id: 9, role: 'supplier' }, deps))
+    await expect(correctAllDetailFields(params, { id: 9, role: 'user' }, deps))
       .rejects.toMatchObject({ status: 403 });
     expect(deps.getTableByKey).not.toHaveBeenCalled();
+  });
+
+  it('throws 403 for a supplier on a column that is not vendor-editable', async () => {
+    const deps = baseDeps({
+      getColumnById: vi.fn().mockResolvedValue({ ...WRITABLE_LINE_COLUMN, vendorEditable: false }),
+    });
+    await expect(correctAllDetailFields(params, { id: 9, role: 'supplier' }, deps))
+      .rejects.toMatchObject({ status: 403 });
+  });
+
+  it('allows a supplier on a column the admin made vendor-editable', async () => {
+    const deps = baseDeps({
+      getColumnById: vi.fn().mockResolvedValue({ ...WRITABLE_LINE_COLUMN, vendorEditable: true }),
+    });
+    const result = await correctAllDetailFields(params, { id: 9, role: 'supplier' }, deps);
+    expect(result.attempted).toBe(2);
   });
 });
 

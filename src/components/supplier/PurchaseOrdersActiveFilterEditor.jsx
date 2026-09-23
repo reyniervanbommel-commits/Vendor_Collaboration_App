@@ -15,7 +15,7 @@ import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFil
 import { getDraftFromFilter, isDateColumn, isNumberColumn, REMARKS_FILTER_OPERATORS } from './purchaseOrderColumnFilterMenuConstants';
 import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
-import { formatColumnUniqueValue } from '../../utils/purchStatusDisplay';
+import { formatColumnUniqueValue, serializePurchStatusFilterValue } from '../../utils/purchStatusDisplay';
 import { measureSync } from '../../utils/perf';
 import {
   DATE_FILTER_OPERATORS,
@@ -132,8 +132,8 @@ export default function PurchaseOrdersActiveFilterEditor({
   }, []);
 
   const handleDraftValueChange = useCallback((nextValue) => {
-    setDraft((prev) => ({ ...prev, value: nextValue }));
-  }, []);
+    setDraft((prev) => ({ ...prev, value: serializePurchStatusFilterValue(column, nextValue) }));
+  }, [column]);
 
   const formatUniqueValue = useCallback((value) => formatColumnUniqueValue(column, value), [column]);
 
@@ -146,13 +146,13 @@ export default function PurchaseOrdersActiveFilterEditor({
     const isHasComment = draft.operator === 'hasComment';
     const patch = {
       operator: draft.operator,
-      value: isHasComment ? '' : draft.value,
+      value: isHasComment ? '' : serializePurchStatusFilterValue(column, draft.value),
       secondaryValue: isHasComment ? '' : draft.secondaryValue,
     };
     startTransition(() => {
       applyColumnFilter(columnKey, patch);
     });
-  }, [applyColumnFilter, columnKey, draft, isRemarks]);
+  }, [applyColumnFilter, column, columnKey, draft, isRemarks]);
 
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const isHasComment = isRemarks && draft.operator === 'hasComment';

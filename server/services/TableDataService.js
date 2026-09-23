@@ -29,7 +29,7 @@ const {
   loadStaffRuntimeHeaderLinks,
   annotateAdminColumnsWithLineLinks,
 } = require('../utils/runtimeHeaderLinks');
-const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, OPERATORS, MAX_RULES } = require('../utils/odataSyncFilter');
+const { compileSyncRules, compileSyncRulesChunks, firstSyncFilterChunk, parseSyncRules, recordMatchesSyncRules, normalizeSyncLayers, recordMatchesAnyLayer, compileSyncLayerChunks, OPERATORS, MAX_RULES, MAX_LAYERS } = require('../utils/odataSyncFilter');
 const {
   listStaleSourceColumns,
   lookupRawFieldValue,
@@ -51,7 +51,17 @@ const {
 } = require('../utils/vendorGroupSyncFilter');
 const { getSyncRetentionSettings, resolveRetentionWarning } = require('../utils/syncRetentionSettings');
 const { compileFormula, evaluateCompiledFormula, getUtcMidnight } = require('../utils/tableFormulaEngine');
-const { time } = require('../utils/timing');
+const { time, mark } = require('../utils/timing');
+const {
+  resolveCollapsedDetailFields,
+  buildDetailJsonFromProjection,
+  buildDetailProjectionSql,
+} = require('../utils/collapsedDetailFields');
+const {
+  resolveCollapsedRollupPlan,
+  buildCollapsedRollupSql,
+  parseCollapsedRollupRows,
+} = require('../utils/collapsedDetailRollup');
 const { valuesEqualForConcurrency } = require('../utils/odataValueEquals');
 const {
   planFanout,
@@ -276,9 +286,10 @@ async function clearSyncRetainedForTable(pool, tableId) {
     `);
 }
 
-async function markOutOfScopeCacheRows(pool, tableId, rules) {
-  if (!Array.isArray(rules) || !rules.length) return { marked: 0 };
-  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+async function markOutOfScopeCacheRows(pool, tableId, syncLayers) {
+  const rules = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
+  if (!rules.length) return { marked: 0 };
+  const hasLineRules = rules.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
   const masters = await pool.request()
     .input('tableId', sql.BigInt, tableId)
     .query(`
@@ -298,7 +309,7 @@ async function markOutOfScopeCacheRows(pool, tableId, rules) {
   for (const row of masters.recordset || []) {
     const headerJson = parseJson(row.data_json);
     const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
-    if (!recordMatchesSyncRules(rules, headerJson, lineRecords)) {
+    if (!recordMatchesAnyLayer(rules, headerJson, lineRecords)) {
       outOfScopeKeys.push({ partitionKey: row.partition_key, recordKey: row.record_key });
     }
   }
@@ -327,6 +338,64 @@ async function markOutOfScopeCacheRows(pool, tableId, rules) {
     throw err;
   }
   return { marked: outOfScopeKeys.length };
+}
+
+/**
+ * Herstelt cache-rijen die weer binnen scope vallen (bv. een laag is opnieuw geactiveerd) direct,
+ * zonder op de volgende nachtrun te wachten. Tegenhanger van markOutOfScopeCacheRows (#325).
+ */
+async function unmarkInScopeCacheRows(pool, tableId, syncLayers) {
+  const layers = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
+  if (!layers.length) return { unmarked: 0 };
+  const hasLineRules = layers.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
+  const removedMasters = await pool.request()
+    .input('tableId', sql.BigInt, tableId)
+    .query(`
+      SELECT partition_key, record_key, data_json
+      FROM dbo.tb_cache WITH (NOLOCK)
+      WHERE table_id = @tableId AND scope = 'master' AND removed_at_source = 1 AND sync_retained = 0
+    `);
+  const detailJsonByRecord = hasLineRules
+    ? await loadDetailJsonByRecord(
+      pool,
+      tableId,
+      (removedMasters.recordset || []).map((row) => `${row.partition_key}|${row.record_key}`)
+    )
+    : new Map();
+
+  const inScopeKeys = [];
+  for (const row of removedMasters.recordset || []) {
+    const headerJson = parseJson(row.data_json);
+    const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
+    if (recordMatchesAnyLayer(layers, headerJson, lineRecords)) {
+      inScopeKeys.push({ partitionKey: row.partition_key, recordKey: row.record_key });
+    }
+  }
+  if (!inScopeKeys.length) return { unmarked: 0 };
+
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    for (const { partitionKey, recordKey } of inScopeKeys) {
+      await new sql.Request(tx)
+        .input('tableId', sql.BigInt, tableId)
+        .input('partitionKey', sql.NVarChar(32), partitionKey)
+        .input('recordKey', sql.NVarChar(128), recordKey)
+        .query(`
+          UPDATE dbo.tb_cache
+          SET removed_at_source = 0
+          WHERE table_id = @tableId AND scope = 'master'
+            AND partition_key = @partitionKey AND record_key = @recordKey
+            AND detail_key = ${MASTER_DETAIL_KEY}
+            AND removed_at_source = 1
+        `);
+    }
+    await tx.commit();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
+  return { unmarked: inScopeKeys.length };
 }
 
 async function countSyncRetainedMasters(pool, tableId) {
@@ -361,12 +430,12 @@ async function loadDetailJsonByRecord(pool, tableId, recordKeys) {
   return grouped;
 }
 
-async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings, syncRules) {
-  const rules = Array.isArray(syncRules) ? syncRules : [];
+async function applySyncRetainedTransitions(pool, table, removedMasters, retentionSettings, syncLayers) {
+  const rules = Array.isArray(syncLayers) ? syncLayers.filter((layer) => layer && layer.active) : [];
   const rawCandidates = (removedMasters.recordset || []).filter((row) => (
     Number(row.previous_removed) === 0 && Number(row.removed_at_source) === 1
   ));
-  const hasLineRules = rules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const hasLineRules = rules.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
   const detailJsonByRecord = hasLineRules
     ? await loadDetailJsonByRecord(
       pool,
@@ -378,7 +447,7 @@ async function applySyncRetainedTransitions(pool, table, removedMasters, retenti
     if (!rules.length) return true;
     const headerJson = parseJson(row.data_json);
     const lineRecords = detailJsonByRecord.get(`${row.partition_key}|${row.record_key}`) || [];
-    return recordMatchesSyncRules(rules, headerJson, lineRecords);
+    return recordMatchesAnyLayer(rules, headerJson, lineRecords);
   });
   if (!candidates.length) {
     return { retainedAdded: 0, capReached: false, retainedKeys: new Set() };
@@ -608,9 +677,9 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2500);
   let filterChunks = [''];
   try {
-    const rules = await getTableSyncRules(table);
-    const resolved = await resolveSyncRules(rules, { forD365: true });
-    filterChunks = compileSyncRulesChunks(resolved);
+    const layers = await getTableSyncLayers(table);
+    const resolvedLayers = await resolveSyncLayers(layers, { forD365: true });
+    filterChunks = compileSyncLayerChunks(resolvedLayers);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
@@ -899,8 +968,11 @@ async function getInheritedPoLookupScopes(table) {
   })).filter((entry) => entry.values.length > 0);
 }
 
-async function getPurchaseOrderSyncRules() {
-  return parseSyncRules(await settingsService.getAsync('PO_SYNC_RULES', ''));
+async function getPurchaseOrderSyncLayers() {
+  const raw = await settingsService.getAsync('PO_SYNC_RULES', '');
+  let parsed = [];
+  try { parsed = raw ? JSON.parse(raw) : []; } catch { parsed = []; }
+  return normalizeSyncLayers(parsed).layers;
 }
 
 function resolveLookupTargetSourceField(lookup, targetColumns) {
@@ -922,15 +994,15 @@ function resolveLookupTargetSourceField(lookup, targetColumns) {
   return configuredTargetField;
 }
 
-async function getTableSyncRules(table) {
+async function getTableSyncLayers(table) {
   if (table.key === 'purchase-orders') {
-    const fromSettings = await getPurchaseOrderSyncRules();
+    const fromSettings = await getPurchaseOrderSyncLayers();
     if (fromSettings.length) return fromSettings;
   }
   if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     return [];
   }
-  return parseDefaultFilterRules(table.defaultFilter);
+  return normalizeSyncLayers(parseDefaultFilterRules(table.defaultFilter)).layers;
 }
 
 async function listVendorAccountsByGroupsFromCache(groupIds) {
@@ -964,11 +1036,27 @@ async function resolveSyncRules(rules, { forD365 = false } = {}) {
   return expandVendorGroupRules(list, accounts);
 }
 
+// Past resolveSyncRules (vendor-group-expansie) toe per laag; lagen zelf blijven OR-gecombineerd,
+// alleen de regels binnen elke laag worden geresolved (#325).
+async function resolveSyncLayers(layers, opts) {
+  const list = Array.isArray(layers) ? layers : [];
+  return Promise.all(list.map(async (layer) => ({
+    ...layer,
+    rules: await resolveSyncRules(layer.rules, opts),
+  })));
+}
+
 async function getTableSyncFilter(table) {
-  const rules = await getTableSyncRules(table);
+  if (table.key === 'purchase-orders') {
+    const layers = await getTableSyncLayers(table);
+    const resolvedLayers = await resolveSyncLayers(layers, { forD365: true });
+    const chunks = compileSyncLayerChunks(resolvedLayers).filter(Boolean);
+    return chunks.length ? chunks.map((c) => `(${c})`).join(' or ') : '';
+  }
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) return '';
+  const rules = parseDefaultFilterRules(table.defaultFilter);
   if (!rules.length) return '';
-  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
-  return compileSyncRules(resolved);
+  return compileSyncRules(rules);
 }
 
 function normalizeLookupKeyPart(value) {
@@ -1210,6 +1298,8 @@ function projectJson(source, sourceColumns) {
 }
 function parseJson(raw) {
   if (!raw) return {};
+  // De collapsed board-read levert data_json al als object aan (JSON_VALUE-projectie i.p.v. blob).
+  if (typeof raw === 'object') return raw;
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
@@ -2355,13 +2445,13 @@ async function refresh(tableKey, options = {}) {
 
     if (table.key === 'purchase-orders') {
       const retentionSettings = await getSyncRetentionSettings();
-      const syncRules = await resolveSyncRules(await getTableSyncRules(table), { forD365: false });
+      const syncLayers = await resolveSyncLayers(await getTableSyncLayers(table), { forD365: false });
       const retentionResult = await applySyncRetainedTransitions(
         pool,
         table,
         removedMasters,
         retentionSettings,
-        syncRules
+        syncLayers
       );
       retentionCapReached = Boolean(retentionResult.capReached);
       retainedKeys = retentionResult.retainedKeys || new Set();
@@ -2690,6 +2780,9 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
 
   return {
     synthetic,
+    // Waaruit deze lookup is opgebouwd — loadLookupEnrichmentCached leidt hier zijn
+    // cache-signatuur uit af.
+    targetTableId: Number(targetTable.id),
     enrichedLookup: {
       ...lk,
       sourceFieldKey: resolvedSourceField,
@@ -2750,7 +2843,49 @@ async function loadLookupEnrichment(table) {
     enriched.push(result.enrichedLookup);
   }
 
-  return { lookups: enriched, masterCols, detailCols };
+  // De doeltabellen waarvan deze verrijking is afgeleid. loadLookupEnrichmentCached gebruikt ze
+  // om te bepalen of de cache nog klopt: wijzigt geen van die tabellen, dan is de verrijking nog
+  // geldig, hoe oud hij ook is.
+  const targetTableIds = [...new Set(
+    loaded.map((result) => result?.targetTableId).filter((id) => Number.isFinite(id))
+  )];
+
+  return { lookups: enriched, masterCols, detailCols, targetTableIds };
+}
+
+// Goedkope inhouds-signatuur van de lookup-doeltabellen: rijaantal plus de laatste sync- en
+// wijzigingstijd per tabel. Een aggregatie over de geïndexeerde (table_id, scope), geen blob-scan
+// — dus ordes goedkoper dan de volledige lookup-reads die hij overbodig maakt.
+async function loadLookupTargetSignature(targetTableIds) {
+  const ids = (Array.isArray(targetTableIds) ? targetTableIds : []).filter((id) => Number.isFinite(id));
+  if (!ids.length) return 'geen-doeltabellen';
+  const pool = await getPool();
+  const request = pool.request();
+  const params = ids.map((id, i) => {
+    request.input(`lookupTarget${i}`, sql.BigInt, id);
+    return `@lookupTarget${i}`;
+  });
+  const result = await request.query(`
+    SELECT table_id, COUNT(*) AS row_count, MAX(synced_at) AS max_synced, MAX(content_changed_at) AS max_changed
+    FROM dbo.tb_cache WITH (NOLOCK)
+    WHERE table_id IN (${params.join(', ')}) AND scope = 'master'
+    GROUP BY table_id
+  `);
+  return buildLookupSignature(result.recordset);
+}
+
+// Puur, zodat het deterministisch te testen is: volgorde-onafhankelijk en ongevoelig voor het
+// verschil tussen een Date en zijn ISO-string.
+function buildLookupSignature(rows) {
+  const parts = (Array.isArray(rows) ? rows : [])
+    .map((row) => [
+      String(row?.table_id ?? ''),
+      String(row?.row_count ?? 0),
+      row?.max_synced ? new Date(row.max_synced).toISOString() : '',
+      row?.max_changed ? new Date(row.max_changed).toISOString() : '',
+    ].join(':'))
+    .sort();
+  return parts.join('|') || 'leeg';
 }
 
 function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
@@ -3083,27 +3218,93 @@ function buildValuesFromColumns(cols, sourceJson, custom) {
 
 // Eén detailregel projecteren naar de board-vorm. ctx bundelt de gedeelde lookups die
 // zowel de board-read als de per-order details-read opbouwen.
-function buildDetailRow(d, ctx) {
+// Welke detailkolommen een ingeklapt bord écht nodig heeft: `itemNumber` voor de
+// productImageSummary in buildDetailRollup, plus de lijnkolom van elke gekoppelde header-kolom.
+// Geeft null zodra één daarvan géén direct bronveld is — een formule-, lookup-, custom- of
+// product-attribuutkolom heeft juist het werk nodig dat de lichte weg overslaat.
+function resolveLightDetailColumns({ detailCols = [], runtimeLinks = null } = {}) {
+  const byKey = new Map();
+  for (const column of detailCols) {
+    const key = String(column?.key || '').trim().toLowerCase();
+    if (key) byKey.set(key, column);
+  }
+  const isDirectSource = (column) => Boolean(column)
+    && column.source === 'source'
+    && !isFormulaColumn(column)
+    && String(column?.options?.kind || '') !== 'product-attribute';
+
+  const needed = new Map();
+  const itemColumn = byKey.get('itemnumber');
+  if (itemColumn) {
+    if (!isDirectSource(itemColumn)) return null;
+    needed.set('itemnumber', itemColumn);
+  }
+  for (const group of ['lineTotalHeaderLinks', 'lineValueHeaderLinks']) {
+    for (const link of (Array.isArray(runtimeLinks?.[group]) ? runtimeLinks[group] : [])) {
+      const key = String(link?.lineColumnKey || '').trim().toLowerCase();
+      if (!key) continue;
+      const column = byKey.get(key);
+      if (!isDirectSource(column)) return null;
+      needed.set(key, column);
+    }
+  }
+  return [...needed.values()];
+}
+
+/**
+ * @param {object} d - ruwe tb_cache-detailrij
+ * @param {object} ctx - detailContext
+ * @param {{ light?: boolean }} [options] - `light`: de regel gaat niet mee in de response en dient
+ *   alleen als input voor buildDetailRollup en de gekoppelde header-kolommen. Dan blijven lookups,
+ *   product-attributen, formules, history en track-marks achterwege — bij een ingeklapt bord is dat
+ *   werk dat direct daarna wordt weggegooid, en dat voor elke van de ~73k regels. De vlaggen
+ *   hieronder blijven bewust in dezelfde functie, zodat licht en volledig nooit uiteen kunnen lopen.
+ */
+function buildDetailRow(d, ctx, { light = false } = {}) {
   const {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
   } = ctx;
   const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
   const detailJson = parseJson(d.data_json);
-  const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
-  const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
-  applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
-  const pavExtras = applyProductAttributePivot(
-    detailValues,
-    detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
-    ctx.pavPivot,
-    ctx.pavColumns,
+  const detailValues = buildValuesFromColumns(
+    light ? (lightDetailCols || detailCols) : detailCols,
+    detailJson,
+    detailCustom,
   );
-  if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
-    applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+  let pavExtras = null;
+  if (!light) {
+    // De drie zware stappen apart optellen (ctx.stats), zodat Server-Timing laat zien waar de
+    // detail-opbouw zijn tijd laat. Zonder die splitsing is tb_build_rows één ondeelbaar getal en
+    // is niet te zeggen welk deel weg kan. Kost ~3 hrtime-paren per regel, onder 1% van de post.
+    const stats = ctx.stats;
+    const tick = () => (stats ? process.hrtime.bigint() : null);
+    const add = (key, from) => {
+      if (stats && from !== null) stats[key] += Number(process.hrtime.bigint() - from) / 1e6;
+    };
+
+    let t = tick();
+    const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
+    applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+    add('lookupMs', t);
+
+    t = tick();
+    pavExtras = applyProductAttributePivot(
+      detailValues,
+      detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
+      ctx.pavPivot,
+      ctx.pavColumns,
+    );
+    add('pavMs', t);
+
+    t = tick();
+    if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
+      applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+    }
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
+    add('formulaMs', t);
   }
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
   const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
   const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
   const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -3117,6 +3318,17 @@ function buildDetailRow(d, ctx) {
   const hasRemovalChange = Boolean(ledgerState?.isRemoved)
     || (!hasLedgerWindow && isRemovedAtSource);
   const isRemoved = isRemovedAtSource || Boolean(ledgerState?.isRemoved);
+  if (light) {
+    // Precies wat buildDetailRollup en applyRuntimeLinkedHeaderValues lezen, niets meer.
+    return {
+      values: detailValues,
+      isNew,
+      isChanged,
+      isRemoved,
+      hasRemovalChange,
+      changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
+    };
+  }
   const detailHistory = historyByCell.get(cellKey);
   const detailTrackMarks = trackMarks.trackMarksByCell.get(cellKey);
   return {
@@ -3185,6 +3397,47 @@ function buildDetailRollup(details) {
   };
 }
 
+// Dezelfde rollup als buildDetailRollup(), maar uit de SQL-aggregatie. De activiteitsvlaggen komen
+// uit het change-ledger zodra er een ledger-venster is; anders uit de baseline-vergelijking die de
+// aggregatiequery al per regel heeft gedaan.
+function buildRollupFromAggregate(aggregate, ledgerSummary, hasLedgerWindow) {
+  const hasNewLine = hasLedgerWindow ? Boolean(ledgerSummary?.hasNewLine) : Boolean(aggregate?.hasNewLine);
+  const hasChangedLine = hasLedgerWindow
+    ? Boolean(ledgerSummary?.hasChangedLine)
+    : Boolean(aggregate?.hasChangedLine);
+  const hasRemovedLine = hasLedgerWindow
+    ? Boolean(ledgerSummary?.hasRemovedLine)
+    : Boolean(aggregate?.hasRemovedLine);
+  const firstItemNumber = aggregate?.firstItemNumber || '';
+  const additionalItemCount = Math.max((aggregate?.uniqueItemCount || 0) - 1, 0);
+
+  return {
+    detailCount: aggregate?.detailCount || 0,
+    ...(hasNewLine ? { hasNewLine } : {}),
+    ...(hasChangedLine ? { hasChangedLine } : {}),
+    ...(hasRemovedLine ? { hasRemovedLine } : {}),
+    ...(firstItemNumber ? { productImageSummary: { firstItemNumber, additionalItemCount } } : {}),
+  };
+}
+
+// Tegenhanger van applyRuntimeLinkedHeaderValues() voor de geaggregeerde read. Loopt over de
+// koppelingen uit het plan (niet over de aggregatie) zodat een order zonder regels dezelfde lege
+// waarden krijgt als voorheen: 0 voor een totaal, '-' voor een waardelijst.
+function applyAggregatedLinkedHeaderValues(masterValues, aggregate, rollupPlan) {
+  if (!masterValues || typeof masterValues !== 'object' || !rollupPlan) return {};
+  for (const link of rollupPlan.totalLinks) {
+    masterValues[link.headerColumnKey] = aggregate?.totals?.[link.headerColumnKey] ?? 0;
+  }
+  const linkedLineValues = {};
+  for (const link of rollupPlan.valueLinks) {
+    const list = aggregate?.values?.[link.headerColumnKey] || [];
+    const texts = list.map((raw) => String(raw).trim());
+    masterValues[link.headerColumnKey] = texts.length ? texts.join(', ') : '-';
+    linkedLineValues[link.headerColumnKey] = list;
+  }
+  return linkedLineValues;
+}
+
 function createOrderChangeState() {
   return { isNew: false, isChanged: false, isRemoved: false, changedFieldKeys: new Set() };
 }
@@ -3196,8 +3449,11 @@ function createLineChangeState() {
 function buildD365ChangeState(ledgerRows) {
   const orderChanges = new Map();
   const lineChanges = new Map();
+  // Samenvatting per order van wat er met de régels gebeurde. De geaggregeerde detail-read leest de
+  // losse regels niet meer, maar heeft deze vlaggen wel nodig voor de activiteitsbalk.
+  const lineChangesByOrder = new Map();
   if (!Array.isArray(ledgerRows) || !ledgerRows.length) {
-    return { orderChanges, lineChanges };
+    return { orderChanges, lineChanges, lineChangesByOrder };
   }
 
   for (const row of ledgerRows) {
@@ -3250,13 +3506,28 @@ function buildD365ChangeState(ledgerRows) {
     if (fieldKey) lineState.changedFieldKeys.add(fieldKey);
   }
 
-  return { orderChanges, lineChanges };
+  // Zelfde afleiding als buildDetailRollup(): een regel die nieuw én gewijzigd is telt als nieuw,
+  // maar losse gewijzigde velden maken de order altijd "changed".
+  for (const [lineKey, lineState] of lineChanges) {
+    const orderKey = lineKey.slice(0, lineKey.lastIndexOf('|'));
+    if (!lineChangesByOrder.has(orderKey)) {
+      lineChangesByOrder.set(orderKey, { hasNewLine: false, hasChangedLine: false, hasRemovedLine: false });
+    }
+    const summary = lineChangesByOrder.get(orderKey);
+    if (lineState.isNew) summary.hasNewLine = true;
+    if ((!lineState.isNew && lineState.isChanged) || lineState.changedFieldKeys.size > 0) {
+      summary.hasChangedLine = true;
+    }
+    if (lineState.isRemoved) summary.hasRemovedLine = true;
+  }
+
+  return { orderChanges, lineChanges, lineChangesByOrder };
 }
 
 // De drie tb_cache-reads (masters, details, custom values) parallel op de pool;
 // onafhankelijke queries, dus geen reden om op elkaar te wachten.
 // Elk deel krijgt een eigen Server-Timing-label (tb_read_masters/details/custom).
-async function readCacheRows(pool, tableId, includeRemoved, recordFilter = null) {
+async function readCacheRows(pool, tableId, includeRemoved, recordFilter = null, detailPlanPromise = null) {
   const mastersRequest = pool.request().input('tableId', sql.BigInt, tableId);
   const mastersScope = applyRecordFilter(mastersRequest, recordFilter, 'c');
   const mastersPromise = time('tb_read_masters', () => mastersRequest
@@ -3273,16 +3544,43 @@ async function readCacheRows(pool, tableId, includeRemoved, recordFilter = null)
       ORDER BY c.record_key
     `));
 
-  const detailsRequest = pool.request().input('tableId', sql.BigInt, tableId);
-  const detailsScope = applyRecordFilter(detailsRequest, recordFilter);
-  const detailsPromise = time('tb_read_details', () => detailsRequest
-    .query(`
-      SELECT partition_key, record_key, detail_key, data_json, removed_at_source, first_seen_at, content_changed_at
-      FROM dbo.tb_cache WITH (NOLOCK)
-      WHERE table_id = @tableId AND scope = 'detail'
-      ${detailsScope}
-      ORDER BY record_key, detail_key
-    `));
+  // De detail-read kent drie vormen, van goedkoop naar duur (zie collapsedDetailRollup.js en
+  // collapsedDetailFields.js). Blijven de sublijnen buiten de response, dan rekent SQL de rollup
+  // per order uit ('aggregate') of levert het alleen de velden die de rollup nog leest ('fields').
+  // Lukt geen van beide, dan komt de volledige data_json mee, zoals voorheen.
+  const detailsPromise = time('tb_read_details', async () => {
+    const plan = detailPlanPromise ? await detailPlanPromise : null;
+
+    if (plan?.mode === 'aggregate') {
+      const request = pool.request().input('tableId', sql.BigInt, tableId);
+      if (plan.baselineAt) request.input('baselineAt', sql.DateTime2, plan.baselineAt);
+      const result = await request.query(plan.sql);
+      return {
+        recordset: [],
+        rollupByRecord: parseCollapsedRollupRows(result.recordset, plan.rollupPlan),
+        rollupPlan: plan.rollupPlan,
+      };
+    }
+
+    const detailFields = plan?.mode === 'fields' ? plan.fields : null;
+    const detailsRequest = pool.request().input('tableId', sql.BigInt, tableId);
+    const detailsScope = applyRecordFilter(detailsRequest, recordFilter);
+    const projection = detailFields ? buildDetailProjectionSql(detailFields) : 'data_json';
+    const result = await detailsRequest
+      .query(`
+        SELECT partition_key, record_key, detail_key, ${projection}, removed_at_source, first_seen_at, content_changed_at
+        FROM dbo.tb_cache WITH (NOLOCK)
+        WHERE table_id = @tableId AND scope = 'detail'
+        ${detailsScope}
+        ORDER BY record_key, detail_key
+      `);
+    if (detailFields) {
+      for (const row of result.recordset) {
+        row.data_json = buildDetailJsonFromProjection(row, detailFields);
+      }
+    }
+    return result;
+  });
 
   const customRequest = pool.request().input('tableId', sql.BigInt, tableId);
   const customScope = applyRecordFilter(customRequest, recordFilter, 'cv');
@@ -3299,7 +3597,13 @@ async function readCacheRows(pool, tableId, includeRemoved, recordFilter = null)
   const [mastersResult, detailsResult, customResult] = await Promise.all([
     mastersPromise, detailsPromise, customPromise,
   ]);
-  return { mastersResult, detailsResult, customResult };
+  return {
+    mastersResult,
+    detailsResult,
+    customResult,
+    rollupByRecord: detailsResult.rollupByRecord || null,
+    rollupPlan: detailsResult.rollupPlan || null,
+  };
 }
 
 function historyCellKey(partitionKey, recordKey, detailKey) {
@@ -3471,6 +3775,106 @@ async function loadTrackMarks(pool, tableId, enabledColumns, mode, boundaries, r
   return { trackMarksByCell, activeOffsetByColumnId, defaultPattern };
 }
 
+// Is het items-syncfilter actief? Dan hangt per régel af of die meetelt en of de order zichtbaar
+// blijft, en kan de rollup niet in SQL. Bewust conservatief: bij twijfel geen aggregatie.
+async function itemsLineFilterConfigured(table) {
+  if (table.key !== 'purchase-orders') return false;
+  try {
+    const itemsTable = await getTableByKey('items');
+    return parseDefaultFilterRules(itemsTable.defaultFilter).length > 0;
+  } catch {
+    return true;
+  }
+}
+
+// Leesplan voor een dichtgeklapt bord: laat SQL de rollup per order berekenen ('aggregate'), of
+// anders alleen de data_json-velden leveren die de rollup nog leest ('fields'). Geeft null zodra
+// geen van beide met zekerheid kan — de read leest dan de volledige blob, zoals voorheen.
+async function planCollapsedDetailRead(input) {
+  const plan = await time('tb_detail_plan', () => resolveCollapsedDetailPlan(input));
+  // Welke leestak gekozen is, bepaalt volledig waar tb_read_details zijn tijd laat: de
+  // rollup-aggregatie, de JSON_VALUE-projectie of de volledige blob-read. Zonder deze marker is
+  // dat van buitenaf niet te zien en is een meting niet toe te rekenen.
+  mark(`tb_detail_plan_${plan?.mode || 'none'}`);
+  return plan;
+}
+
+// Mag de read terugvallen op de 'fields'-projectie (JSON_VALUE per veld, buildDetailProjectionSql)?
+// Standaard niet. Gemeten op Azure, 21-09-2026: die projectie kost 44 s waar dezelfde read met de
+// volledige data_json 4,6 s kost — ~73k detailregels, identieke SQL-server en -tier (zie
+// .cursor/plans/2026-09-21-perf-dev-prod-gelijktrekken.plan.md, §5c en §5e). SQL Server parst de
+// blob dan per rij per veld; Node parst hem één keer per rij en houdt bovendien alle velden over.
+// De schakelaar blijft bestaan zodat beide takken meetbaar zijn zonder de code terug te draaien.
+function fieldsProjectionEnabled() {
+  const raw = String(process.env.PO_DETAIL_FIELDS_PROJECTION || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true';
+}
+
+async function resolveCollapsedDetailPlan({
+  table, colsPromise, linksPromise, enrichmentPromise, syncStatePromise, viewedPromise,
+}) {
+  try {
+    // De rollup heeft alleen kolommen, koppelingen en de items-filtercheck nodig. De
+    // lookup-enrichment is uitsluitend voor de veldprojectie — staat die uit, dan wachten we er
+    // ook niet op. Dat scheelt de detail-read de hele lookup-tijd (gemeten 0,9-1,6 s), want die
+    // read wacht op dit plan.
+    const [[, detailCols], runtimeLinks, itemsFilterActive] = await Promise.all([
+      colsPromise, linksPromise, itemsLineFilterConfigured(table),
+    ]);
+
+    const rollupPlan = resolveCollapsedRollupPlan({ detailColumns: detailCols, runtimeLinks, itemsFilterActive });
+    if (rollupPlan) {
+      const [{ lastFullSyncAt }, lastViewedAt] = await Promise.all([syncStatePromise, viewedPromise]);
+      const baselineMs = resolveLedgerSinceMs({ lastViewedAt, lastFullSyncAt });
+      const baseline = { enabled: baselineMs !== null, exclusive: usesViewedBaseline(lastViewedAt) };
+      return {
+        mode: 'aggregate',
+        rollupPlan,
+        sql: buildCollapsedRollupSql(rollupPlan, baseline),
+        baselineAt: baseline.enabled ? new Date(baselineMs) : null,
+      };
+    }
+
+    if (!fieldsProjectionEnabled()) return null;
+    return planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment: await enrichmentPromise });
+  } catch (err) {
+    logger.warn('Leesplan voor collapsed detail-read mislukt; volledige data_json gelezen', {
+      error: err.message,
+    });
+    return null;
+  }
+}
+
+// Veldplan voor een collapsed detail-read: welke data_json-velden blijven er nodig als de
+// sublijnen niet in de response komen. Geeft null zodra de set niet met zekerheid te bepalen is.
+function planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment }) {
+  {
+    const formulaReferences = new Map();
+    for (const item of compileFormulaColumns(detailCols)) {
+      const key = String(item?.column?.key || '').trim().toLowerCase();
+      const references = item?.compiled?.references;
+      if (key && Array.isArray(references)) formulaReferences.set(key, [...references]);
+    }
+    // Het items-syncfilter matcht rechtstreeks op een JSON-veld van de regel; welk veld dat is
+    // volgt uit de items-lookup, met itemNumber als vaste fallback.
+    const itemsLookup = (enrichment?.lookups || []).find((lk) => (
+      String(lk?.targetTableKey || '').trim().toLowerCase() === 'items' && lk.sourceScope === 'detail'
+    ));
+    const alwaysFields = ['itemNumber'];
+    const itemsFilterField = String(itemsLookup?.sourceFieldKey || '').trim();
+    if (itemsFilterField) alwaysFields.push(itemsFilterField);
+
+    const fields = resolveCollapsedDetailFields({
+      detailColumns: detailCols,
+      runtimeLinks,
+      lookups: enrichment?.lookups || [],
+      alwaysFields,
+      formulaReferences,
+    });
+    return fields ? { mode: 'fields', fields } : null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // read — bouw rijen uit tb_cache + actieve kolommen + eigen waarden
 // ---------------------------------------------------------------------------
@@ -3521,8 +3925,8 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
         return loadTrackMarks(pool, table.id, trackEnabledColumns, trackConfig.mode, boundaries, recordFilter);
       })
     : Promise.resolve(emptyTrackMarks);
-  const syncRulesPromise = table.key === 'purchase-orders'
-    ? time('tb_sync_rules', () => getTableSyncRules(table))
+  const syncLayersPromise = table.key === 'purchase-orders'
+    ? time('tb_sync_rules', () => getTableSyncLayers(table))
     : Promise.resolve([]);
   const ledgerPromise = includeChangeDecorations
     ? (async () => {
@@ -3555,42 +3959,55 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   })()
     : Promise.resolve({ d365LedgerRows: [], hasLedgerWindow: false });
 
+  const colsPromise = time('tb_read_cols', () => Promise.all([
+    listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
+    listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
+  ]));
+  // Push-total/push-values koppelingen zijn een gedeelde, board-brede instelling (zie
+  // 2026-09-02-header-push-line-writeback-design.md), geen persoonlijke voorkeur per staff-lid.
+  // Daarom altijd staff-links meenemen, ook voor staff zelf — anders toont het bord een kolom
+  // als "los" (bewerkbaar) zodra een ándere staff-gebruiker de koppeling heeft aangemaakt,
+  // terwijl de Data model-pagina (die altijd merget) 'm wel als gekoppeld laat zien.
+  const linksPromise = time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key, {
+    includeStaffLinks: true,
+  }));
+  const enrichmentPromise = time('tb_lookups', () => loadLookupEnrichmentCached(table));
+  // Blijven de sublijnen buiten de response, dan hoeft de detail-read niet elke regel op te halen:
+  // SQL kan de rollup per order berekenen, of anders alleen de velden leveren die de rollup leest.
+  // Het plan hangt af van kolommen, koppelingen en lookups; die laden parallel met de master-read,
+  // dus dit kost geen extra wachttijd.
+  const detailPlanPromise = (includeDetails || recordFilter)
+    ? Promise.resolve(null)
+    : planCollapsedDetailRead({
+      table, colsPromise, linksPromise, enrichmentPromise, syncStatePromise, viewedPromise,
+    });
+
   const [
     [masterCols, detailCols],
     runtimeLinks,
     { lastFullSyncAt },
     lastViewedAt,
-    { mastersResult, detailsResult, customResult },
+    { mastersResult, detailsResult, customResult, rollupByRecord, rollupPlan },
     enrichment,
     { d365LedgerRows, hasLedgerWindow },
     historyByCell,
     trackMarks,
-    syncRules,
+    syncLayers,
   ] = await Promise.all([
-    time('tb_read_cols', () => Promise.all([
-      listColumns({ tableId: table.id, scope: 'master', includeInactive: false }),
-      listColumns({ tableId: table.id, scope: 'detail', includeInactive: false }),
-    ])),
-    // Push-total/push-values koppelingen zijn een gedeelde, board-brede instelling (zie
-    // 2026-09-02-header-push-line-writeback-design.md), geen persoonlijke voorkeur per staff-lid.
-    // Daarom altijd staff-links meenemen, ook voor staff zelf — anders toont het bord een kolom
-    // als "los" (bewerkbaar) zodra een ándere staff-gebruiker de koppeling heeft aangemaakt,
-    // terwijl de Data model-pagina (die altijd merget) 'm wel als gekoppeld laat zien.
-    time('tb_links', () => loadUserRuntimeHeaderLinks(pool, userId, table.key, {
-      includeStaffLinks: true,
-    })),
+    colsPromise,
+    linksPromise,
     syncStatePromise,
     viewedPromise,
-    readCacheRows(pool, table.id, includeRemoved, recordFilter),
-    time('tb_lookups', () => loadLookupEnrichmentCached(table)),
+    readCacheRows(pool, table.id, includeRemoved, recordFilter, detailPlanPromise),
+    enrichmentPromise,
     ledgerPromise,
     historyByCellPromise,
     trackMarksPromise,
-    syncRulesPromise,
+    syncLayersPromise,
   ]);
-  const resolvedSyncRules = table.key === 'purchase-orders'
-    ? await resolveSyncRules(syncRules, { forD365: false })
-    : (Array.isArray(syncRules) ? syncRules : []);
+  const resolvedSyncLayers = table.key === 'purchase-orders'
+    ? await resolveSyncLayers(syncLayers, { forD365: false })
+    : [];
   const compiledMasterFormulas = compileMasterFormulaColumns(masterCols);
   const compiledDetailFormulas = compileFormulaColumns(detailCols);
   const pavColumns = (detailCols || []).filter((column) => column?.options?.kind === 'product-attribute');
@@ -3627,19 +4044,32 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     detailsByRecord.get(recKey).push(d);
   }
 
-  const { orderChanges, lineChanges } = buildD365ChangeState(d365LedgerRows);
+  const { orderChanges, lineChanges, lineChangesByOrder } = buildD365ChangeState(d365LedgerRows);
 
   const valuesFor = buildValuesFromColumns;
+  // Gaan de sublijnen niet mee in de response, dan dienen ze alleen als input voor de rollup en de
+  // gekoppelde header-kolommen. Dat scheelt per regel de lookups, product-attributen, formules,
+  // history en track-marks — bij ~73k regels de grootste post in tb_build_rows. Null betekent dat
+  // een van die kolommen berekend of opgezocht is; dan bouwen we de volledige rij, zoals altijd.
+  const lightDetailCols = includeDetails ? null : resolveLightDetailColumns({ detailCols, runtimeLinks });
+  const useLightDetails = Boolean(lightDetailCols);
+  mark(`tb_detail_rows_${useLightDetails ? 'light' : 'full'}`);
+
+  // Opsplitsing van tb_build_rows: hoeveel gaat naar de detailregels, en daarbinnen naar lookups,
+  // product-attributen en formules. Bepaalt of het zin heeft die stappen over te slaan bij een
+  // ingeklapt bord (W11) of dat de tijd elders zit.
+  const buildStats = { detailMs: 0, lookupMs: 0, pavMs: 0, formulaMs: 0, detailRows: 0 };
+
   const detailContext = {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
-    compiledDetailFormulas, formulaToday, pavPivot, pavColumns,
+    compiledDetailFormulas, formulaToday, pavPivot, pavColumns, stats: buildStats,
   };
 
   let newCount = 0;
   let changedCount = 0;
   let scopedRows;
-  const activeSyncRules = Array.isArray(resolvedSyncRules) ? resolvedSyncRules : [];
+  const activeSyncLayers = Array.isArray(resolvedSyncLayers) ? resolvedSyncLayers.filter((layer) => layer && layer.active) : [];
   const masterJsonByRecKey = new Map(
     mastersResult.recordset.map((m) => [`${m.partition_key}|${m.record_key}`, parseJson(m.data_json)])
   );
@@ -3690,18 +4120,30 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     const masterJson = parseJson(m.data_json);
     const masterCustom = customByCell.get(`${m.partition_key}|${m.record_key}|${MASTER_DETAIL_KEY}`) || {};
     let hasLineChanges = false;
-    let rawDetailRows = detailsByRecord.get(recKey) || [];
-    if (itemsLineFilterActive) {
-      rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsFilter(d, itemsFilterField, itemsFilterKeys));
-      if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
+    let details = [];
+    let detailRollup;
+    if (rollupByRecord) {
+      // SQL heeft de rollup al berekend; de losse regels zijn niet gelezen.
+      const aggregate = rollupByRecord.get(recKey);
+      detailRollup = buildRollupFromAggregate(aggregate, lineChangesByOrder.get(recKey), hasLedgerWindow);
+      hasLineChanges = Boolean(detailRollup.hasNewLine || detailRollup.hasChangedLine);
+    } else {
+      let rawDetailRows = detailsByRecord.get(recKey) || [];
+      if (itemsLineFilterActive) {
+        rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsFilter(d, itemsFilterField, itemsFilterKeys));
+        if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
+      }
+      const detailStart = process.hrtime.bigint();
+      details = rawDetailRows.map((d) => {
+        const detail = buildDetailRow(d, detailContext, { light: useLightDetails });
+        if (detail.isNew || detail.isChanged) hasLineChanges = true;
+        return detail;
+      });
+      buildStats.detailMs += Number(process.hrtime.bigint() - detailStart) / 1e6;
+      buildStats.detailRows += rawDetailRows.length;
+      detailRollup = buildDetailRollup(details);
+      for (const detail of details) delete detail.hasRemovalChange;
     }
-    const details = rawDetailRows.map((d) => {
-      const detail = buildDetailRow(d, detailContext);
-      if (detail.isNew || detail.isChanged) hasLineChanges = true;
-      return detail;
-    });
-    const detailRollup = buildDetailRollup(details);
-    for (const detail of details) delete detail.hasRemovalChange;
 
     const firstSeenMs = m.first_seen_at ? new Date(m.first_seen_at).getTime() : null;
     const changedMs = m.content_changed_at ? new Date(m.content_changed_at).getTime() : null;
@@ -3718,7 +4160,9 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
 
     const masterValues = valuesFor(masterCols, masterJson, masterCustom);
     applyLookups(masterValues, m.partition_key, enrichment.lookups, 'master', masterJson);
-    const linkedLineValues = applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
+    const linkedLineValues = rollupByRecord
+      ? applyAggregatedLinkedHeaderValues(masterValues, rollupByRecord.get(recKey), rollupPlan)
+      : applyRuntimeLinkedHeaderValues(masterValues, details, runtimeLinks);
     const formulaErrors = applyFormulaColumnsToRowValues(masterValues, compiledMasterFormulas, { today: formulaToday });
 
     // Lege objecten/arrays laten we weg: de client vult ze zelf aan met dezelfde defaults, en bij
@@ -3747,18 +4191,28 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     };
   });
 
+  // Opsplitsing van tb_build_rows in Server-Timing. Het masterdeel is het verschil tussen
+  // tb_build_rows en tb_build_details; binnen de details laat de rest zien wat lookups,
+  // product-attributen en formules kosten — precies de stappen die bij een ingeklapt bord
+  // overgeslagen zouden kunnen worden.
+  mark('tb_build_details', buildStats.detailMs);
+  mark('tb_build_det_lookups', buildStats.lookupMs);
+  mark('tb_build_det_pav', buildStats.pavMs);
+  mark('tb_build_det_formulas', buildStats.formulaMs);
+  mark('tb_build_det_rows_n', buildStats.detailRows);
+
   let visibleRows = rows;
-  if (table.key === 'purchase-orders' && (activeSyncRules.length || itemsLineFilterActive)) {
+  if (table.key === 'purchase-orders' && (activeSyncLayers.length || itemsLineFilterActive)) {
     visibleRows = rows.filter((row) => {
       const recKey = `${row.partitionKey}|${row.recordKey}`;
       // Items-filter: verberg orders zonder enkele matchende regel (ook retained orders — de
       // gebruiker wil een schoon, op de items-filter gefilterd bord).
       if (itemsLineFilterActive && ordersHiddenByItemsFilter.has(recKey)) return false;
-      if (activeSyncRules.length) {
+      if (activeSyncLayers.length) {
         if (row.syncRetained) return true;
         const masterJson = masterJsonByRecKey.get(recKey) || {};
         const lineRecords = (detailsByRecord.get(recKey) || []).map((d) => parseJson(d.data_json));
-        return recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords);
+        return recordMatchesAnyLayer(activeSyncLayers, masterJson, lineRecords);
       }
       return true;
     });
@@ -3890,10 +4344,10 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const wanted = new Set(valueColumnKeys.filter(Boolean));
   const cols = masterCols.filter((c) => wanted.has(c.key));
 
-  const activeSyncRules = table.key === 'purchase-orders'
-    ? await resolveSyncRules(await getTableSyncRules(table), { forD365: false })
+  const activeSyncLayers = table.key === 'purchase-orders'
+    ? await resolveSyncLayers(await getTableSyncLayers(table), { forD365: false })
     : [];
-  const needsLineRecords = activeSyncRules.some((rule) => String(rule?.level || 'header').trim() === 'line');
+  const needsLineRecords = activeSyncLayers.some((layer) => (layer.rules || []).some((rule) => String(rule?.level || 'header').trim() === 'line'));
 
   const mastersResult = await time('tb_vendor_master_only', () => pool.request()
     .input('tableId', sql.BigInt, table.id)
@@ -3928,9 +4382,9 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
   const rows = [];
   for (const m of mastersResult.recordset) {
     const masterJson = parseJson(m.data_json);
-    if (activeSyncRules.length && !Boolean(m.sync_retained)) {
+    if (activeSyncLayers.length && !Boolean(m.sync_retained)) {
       const lineRecords = lineRecordsByRecKey?.get(`${m.partition_key}|${m.record_key}`) || [];
-      if (!recordMatchesSyncRules(activeSyncRules, masterJson, lineRecords)) continue;
+      if (!recordMatchesAnyLayer(activeSyncLayers, masterJson, lineRecords)) continue;
     }
     rows.push({
       recordKey: m.record_key,
@@ -3947,10 +4401,26 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
 // gefilterd op één order in plaats van de hele tabel.
 // ---------------------------------------------------------------------------
 
-// De lookup-verrijking leest complete doeltabellen (vendors/items) en kost honderden ms.
-// Voor het openklappen van één order is dat te duur en een paar seconden oude
-// lookup-labels zijn ongevaarlijk; de board-read zelf blijft ongecached.
-const LOOKUP_ENRICHMENT_TTL_MS = 30 * 1000;
+// De lookup-verrijking leest complete doeltabellen (vendors/items/receipt-lines) en kost op
+// productie seconden — gemeten 22-09: 15,4 s toen de cache leeg was.
+//
+// Tot v1.71.8 gooide een klok van 30 seconden die verrijking weg. Overdag is de normale situatie
+// dat er meer dan een halve minuut tussen twee reads zit, dus betaalde bijna elke bezoeker de
+// volledige lookup-read opnieuw — ook als vendors en items de hele dag niet waren veranderd.
+//
+// Nu bepaalt de inhoud of de cache nog klopt, niet de leeftijd: dezelfde aanpak als
+// BoardSnapshotCache ("unlimited-until-revision"). Wijzigt geen van de doeltabellen, dan blijft
+// de verrijking geldig. De ruime TTL hieronder is alleen een vangnet voor het theoretische geval
+// dat er ooit een schrijfweg bijkomt die de signatuur niet raakt; hij verloopt in de praktijk
+// nooit vóór een sync dat al doet.
+const LOOKUP_ENRICHMENT_TTL_MS = 12 * 60 * 60 * 1000;
+
+// Hoe vaak we die signatuur opnieuw ophalen. Gemeten op DEV: de aggregatie kost 0,6-1,2 s — veel
+// goedkoper dan de lookup-reads die ze overslaat, maar niet gratis genoeg om bij élke board-read
+// te draaien. Binnen dit venster vertrouwen we de cache zonder te kijken. De klok bepaalt dus hoe
+// vaak we controleren, de inhoud of we herladen; het ergste gevolg van een gemiste wijziging is
+// hooguit een halve minuut oude lookup-labels.
+const LOOKUP_SIGNATURE_CHECK_MS = 30 * 1000;
 const lookupEnrichmentCache = new Map();
 
 // In-flight loads per tabel, zodat gelijktijdige koude aanvragen (board-read + /columns + bi/meta
@@ -3960,13 +4430,33 @@ const lookupEnrichmentInflight = new Map();
 
 async function loadLookupEnrichmentCached(table) {
   const cached = lookupEnrichmentCache.get(table.id);
-  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) {
+    // Net gecontroleerd: niet opnieuw kijken. Dit scheelt de signatuurquery bij reads die kort
+    // op elkaar volgen, zonder de verrijking zelf te laten verlopen.
+    if (Date.now() - (cached.checkedAt || 0) < LOOKUP_SIGNATURE_CHECK_MS) return cached.value;
+    // Eén lichte aggregatie tegen de volledige doeltabel-reads die we ermee overslaan. Mislukt
+    // hij, dan houden we de cache aan in plaats van terug te vallen op de dure read: een
+    // haperende signatuurquery mag niet elke board-read seconden duurder maken.
+    const signature = await time('tb_lookup_sig', () => loadLookupTargetSignature(cached.targetTableIds))
+      .catch(() => cached.signature);
+    if (signature === cached.signature) {
+      cached.checkedAt = Date.now();
+      return cached.value;
+    }
+  }
   const pending = lookupEnrichmentInflight.get(table.id);
   if (pending) return pending;
   const promise = (async () => {
     try {
       const value = await loadLookupEnrichment(table);
-      lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
+      const targetTableIds = Array.isArray(value?.targetTableIds) ? value.targetTableIds : [];
+      // De signatuur hoort bij de zojuist gelezen inhoud. Lukt hij niet, dan bewaren we null en
+      // valt de volgende aanroep terug op herladen — veilig, alleen niet goedkoop.
+      const signature = await loadLookupTargetSignature(targetTableIds).catch(() => null);
+      const now = Date.now();
+      lookupEnrichmentCache.set(table.id, {
+        value, loadedAt: now, checkedAt: now, signature, targetTableIds,
+      });
       return value;
     } finally {
       lookupEnrichmentInflight.delete(table.id);
@@ -4224,7 +4714,9 @@ async function markViewed(userId, tableKey, { supplierAccount = null } = {}) {
 // ---------------------------------------------------------------------------
 // saveCustomValue — instant SQL-write van een app-native kolomwaarde
 // ---------------------------------------------------------------------------
-async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, detailKey, value }, userId) {
+async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, detailKey, value }, user) {
+  // Backwards compat: sommige interne callers gaven tot dusver een kaal userId door.
+  const userId = (user && typeof user === 'object') ? user.id : user;
   const table = await getTableByKey(tableKey);
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
@@ -4233,6 +4725,11 @@ async function saveCustomValue({ tableKey, columnId, partitionKey, recordKey, de
   }
   assertNotPavWritable(tableKey, column);
   assertCustomColumnWritable(column);
+  // Vendors mogen alleen bewerken op kolommen die de admin expliciet als vendor-editable heeft
+  // aangemerkt (Data model). Rij-scope wordt al vóór deze aanroep afgedwongen (assertSupplierPurchaseOrderRow).
+  if (String(user?.role || '') === ROLES.SUPPLIER && !column.vendorEditable) {
+    throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
+  }
 
   const part = String(partitionKey || '').trim();
   const record = String(recordKey || '').trim();
@@ -4595,7 +5092,9 @@ async function listHiddenInFilterRows(tableKey) {
 // LET OP: writeBackField is nog PO-entiteit-gebonden (PurchaseOrderHeaders/Lines). Voor de purchase-orders-
 // tabel klopt de mapping 1-op-1 (partitionKey=dataAreaId, recordKey=orderNumber, detailKey=lineNumber).
 // TODO(#177): generieke PATCH via de SourceProvider zodra andere schrijfbare tabellen nodig zijn.
-async function correctField({ tableKey, columnId, partitionKey, recordKey, detailKey, value, basedOnValue }, userId) {
+async function correctField({ tableKey, columnId, partitionKey, recordKey, detailKey, value, basedOnValue }, user) {
+  // Backwards compat: sommige interne callers gaven tot dusver een kaal userId door.
+  const userId = (user && typeof user === 'object') ? user.id : user;
   const table = await getTableByKey(tableKey);
   const { getColumnById } = require('./TableRegistryService');
   const column = await getColumnById(columnId);
@@ -4605,6 +5104,11 @@ async function correctField({ tableKey, columnId, partitionKey, recordKey, detai
   assertNotPavWritable(tableKey, column);
   if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
     throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
+  }
+  // Vendors mogen alleen naar D365 terugschrijven op kolommen die de admin expliciet als
+  // vendor-editable heeft aangemerkt (Data model). Rij-scope is al afgedwongen vóór deze aanroep.
+  if (String(user?.role || '') === ROLES.SUPPLIER && !column.vendorEditable) {
+    throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
   }
 
   const part = String(partitionKey || '').trim();
@@ -4764,7 +5268,8 @@ async function correctAllDetailFields(
   deps = {},
 ) {
   const role = String(user?.role || '');
-  if (role !== ROLES.ADMIN && role !== ROLES.EMPLOYEE) {
+  const isStaffUser = role === ROLES.ADMIN || role === ROLES.EMPLOYEE;
+  if (!isStaffUser && role !== ROLES.SUPPLIER) {
     throw Object.assign(new Error('Access denied — insufficient permissions'), { status: 403 });
   }
 
@@ -4783,6 +5288,11 @@ async function correctAllDetailFields(
     }
     if (column.source !== 'source' || !column.writable || column.writeMechanism !== 'patch' || !column.sourceField) {
       throw Object.assign(new Error('This column is not configured for write-back to D365'), { status: 400 });
+    }
+    // Vendors mogen deze header-fan-out alleen op kolommen die de admin expliciet als
+    // vendor-editable heeft aangemerkt (Data model). Rij-scope is al afgedwongen vóór deze aanroep.
+    if (!isStaffUser && !column.vendorEditable) {
+      throw Object.assign(new Error('This column cannot be edited by vendors'), { status: 403 });
     }
     if (column.scope !== 'detail') {
       throw Object.assign(new Error('Header write-back requires a writable line column'), { status: 400 });
@@ -5080,16 +5590,23 @@ async function getDataModel(tableKey) {
     settingsService.getAsync('D365_ODATA_BASE_URL', ''),
     settingsService.getAsync('D365_ODATA_COMPANY', ''),
   ]);
-  const syncRules = await getTableSyncRules(table);
-  let compiledFilter = '';
-  try { compiledFilter = compileSyncRules(syncRules); } catch { compiledFilter = ''; }
+  const syncLayers = await getTableSyncLayers(table);
+  const compiledLayers = syncLayers.map((layer) => {
+    let compiled = '';
+    try { compiled = compileSyncRules(layer.rules); } catch { compiled = ''; }
+    return { ...layer, compiled };
+  });
   const isInheritedSyncFilterTable = READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
   const usesPoLookupScope = PO_LOOKUP_SCOPED_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase());
-  let inheritedSyncRules = [];
+  let inheritedLayers = [];
   let inheritedCompiledFilter = '';
   if (isInheritedSyncFilterTable || usesPoLookupScope) {
-    inheritedSyncRules = await getPurchaseOrderSyncRules();
-    try { inheritedCompiledFilter = compileSyncRules(inheritedSyncRules); } catch { inheritedCompiledFilter = ''; }
+    inheritedLayers = await getPurchaseOrderSyncLayers();
+    const inheritedChunks = inheritedLayers
+      .filter((layer) => layer.active)
+      .map((layer) => { try { return compileSyncRules(layer.rules); } catch { return ''; } })
+      .filter(Boolean);
+    inheritedCompiledFilter = inheritedChunks.length ? inheritedChunks.map((c) => `(${c})`).join(' or ') : '';
   }
 
   // Cache-stats uit tb_cache + tb_sync_state.
@@ -5136,13 +5653,14 @@ async function getDataModel(tableKey) {
   const missingLineFields = getMissingPreviewFields(lineCols, previewTables.line.sampleByField);
   if ((missingHeaderFields.length || missingLineFields.length) && table.key === 'purchase-orders') {
     try {
-      const resolvedPreviewRules = await resolveSyncRules(syncRules, { forD365: true });
+      const resolvedPreviewLayers = await resolveSyncLayers(compiledLayers, { forD365: true });
+      const previewChunks = compileSyncLayerChunks(resolvedPreviewLayers);
       const fallbackSample = await fetchPurchaseOrders({
         supplierAccount: null,
         top: DATA_MODEL_PREVIEW_ROW_LIMIT,
         skip: 0,
         fetchAll: false,
-        extraFilter: firstSyncFilterChunk(resolvedPreviewRules),
+        extraFilter: previewChunks[0] || '',
         maxItems: DATA_MODEL_PREVIEW_ROW_LIMIT,
       });
       const headerRawRows = (fallbackSample.items || []).map((item) => item?.raw || {});
@@ -5194,25 +5712,33 @@ async function getDataModel(tableKey) {
     };
   }));
 
+  const firstActiveLayer = compiledLayers.find((layer) => layer.active);
   const syncFilterPayload = isInheritedSyncFilterTable
     ? {
+        layers: [],
         rules: [],
         compiled: '',
-        inheritedRules: inheritedSyncRules,
+        inheritedLayers,
+        inheritedRules: inheritedLayers.flatMap((layer) => (layer.active ? layer.rules : [])),
         inheritedCompiled: inheritedCompiledFilter,
         readOnly: true,
         inheritedFromTable: 'purchase-orders',
         message: 'This table automatically inherits the active Purchase Orders sync filter.',
         operators: OPERATORS,
         maxRules: MAX_RULES,
+        maxLayers: MAX_LAYERS,
         templates: [],
       }
     : {
-        rules: syncRules,
-        compiled: compiledFilter,
+        // Nieuwe, primaire vorm (#325): meerdere additieve (OR) filter-lagen.
+        layers: compiledLayers,
+        // Backwards compat voor oudere clients: eerste actieve laag als platte "rules"/"compiled".
+        rules: firstActiveLayer ? firstActiveLayer.rules : [],
+        compiled: firstActiveLayer ? firstActiveLayer.compiled : '',
         readOnly: false,
         operators: OPERATORS,
         maxRules: MAX_RULES,
+        maxLayers: MAX_LAYERS,
         templates: syncTemplatesForTable(table.key),
         // Items zijn bewerkbaar maar blijven beperkt tot de PO lookup scope (itemnummers uit
         // gesyncte inkooporders). De PO-filter tonen we informatief; het eigen filter werkt binnen die scope.
@@ -5261,41 +5787,53 @@ async function saveTableDefaultFilter(tableId, rules) {
   invalidateTableCache();
 }
 
-// Sync-filter-regels per tabel opslaan.
-async function saveSyncFilters(tableKey, rules) {
+// Sync-filter-LAGEN per tabel opslaan (#325: meerdere additieve OR-lagen i.p.v. één vervangende
+// regel-lijst). Accepteert zowel { layers: [...] } als de legacy platte rules-array (auto-wrap via
+// normalizeSyncLayers) voor backwards compatibility.
+async function saveSyncFilters(tableKey, payload) {
   const table = await getTableByKey(tableKey);
   if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
     throw Object.assign(new Error('This table automatically inherits the Purchase Orders filter and cannot be changed manually.'), { status: 400 });
   }
-  const list = Array.isArray(rules) ? rules : [];
-  if (list.some(isVendorGroupRule)) expandVendorGroupRules(list, ['ok']);
-  const compiled = compileSyncRules(list.filter((rule) => !isVendorGroupRule(rule)));
+  const { layers } = normalizeSyncLayers(payload);
+  for (const layer of layers) {
+    if (layer.rules.some(isVendorGroupRule)) expandVendorGroupRules(layer.rules, ['ok']);
+  }
+  const compiledLayers = layers.map((layer) => {
+    let compiled = '';
+    try { compiled = compileSyncRules(layer.rules.filter((rule) => !isVendorGroupRule(rule))); } catch { compiled = ''; }
+    return { ...layer, compiled };
+  });
+
   if (table.key === 'purchase-orders') {
-    await settingsService.set('PO_SYNC_RULES', JSON.stringify(list));
+    await settingsService.set('PO_SYNC_RULES', JSON.stringify({ layers }));
     const pool = await getPool();
-    await clearSyncRetainedForTable(pool, table.id);
-    if (list.length) {
-      const matchingRules = await resolveSyncRules(list, { forD365: false });
-      await markOutOfScopeCacheRows(pool, table.id, matchingRules);
+    const activeLayers = layers.filter((layer) => layer.active);
+    if (activeLayers.length) {
+      const resolvedLayers = await resolveSyncLayers(activeLayers, { forD365: false });
+      // Alleen rijen buiten de nieuwe combinatie van actieve lagen markeren als out-of-scope —
+      // niet meer blind alle sync_retained resetten (dat verloor eerder ten onrechte de scope/
+      // retentie van niet-gewijzigde lagen, zie AC #2 work item #325).
+      await markOutOfScopeCacheRows(pool, table.id, resolvedLayers);
+      // Rijen die weer matchen (bv. een laag opnieuw actief) direct herstellen, zodat eerder
+      // gecachte data direct terugkomt zonder op de nachtrun te wachten (AC #3, unmarkInScopeCacheRows).
+      await unmarkInScopeCacheRows(pool, table.id, resolvedLayers);
+    } else {
+      await clearSyncRetainedForTable(pool, table.id);
     }
   }
-  await saveTableDefaultFilter(table.id, list);
+  await saveTableDefaultFilter(table.id, layers.flatMap((layer) => (layer.active ? layer.rules : [])));
   // Deze actie verandert wélke rijen in scope zijn (removed_at_source / sync_retained) zonder
   // content_changed_at of last_full_sync_at te raken. De gedeelde BI/RCCP-snapshots moeten dus
   // expliciet weg, anders tonen die tot de volgende signatuurwijziging out-of-scope rijen.
   // eslint-disable-next-line global-require
   require('./BoardSnapshotCache').invalidateBoardSnapshots({ tableKey: table.key });
-  return { rules: list, compiled };
+  return { layers: compiledLayers };
 }
 
-// Tel hoeveel bron-rijen de filter matcht (impact-preview vóór verversen).
-async function countSyncFilter(tableKey, rules) {
-  const table = await getTableByKey(tableKey);
-  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
-    throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
-  }
-  const list = Array.isArray(rules) ? rules : [];
-  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(list, { forD365: true }) : list;
+// Tel hoeveel bron-rijen ÉÉN regel-set matcht (interne helper, hergebruikt per laag).
+async function countSyncFilterForRules(table, rules) {
+  const resolved = table.key === 'purchase-orders' ? await resolveSyncRules(rules, { forD365: true }) : rules;
   const compiled = compileSyncRules(resolved);
   const filterChunks = compileSyncRulesChunks(resolved);
 
@@ -5352,6 +5890,30 @@ async function countSyncFilter(tableKey, rules) {
     total += Number(result.total) || 0;
   }
   return { total, compiled };
+}
+
+// Tel hoeveel bron-rijen de sync-filter-LAGEN matchen (impact-preview vóór verversen, #325).
+// Accepteert { layers: [...] } of de legacy platte rules-array. Som over actieve lagen is een
+// bovengrens (een rij die door 2 lagen matcht telt dubbel) — zelfde pragmatische aanpak als de
+// bestaande grote-one-of-chunking, ruim voldoende voor een impact-indicatie.
+async function countSyncFilter(tableKey, payload) {
+  const table = await getTableByKey(tableKey);
+  if (READ_ONLY_SYNC_FILTER_TABLE_KEYS.has(String(table.key || '').trim().toLowerCase())) {
+    throw Object.assign(new Error('This table automatically uses the Purchase Orders filter.'), { status: 400 });
+  }
+  const { layers } = normalizeSyncLayers(payload);
+  const activeLayers = layers.filter((layer) => layer.active);
+  if (!activeLayers.length) return { total: 0, compiled: '', layers: [] };
+
+  const perLayer = [];
+  let total = 0;
+  for (const layer of activeLayers) {
+    const result = await countSyncFilterForRules(table, layer.rules);
+    perLayer.push({ id: layer.id, name: layer.name, total: result.total, compiled: result.compiled });
+    total += result.total;
+  }
+  const compiled = perLayer.map((l) => l.compiled).filter(Boolean).map((c) => `(${c})`).join(' or ');
+  return { total, compiled, layers: perLayer };
 }
 
 module.exports = {
@@ -5422,5 +5984,9 @@ module.exports = {
   buildLookupTargetAliases,
   combineODataFilters,
   buildOneOfFilterClause,
+  fieldsProjectionEnabled,
+  planCollapsedDetailFields,
+  buildLookupSignature,
+  resolveLightDetailColumns,
   FETCH_ADAPTERS,
 };

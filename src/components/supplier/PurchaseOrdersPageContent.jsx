@@ -21,11 +21,15 @@ import {
 import { buildTableDataRevision } from '../bi/tableDataRevision';
 import { useDataPagesPrefetch } from '../../hooks/useDataPagesPrefetch';
 
-// Vendors mogen nooit terugschrijven naar D365. Forceer write-back uit op alle kolommen zodat
-// zowel de inline write-back editor als de D365-sync-indicator verdwijnen voor niet-staff.
+// Vendors mogen alleen terugschrijven naar D365 op kolommen die de admin expliciet als
+// vendor-editable heeft aangemerkt (Data model > Editable by vendor). Op alle andere kolommen
+// forceren we write-back uit, zodat zowel de inline write-back editor als de D365-sync-indicator
+// verdwijnen voor niet-staff.
 function disableWriteBack(columns) {
   if (!Array.isArray(columns)) return columns;
-  return columns.map((c) => (c && c.writableToD365 ? { ...c, writableToD365: false } : c));
+  return columns.map((c) => (
+    c && c.writableToD365 && !c.vendorEditable ? { ...c, writableToD365: false } : c
+  ));
 }
 
 // Stabiele referentie zodat de "All orders"-override geen onnodige re-renders triggert.
@@ -155,9 +159,12 @@ function PurchaseOrdersPageContent({ status, tableContext }) {
   });
   const cellActions = useMemo(() => ({
     onSaveValue: bulkEdit.handleSaveValue,
-    // Write-back naar D365 is nooit toegestaan voor vendors (defense in depth naast de kolom-flag).
-    onCorrect: isStaff ? bulkEdit.handleCorrectField : undefined,
-    onCorrectAllLines: isStaff ? bulkEdit.handleCorrectAllLines : undefined,
+    // Write-back naar D365 door vendors wordt hierna alsnog per kolom geblokkeerd: de cel toont
+    // de write-back-editor alleen als column.writableToD365 true is, en disableWriteBack() zet
+    // dat voor vendors uit tenzij de admin de kolom vendor-editable heeft gemaakt. De server
+    // herhaalt deze check (column.vendorEditable) als laatste laag.
+    onCorrect: isStaff || isSupplier ? bulkEdit.handleCorrectField : undefined,
+    onCorrectAllLines: isStaff || isSupplier ? bulkEdit.handleCorrectAllLines : undefined,
     onUpdateStatusOptions: pageModel.updateStatusOptions,
     isAdmin: tableContext.isAdmin,
     isStaff: tableContext.isStaff,

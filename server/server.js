@@ -263,6 +263,11 @@ initSqlPool()
       logger.warn('Refresh-run interrupt bij process-start mislukt', { error: err && err.message ? err.message : String(err) });
     }
     startStaleReclaimLoop();
+    // De board-caches leven in het geheugen van deze container, dus een deploy of een
+    // platform-herstart laat ze leeg achter en de eerste bezoeker betaalt de koude read
+    // (gemeten op PROD 22-09: 23,9 s tegen ~6,0 s warm). Bewust niet awaiten: de HTTP-server
+    // moet meteen luisteren, de read mag op de achtergrond lopen.
+    require('./services/BoardWarmup').warmBoardCaches({ reason: 'startup' }).catch(() => {});
   })
   .catch((err) => logger.error('MSSQL-pool init faalde; val terug op lazy connect', { error: err && err.message ? err.message : String(err) }))
   .finally(() => {

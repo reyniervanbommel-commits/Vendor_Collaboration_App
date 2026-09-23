@@ -17,7 +17,10 @@ module.exports = defineConfig({
   testDir: './e2e',
   fullyParallel: true,
   forbidOnly: isCI,
-  retries: isCI ? 2 : 0,
+  // Ook lokaal retries: de preview- en DEV-omgeving zijn Container Apps met min-replicas 0. Na een
+  // koude start of tijdens opschalen lopen losse requests op een timeout of ECONNRESET, zonder dat
+  // er iets mis is met de app. Zonder retry faalt elke run op een andere willekeurige test.
+  retries: 2,
   // DEV is één bescheiden Container App-instance, geen lokale server — meerdere workers die
   // tegelijk inloggen + board-data ophalen veroorzaken onderling resource-contentie (waargenomen:
   // API-calls die individueel 5-10s+ duurden). Serieel draaien is trager maar betrouwbaar.
