@@ -119,9 +119,21 @@ export const devTestItems = [
       'Bestaande employees hebben nog steeds Analytics en External links (migratie 050)',
       'Kolom Permissions toont Full access bij een admin en Vendor access bij een vendor, niet No permissions',
       'Choose action > Change role wijzigt de rol van een bestaande gebruiker; bij je eigen account ontbreekt die optie',
-      'Bij een vendor toont Manage permissions geen vinkjes maar de melding dat dit alleen voor employees geldt',
+      'Bij een vendor toont Manage permissions geen instellingen-vinkjes, wel de comment-opties',
       'Als employee zonder de datamodel-permissie is Instellingen > Data model niet zichtbaar en blijft write-back onbereikbaar',
       'Wachtwoord vergeten van een bestaand account loopt via Forgot password; de set-password-pagina weigert een account dat al een wachtwoord heeft',
+    ],
+  },
+  {
+    id: 'feature-328-comment-permissions-v1-73-0',
+    title: 'Feature 328 - Comment-rechten per gebruiker (v1.73.0)',
+    checks: [
+      'Instellingen > Users: bij een employee opent Manage permissions een Comments-sectie met View comments, Add comments en Show comments column',
+      'Add comments of Show comments column aanzetten zet View comments ook aan; View comments uitzetten zet de andere twee uit',
+      'Bij een vendor zie je alleen die drie comment-opties, geen OData-vinkje, en Save werkt',
+      'Bij een admin zie je geen comment-vinkjes',
+      'Zet View comments uit bij een employee, herlaad als die gebruiker: geen remarks-badge, geen Remarks in het celmenu, wel de orderhistorie',
+      'Zet Show comments column uit: de remarks-kolom staat niet meer op het board',
     ],
   },
 ];
