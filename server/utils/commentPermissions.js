@@ -157,13 +157,8 @@ function filterRemarksColumns(columns, canSeeColumn) {
 }
 
 module.exports = {
-  COMMENT_PERMISSION_IDS,
-  SETTINGS_PERMISSION_IDS,
-  isCommentPermissionId,
   classifyPermissionPatch,
   grantsCommentPermissionsByDefault,
-  deleteAllPermissions,
-  deleteSettingsPermissions,
   ensureCommentPermissions,
   replaceUserPermissions,
   applyRoleChangePermissions,
