@@ -6,13 +6,13 @@ import { Save24Regular } from '@fluentui/react-icons';
 import RccpChartWeekRangesEditor from './RccpChartWeekRangesEditor';
 import RccpQuantityMeasuresEditor from './RccpQuantityMeasuresEditor';
 import RccpSettingsDataFields from './RccpSettingsDataFields';
-import RccpSettingsDisplayFields from './RccpSettingsDisplayFields';
+import RccpSettingsCapacityFields from './RccpSettingsCapacityFields';
 import { useRccpSettingsFormHandlers } from './useRccpSettingsFormHandlers';
 
 const TABS = [
   { value: 'data', label: 'Data' },
   { value: 'quantities', label: 'Quantities' },
-  { value: 'display', label: 'Display' },
+  { value: 'capacity', label: 'Capacity' },
   { value: 'highlights', label: 'Highlights' },
 ];
 
@@ -51,9 +51,11 @@ function RccpSettingsForm({
         <RccpSettingsDataFields
           config={config}
           columns={columns}
+          itemColumns={itemColumns}
           statusOptions={statusOptions}
           compact={isFlyout}
           onUpdateField={onUpdateField}
+          onItemPickerColumns={handlers.handleItemPickerColumns}
         />
       )}
       {tab === 'quantities' && (
@@ -67,15 +69,13 @@ function RccpSettingsForm({
           onUpdateField={onUpdateField}
         />
       )}
-      {tab === 'display' && (
-        <RccpSettingsDisplayFields
+      {tab === 'capacity' && (
+        <RccpSettingsCapacityFields
           config={config}
           compact={isFlyout}
-          itemColumns={itemColumns}
           onUpdateField={onUpdateField}
           onGreen={handlers.handleGreen}
           onOrange={handlers.handleOrange}
-          onItemPickerColumns={handlers.handleItemPickerColumns}
         />
       )}
       {tab === 'highlights' && (

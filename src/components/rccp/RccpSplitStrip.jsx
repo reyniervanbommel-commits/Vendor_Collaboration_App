@@ -204,6 +204,7 @@ function RccpSplitStrip({
               itemFocus={itemFocus}
               matrixColorFill={analysis.config?.matrixColorFill !== false}
               confirmedColor={analysis.config?.confirmedColor}
+              showCapacityRows={analysis.config?.showCapacityRows !== false}
             />
           </div>
           <RccpSplitKpiPanel

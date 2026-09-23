@@ -1,7 +1,8 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Button, Field, Input, Select, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
 import { ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
-import { rccpFieldLabel } from './rccpFieldLabel';
+import { rccpFieldLabel, RccpInfoLabel } from './rccpFieldLabel';
+import RccpItemPickerColumnsEditor from './RccpItemPickerColumnsEditor';
 import RccpNarrowDropdown from './RccpNarrowDropdown';
 import { buildRccpColumnOption, matchRccpColumn, rccpColumnOptionValue } from '../../utils/rccpColumnGroups';
 import { isRccpDateColumn, isRccpVendorColumn } from '../../utils/rccpQuantityColumns';
@@ -100,7 +101,7 @@ function CapacityImportFields({ compact, policy, onPolicy }) {
 }
 
 function RccpSettingsDataFields({
-  config, columns, statusOptions, compact, onUpdateField,
+  config, columns, itemColumns = [], statusOptions, compact, onUpdateField, onItemPickerColumns,
 }) {
   const styles = useStyles();
   const vendorColumns = useMemo(() => columns.filter(isRccpVendorColumn), [columns]);
@@ -181,6 +182,19 @@ function RccpSettingsDataFields({
             />
           </Field>
         </div>
+      </div>
+      <div className={styles.group}>
+        <Text weight="semibold" className={styles.groupTitle}>
+          <RccpInfoLabel info="Extra item-entity fields shown after the unique item number in the Item dropdown.">
+            Item picker
+          </RccpInfoLabel>
+        </Text>
+        <RccpItemPickerColumnsEditor
+          columns={itemColumns}
+          selectedKeys={config.itemPickerColumnKeys || []}
+          compact={compact}
+          onChange={onItemPickerColumns}
+        />
       </div>
       <CapacityImportFields
         compact={compact}

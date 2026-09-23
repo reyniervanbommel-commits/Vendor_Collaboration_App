@@ -4,6 +4,16 @@
 // Rechtsonder op DEV opent DevFeatureChecklist deze checks als afvinkbare vakjes.
 export const devTestItems = [
   {
+    id: 'rccp-hide-capacity-rows-v1-72-2',
+    title: 'Capaciteitsrijen verbergen in Performance (v1.72.2)',
+    checks: [
+      'Performance & Planning, Settings, tab Data: Item picker staat hier, niet meer op een Display-tab',
+      'Tab Capacity: schakelaar Available and over capacity uit zet die twee rijen uit in grafiek en matrix; de matrix houdt de overige rijen',
+      'Chart overlays en matrix colors staan op Capacity; de tab Display is weg',
+      'Schakelaar weer aan en opslaan: beide rijen komen terug in grafiek en matrix',
+    ],
+  },
+  {
     id: 'rccp-week-matrix-all-vendors-v1-72-1',
     title: 'Weekmatrix telt alle leveranciers (v1.72.1)',
     checks: [

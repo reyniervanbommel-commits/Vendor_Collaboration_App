@@ -27,6 +27,23 @@ describe('useRccpChartRowsLayout', () => {
     expect(typeof result.current.weekBoundaryCoordinates).toBe('function');
   });
 
+  it('hides available and over capacity from the chart and the matrix', () => {
+    const rows = [
+      ...measureRows,
+      { measureKey: '__capacity__', label: 'Available capacity', isCapacity: true },
+      { measureKey: '__overcapacity__', label: 'Over capacity', isOvercapacity: true },
+    ];
+    const { result } = renderHook(() => useRccpChartRowsLayout({
+      measureRows: rows,
+      periods,
+      showCapacityRows: false,
+    }));
+    const hidden = (row) => row.isCapacity || row.isOvercapacity;
+    expect(result.current.orderedRows.some(hidden)).toBe(false);
+    expect(result.current.matrixRows.some(hidden)).toBe(false);
+    expect(result.current.matrixRows.map((row) => row.measureKey)).toEqual(['open', 'received']);
+  });
+
   it('returns an empty layout without periods', () => {
     const { result } = renderHook(() => useRccpChartRowsLayout({ measureRows, periods: [] }));
     expect(result.current.periodHeaders).toHaveLength(0);

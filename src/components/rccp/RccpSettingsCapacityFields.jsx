@@ -1,6 +1,5 @@
 import React, { memo, useCallback } from 'react';
 import { Field, Input, Switch, Text, makeStyles, shorthands, tokens } from '@fluentui/react-components';
-import RccpItemPickerColumnsEditor from './RccpItemPickerColumnsEditor';
 import { rccpFieldLabel, RccpInfoLabel, RccpHoverHint } from './rccpFieldLabel';
 import ColorPalettePicker from '../shared/ColorPalettePicker';
 
@@ -64,6 +63,24 @@ function ThresholdInputs({ compact, green, orange, onGreen, onOrange }) {
           />
         </Field>
       </div>
+    </div>
+  );
+}
+
+function CapacityRowsSwitch({ config, onUpdateField }) {
+  const styles = useStyles();
+  const handleChange = useCallback(
+    (_, data) => onUpdateField('showCapacityRows', data.checked),
+    [onUpdateField],
+  );
+  return (
+    <div className={styles.switchRow}>
+      <Switch
+        checked={config.showCapacityRows !== false}
+        onChange={handleChange}
+        label="Available and over capacity"
+      />
+      <RccpHoverHint info="Shows Available capacity and Over capacity in the chart and the matrix. When off, the matrix keeps the other rows only." />
     </div>
   );
 }
@@ -135,8 +152,8 @@ function MatrixColorFillSwitch({ config, onUpdateField }) {
   );
 }
 
-function RccpSettingsDisplayFields({
-  config, compact, itemColumns = [], onUpdateField, onGreen, onOrange, onItemPickerColumns,
+function RccpSettingsCapacityFields({
+  config, compact, onUpdateField, onGreen, onOrange,
 }) {
   const styles = useStyles();
 
@@ -144,16 +161,11 @@ function RccpSettingsDisplayFields({
     <div className={styles.stack}>
       <div className={styles.group}>
         <Text weight="semibold" className={styles.groupTitle}>
-          <RccpInfoLabel info="Extra item-entity fields shown after the unique item number in the Item dropdown.">
-            Item picker
+          <RccpInfoLabel info="Show or hide the Available capacity and Over capacity rows together.">
+            Capacity rows
           </RccpInfoLabel>
         </Text>
-        <RccpItemPickerColumnsEditor
-          columns={itemColumns}
-          selectedKeys={config.itemPickerColumnKeys || []}
-          compact={compact}
-          onChange={onItemPickerColumns}
-        />
+        <CapacityRowsSwitch config={config} onUpdateField={onUpdateField} />
       </div>
       <div className={styles.group}>
         <Text weight="semibold" className={styles.groupTitle}>
@@ -183,4 +195,4 @@ function RccpSettingsDisplayFields({
   );
 }
 
-export default memo(RccpSettingsDisplayFields);
+export default memo(RccpSettingsCapacityFields);
