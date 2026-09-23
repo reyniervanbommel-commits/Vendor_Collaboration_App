@@ -520,6 +520,48 @@ wat in §5c/§5e als tien keer trager is ontmaskerd. Alleen een echte kolom met 
 
 ---
 
+## 5p. Nulmeting PROD — 23-09 15:57Z, vóór de promotie
+
+Vastgelegd zodat het effect van de promotie hard aantoonbaar is. PROD draait nog `main`; alleen de
+database-tier (W16) is daar doorgevoerd.
+
+| Run | `app` | `tb_read_details` | `tb_build_rows` | `tb_lookups` |
+|---|---|---|---|---|
+| 1 *(koud)* | 8.079 ms | 3.442 ms | 3.300 ms | **4.363 ms** |
+| 2 | 5.913 ms | 2.429 ms | 2.986 ms | 0 ms |
+| 3 | 5.917 ms | 2.693 ms | 2.904 ms | 0 ms |
+| 4 | 5.885 ms | 2.295 ms | 3.030 ms | 0 ms |
+
+- Payload 2.668 KB, 2.190 rijen · `board-kpis` 7–8 ms warm, 202 KB, zonder `confirmed`
+- Datavolume: 2.190 masters, 70.675 detailregels
+
+**Run 1 laat precies zien wat W14 gaat opleveren:** `tb_lookups` = 4.363 ms bij een koude cache,
+daarna 0 — dat is het oude 30-secondengedrag dat op productie nog draait. Na de promotie hoort die
+piek te verdwijnen.
+
+**Wat de promotie op PROD moet opleveren**, op basis van de DEV-metingen: `tb_lookups`-piek weg,
+`board-kpis`-payload kleiner, en de warmup die de eerste bezoeker na de nachtsync scheelt. De
+`app`-tijd zelf verandert weinig — de grote fix (`8d8fde6`) is daar een *preventie*, geen
+versnelling: zonder die commit zou `56b98bd` de read op PROD naar tientallen seconden brengen.
+
+### Browsertest C/R-toggle (commit `3f80d7f`) — 23-09
+
+| Controle | Uitkomst |
+|---|---|
+| Laden vraagt de requested-set | ✅ `GET /api/rccp/board-kpis` |
+| Omzetten naar Conf. haalt de confirmed-set | ✅ `GET /api/rccp/board-kpis?dateMode=confirmed` |
+| Tegels gevuld op Req., Conf. en terug | ✅ |
+| Console-fouten | ✅ geen |
+
+**Observatie, geen regressie:** op Conf. tonen de tegels 0 terwijl de server wél data levert (246
+van de 916 orders hebben een confirmed datum, samen 30.268 open). De tegels aggregeren over de
+*zichtbare* orders, en die logica zit in `src/utils/poBoardKpis.js` en `rccpKpiCardProps.js` —
+bestanden die commit `3f80d7f` niet aanraakt. Vóór die commit werd dezelfde aggregatie over
+dezelfde orderset gedaan, alleen werd de confirmed-set toen onvoorwaardelijk meegestuurd. Het
+gedrag is dus ouder dan deze wijziging. **Wel het melden waard als functioneel punt.**
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
