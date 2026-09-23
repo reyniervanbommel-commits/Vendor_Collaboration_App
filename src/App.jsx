@@ -9,6 +9,7 @@ import { ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
 import { TourProvider } from './components/onboarding';
 import AppToaster from './components/shared/AppToaster';
+import CommentPermissionNotice from './components/shared/CommentPermissionNotice';
 import SecretExpiryWarning from './components/shared/SecretExpiryWarning';
 import { BulkWriteBackJobProvider } from './context/BulkWriteBackJobContext';
 import { usePreventTrackpadNavigation } from './hooks/usePreventTrackpadNavigation';
@@ -79,6 +80,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
     <TourProvider enabled={showFooter}>
       <div className={styles.appShell}>
         <SecretExpiryWarning />
+        <CommentPermissionNotice />
         <div className={styles.content}>
           <Suspense fallback={<div className={styles.routeFallback}><Spinner label="Loading…" /></div>}>
           <Routes>

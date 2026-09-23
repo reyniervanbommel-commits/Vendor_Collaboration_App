@@ -3865,7 +3865,7 @@ function planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment }) {
 // expanden en haalt de regels dan per order op (readRowDetails). De afgeleiden die het board wél
 // collapsed nodig heeft (aantal, new/changed/removed-vlaggen, linked kolomwaarden, image-preview)
 // blijven meekomen als rollup. Scheelt bij ~2000 orders het leeuwendeel van de payload.
-async function readExecute({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true, includeChangeDecorations = true, partitionKey = null, recordKey = null } = {}) {
+async function readExecute({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true, includeChangeDecorations = true, partitionKey = null, recordKey = null, hideRemarksColumns = false } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
   const recordFilter = (partitionKey && recordKey)
@@ -4246,8 +4246,12 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     staleThresholdMinutes,
     meta: {
       columns: {
-        master: [...masterCols, ...enrichment.masterCols],
-        detail: [...detailCols, ...enrichment.detailCols],
+        master: hideRemarksColumns
+          ? require('../utils/commentPermissions').filterRemarksColumns([...masterCols, ...enrichment.masterCols], false)
+          : [...masterCols, ...enrichment.masterCols],
+        detail: hideRemarksColumns
+          ? require('../utils/commentPermissions').filterRemarksColumns([...detailCols, ...enrichment.detailCols], false)
+          : [...detailCols, ...enrichment.detailCols],
       },
       trackChanges: trackActive
         ? {
@@ -4268,8 +4272,8 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
 
 const _readInflight = new Map();
 
-function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey, recordKey }) {
-  return [tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey || '', recordKey || ''].join('\0');
+function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey, recordKey, hideRemarksColumns }) {
+  return [tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey || '', recordKey || '', hideRemarksColumns ? '1' : '0'].join('\0');
 }
 
 async function read(opts = {}) {

@@ -2,6 +2,7 @@ import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Text, makeStyles, tokens } from '@fluentui/react-components';
 import { NEW_COLUMN_TYPES } from './purchaseOrderColumnFilterMenuConstants';
 import { renderColumnTypeIcon } from './purchaseOrderColumnFilterMenuMainPaneUtils';
+import { useCommentPermissions } from '../../hooks/useCommentPermissions';
 
 const useStyles = makeStyles({
   subPaneTitle: {
@@ -48,12 +49,16 @@ export default function PurchaseOrderAddColumnPane({
   remarksAlreadyAdded = false,
   onConfirm,
 }) {
+  const { canSeeColumn } = useCommentPermissions();
   const localStyles = useStyles();
   const addableTypes = useMemo(
-    () => (columnLevel === 'header'
-      ? NEW_COLUMN_TYPES
-      : NEW_COLUMN_TYPES.filter((type) => !['image', 'remarks', 'date_wm'].includes(type.key))),
-    [columnLevel]
+    () => {
+      const levelTypes = columnLevel === 'header'
+        ? NEW_COLUMN_TYPES
+        : NEW_COLUMN_TYPES.filter((type) => !['image', 'remarks', 'date_wm'].includes(type.key));
+      return canSeeColumn ? levelTypes : levelTypes.filter((type) => type.dataType !== 'remarks');
+    },
+    [canSeeColumn, columnLevel]
   );
 
   return (
