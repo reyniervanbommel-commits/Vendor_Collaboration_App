@@ -44,7 +44,14 @@ const {
   buildLookupSignature,
   resolveLightDetailColumns,
   FETCH_ADAPTERS,
+  read,
 } = require('./TableDataService');
+
+describe('TableDataService.read', () => {
+  it('blijft de publieke board-read entrypoint', () => {
+    expect(typeof read).toBe('function');
+  });
+});
 
 describe('TableDataService.computeContentHash', () => {
   const masterJson = JSON.stringify({ vendorAccount: 'Q000104', status: 'Open' });
