@@ -1,6 +1,7 @@
 import React, { memo, useCallback } from 'react';
 import { Checkbox, Text, makeStyles, tokens, shorthands } from '@fluentui/react-components';
 import { PAGE_PERMISSIONS_BY_ID } from '../../constants/pagePermissions';
+import { COMMENT_PERMISSIONS } from '../../constants/commentPermissions';
 import { getGrantableSettingsSections } from '../../utils/settingsAudience';
 
 const SECTIONS = getGrantableSettingsSections();
@@ -47,14 +48,14 @@ function PermissionRow({ id, label, description, checked, onToggle }) {
 const MemoPermissionRow = memo(PermissionRow);
 
 /**
- * Toewijsbare instellingen-permissies, gegroepeerd per sidebar-sectie (#AB:326).
- * @param {{ selected: string[], onToggle: (id: string) => void }} props
+ * Instellingen-permissies plus comment-rechten (#AB:326, #AB:328).
+ * @param {{ selected: string[], onToggle: (id: string) => void, includeSettings?: boolean }} props
  */
-function PermissionsChecklist({ selected, onToggle }) {
+function PermissionsChecklist({ selected, onToggle, includeSettings = true }) {
   const styles = useStyles();
   return (
     <div className={styles.list}>
-      {SECTIONS.map((section) => (
+      {includeSettings && SECTIONS.map((section) => (
         <div key={section.id} className={styles.section}>
           <Text className={styles.heading}>{section.heading}</Text>
           {section.items.map((item) => (
@@ -69,6 +70,18 @@ function PermissionsChecklist({ selected, onToggle }) {
           ))}
         </div>
       ))}
+      <div className={styles.section}>
+        <Text className={styles.heading}>Comments</Text>
+        {COMMENT_PERMISSIONS.map((item) => (
+          <MemoPermissionRow
+            key={item.id}
+            id={item.id}
+            label={item.label}
+            checked={selected.includes(item.id)}
+            onToggle={onToggle}
+          />
+        ))}
+      </div>
     </div>
   );
 }

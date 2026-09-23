@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
+import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
+import { noteCommentPermissionDenied } from '../../../utils/commentPermissionNotice';
 import { isRemarkActivity, mergeNewest, mergeOlder, toRemark } from './remarksFormatters';
 
 const INITIAL_DELAY = 5000;
@@ -31,6 +33,8 @@ function activityPath(tableKey, row, afterCursor) {
  * Owns remark pagination, mutations and five-second delta polling for one open row.
  */
 export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
+  const { canView, canWrite } = useCommentPermissions();
+  const active = Boolean(enabled && canView);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [nextCursor, setNextCursor] = useState(null);
@@ -61,7 +65,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   }, []);
 
   const loadInitial = useCallback(async () => {
-    if (!enabled || !tableKey || !row?.partitionKey || !row?.recordKey) return;
+    if (!active || !tableKey || !row?.partitionKey || !row?.recordKey) return;
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
@@ -75,6 +79,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       newestCursorRef.current = activityData?.newestCursor || null;
       backoffRef.current = INITIAL_DELAY;
     } catch (requestError) {
+      if (noteCommentPermissionDenied(requestError)) return;
       if (requestError?.name !== 'AbortError' && requestError?.code !== 'REQUEST_IN_PROGRESS') {
         setError(requestError?.message || 'Failed to load remarks');
       }
@@ -82,7 +87,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       setLoading(false);
       loadingRef.current = false;
     }
-  }, [enabled, request, row, tableKey]);
+  }, [active, request, row, tableKey]);
 
   const loadOlder = useCallback(async () => {
     if (!nextCursor) return;
@@ -104,7 +109,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       const normalizedBody = String(body ?? '')
         .normalize('NFC')
         .trim();
-      if (!normalizedBody || normalizedBody.length > 2000) {
+      if (!canWrite || !normalizedBody || normalizedBody.length > 2000) {
         throw new Error('Remark must contain between 1 and 2000 characters');
       }
       const data = await request(`/data/${encodeURIComponent(tableKey)}/remarks`, {
@@ -124,7 +129,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       }
       return remark;
     },
-    [onSummaryChange, request, row, tableKey]
+    [canWrite, onSummaryChange, request, row, tableKey]
   );
 
   const deleteRemark = useCallback(
@@ -175,7 +180,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   }, [loadInitial]);
 
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!active) return undefined;
     let disposed = false;
     const clearTimer = () => {
       if (timerRef.current) window.clearTimeout(timerRef.current);
@@ -230,7 +235,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       controllersRef.current.clear();
       requestInFlightRef.current = false;
     };
-  }, [enabled, onSummaryChange, request, row, tableKey]);
+  }, [active, onSummaryChange, request, row, tableKey]);
 
   return useMemo(
     () => ({
