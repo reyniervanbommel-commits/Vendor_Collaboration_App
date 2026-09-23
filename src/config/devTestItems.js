@@ -15,6 +15,14 @@ export const devTestItems = [
       'Zet Show comments column uit: de remarks-kolom staat niet meer op het board',
     ],
   },
+  {
+    id: 'kpi-pill-position-v1-73-1',
+    title: 'KPI-pil positie op PO-tabel (v1.73.1)',
+    checks: [
+      'Purchase orders → tab KPIs: de gekleurde %-pil op de KPI-kaarten staat boven de balk, niet erop',
+      'Performance & Planning op de PO-tabel en de aparte RCCP-pagina: pil-positie is ongewijzigd',
+    ],
+  },
 ];
 
 /** Flat checklist rows for DevFeatureChecklist (one checkbox per check line). */
