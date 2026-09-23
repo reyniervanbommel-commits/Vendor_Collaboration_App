@@ -481,6 +481,45 @@ Playwright tegen DEV, drie herladingen van het PO-board, gemeten tot de eerste b
 
 ---
 
+## 5o. Meting 23-09 — `tb_build_rows` opgesplitst 🎯 *B verworpen, grotere kans gevonden*
+
+| Run | `tb_build_rows` | detail-opbouw | **master-opbouw** | lookups | pav | formules | overig |
+|---|---|---|---|---|---|---|---|
+| 1 | 1.892 ms | 725 ms | **1.167 ms** | 517 ms | 15 ms | 3 ms | 190 ms |
+| 2 | 1.766 ms | 571 ms | **1.195 ms** | 84 ms | 14 ms | 3 ms | 470 ms |
+| 3 | 1.116 ms | 392 ms | **724 ms** | 220 ms | 10 ms | 2 ms | 160 ms |
+
+**Verwerpt B (W11-verfijnd).** De stappen die een verfijnde lichte weg zou overslaan — de
+product-attribuut-pivot en de formules — kosten samen **12–18 ms**. Op een `app` van 4.000–6.000 ms
+is dat niet meetbaar. De lookups (84–517 ms) moeten sowieso blijven vanwege de
+ontvangst-koppelingen. **W11 in elke vorm vervalt.**
+
+**Het masterdeel is groter dan het detaildeel** (724–1.195 ms tegen 392–725 ms). Mijn aanname dat de
+73k detailregels de bouwtijd domineerden klopte niet: de 917 masterrijen kosten meer. Wie in de
+opbouw wil winnen, moet daar kijken — maar het gaat om ~1 s van de ~5 s.
+
+### De vondst: driekwart van de gelezen detailregels wordt weggegooid
+
+`tb_build_det_rows_n` = **18.145** verwerkte detailregels. In de cache staan er **73.177**.
+
+Het verschil is het items-syncfilter. `readCacheRows` leest álle detailregels uit SQL
+(`WHERE table_id = @tableId AND scope = 'detail'`, geen verdere filtering), waarna Node ze per
+order filtert met `detailMatchesItemsFilter`. **Van de 73.177 gelezen regels blijven er 18.145
+over — 75% wordt na het lezen weggegooid.**
+
+Dat verklaart waarom `tb_read_details` (2.757–4.061 ms) de grootste post is: het leest vier keer
+zoveel als nodig.
+
+**Dit maakt W12 veruit de grootste resterende kans.** Met `itemNumber` als echte, geïndexeerde
+kolom naast de JSON kan het items-filter in de `WHERE` van de detail-query, in plaats van in Node
+erna. Ruwe schatting: `tb_read_details` van ~3.500 ms naar de orde van 1.000 ms, plus een kleiner
+detaildeel in `tb_build_rows`.
+
+**Let op bij de uitwerking:** het filter mag níét via `JSON_VALUE` in de `WHERE` — dat is precies
+wat in §5c/§5e als tien keer trager is ontmaskerd. Alleen een echte kolom met index lost dit op.
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -772,7 +811,9 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 22-09 | **W14 gebouwd en geverifieerd (§5k)** → `302bc92` / v1.71.9. `tb_lookups` = `tb_lookup_sig` in alle calls: de volledige doeltabel-read is weg, ook ná 45 s pauze. Signatuurquery kost zelf 0,6–1,2 s → vervolg: hooguit één check per 30 s |
 | 22-09 | **W4/W5 gemeten en verworpen (§5l)** → payload is 85% `orders`, 15% `sku`; W5 zou 7% besparen. Lazy `confirmed` levert −50% payload én −50% CPU en lost W6 mee op. **W4, W5, W6 vervallen** |
 | 22-09 | **Lazy confirmed + signatuur-throttle geverifieerd (§5m)** → `4a7debc` + `3f80d7f` / v1.72.0. Throttle werkt exact: 0 ms binnen het venster, 0,4–0,9 s daarbuiten. Lazy levert −14% payload (niet de voorspelde −50%), −319 ms CPU en −35% op de eerste call. W6 opgelost |
-| | *volgende: W10/W11 (`tb_build_rows` 3,0–3,3 s op PROD, nu de grootste post), daarna W9 (CI-gate). Vóór promotie: functionele/security-check op de ~52 commits* |
+| 23-09 | **Server-vs-browser gemeten (§5n)** → render is 12%, server 64%. Het bord virtualiseert al (5 rijen van 917). **W10 vervalt als prioriteit** |
+| 23-09 | **`tb_build_rows` opgesplitst (§5o)** → pav 10–15 ms, formules 2–3 ms: **W11 vervalt in elke vorm**. Masterdeel (724–1.195 ms) groter dan detaildeel. **Vondst: 73.177 detailregels gelezen, 18.145 gebruikt** — het items-filter draait in Node ná een volledige SQL-read |
+| | *volgende: **W12** — `itemNumber` als geïndexeerde kolom naast de JSON, zodat het items-filter in SQL kan. Grootste resterende kans. Daarna W9 (CI-gate, inclusief de kapotte `perf-screening`-selectors). Vóór promotie: functionele/security-check op de ~54 commits* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---
