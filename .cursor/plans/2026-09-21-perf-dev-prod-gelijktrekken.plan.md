@@ -562,6 +562,67 @@ gedrag is dus ouder dan deze wijziging. **Wel het melden waard als functioneel p
 
 ---
 
+## 5q. PROD-deploy uitgevoerd — 23-09 18:40Z ✅
+
+PR #130 gemerged (`3b332af`), revisie `vendorportal-prod--0000050`, image `prod-3b332afb`.
+Deploy-run `35902126493`: **success**. Migraties gedraaid, `seed_e2e`-bestanden overgeslagen zoals
+bedoeld.
+
+**De warmup draaide op productie**, bevestigd in het containerlog:
+
+```
+18:41:26Z  "Board-caches opgewarmd", reason: "startup"
+```
+
+Container gestart 18:40:41, warmup klaar 18:41:26 — 45 seconden.
+
+### Meting vóór en ná (zelfde script, zelfde methode)
+
+| | Nulmeting 15:57Z | Ná deploy 19:10Z |
+|---|---|---|
+| `app` run 1 *(koud)* | 8.079 ms | 8.057 ms |
+| `app` runs 2–4 | ~5.900 ms | 5.875–6.086 ms |
+| `tb_read_details` | 2.295–3.442 ms | 2.302–2.580 ms |
+| `tb_build_rows` | 2.904–3.300 ms | 2.908–3.113 ms |
+| **`tb_lookups` run 1** | **4.363 ms** | **732 ms** |
+| `board-kpis` payload | 202 KB | **174 KB** |
+| `board-kpis` warm | 7–8 ms | 5–13 ms |
+| Payload / rijen | 2.668 KB / 2.190 | 2.669 KB / 2.190 |
+
+**Wat er aantoonbaar is verbeterd:**
+
+- **De lookup-piek: 4.363 → 732 ms.** Dat is W14 op productie. De koude lookup-read is geen
+  4,4 seconden meer maar de goedkope signatuurcheck.
+- **`board-kpis`-payload: 202 → 174 KB** (−14%), de lazy confirmed-set.
+- **De warmup draait**, dus de eerste bezoeker na de nachtsync van 03:00 betaalt de koude read niet
+  meer zelf.
+
+**Wat gelijk bleef:** de `app`-tijd (~6 s) en `tb_build_rows` (~3 s). Dat is verwacht — de grote fix
+`8d8fde6` is op productie een *preventie*, geen versnelling. `tb_build_rows` is precies de post waar
+W12 over gaat.
+
+### Twee waarnemingen tijdens de deploy
+
+1. **Kort na de deploy gaf de login één keer HTTP 500.** Bij hermeten: health 200 in 0,19 s, login
+   200, en **geen enkele foutregel in het containerlog**. Toegeschreven aan het opstarten (container
+   nieuw, pool nog niet warm). Wel het vermelden waard mocht het terugkomen.
+2. **`board-kpis` deed direct na de deploy 6,4 s, ook op de tweede call.** Twintig minuten later
+   5–7 ms. De revisie-cache was leeg en de twee calls liepen door het opwarmen heen. Geen regressie.
+
+### Correctie op de rollback-informatie in de skill
+
+`push-dev-to-prod` noemt een "oude App Service als noodrem, zolang DevOps #29 niet is uitgevoerd".
+**Die App Service bestaat niet meer** — `az webapp list` geeft zowel in de resource group als
+subscriptie-breed een lege lijst. De werkelijke rollback is terug naar revisie
+`vendorportal-prod--0000049` (image `prod-39d677ac`, 15 september); de app draait in *Single
+revision mode*.
+
+De twee migraties hoeven daarbij niet terug: `049` is puur additief (kolom met default) en `050`
+raakt alleen `user_permissions`, een tabel die er sinds migratie 004 al is. Dat is beredeneerd,
+niet getest.
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
