@@ -126,6 +126,7 @@ function defaultConfig() {
     orderedMeasureKey: SLOT_DEFAULT_KEYS.ordered,
     showCapacityLine: true,
     showWarningLine: true,
+    showCapacityRows: true,
     matrixColorFill: true,
     confirmedColor: '#8A8886',
     chartWeekRanges: [],
@@ -260,6 +261,7 @@ function validateConfig(raw) {
 
   const showCapacityLine = raw.showCapacityLine !== false;
   const showWarningLine = raw.showWarningLine !== false;
+  const showCapacityRows = raw.showCapacityRows !== false;
   const matrixColorFill = raw.matrixColorFill !== false;
   const confirmedColor = isHexColor(raw.confirmedColor)
     ? String(raw.confirmedColor).toLowerCase()
@@ -299,6 +301,7 @@ function validateConfig(raw) {
       orderedMeasureKey,
       showCapacityLine,
       showWarningLine,
+      showCapacityRows,
       matrixColorFill,
       confirmedColor,
       chartWeekRanges,

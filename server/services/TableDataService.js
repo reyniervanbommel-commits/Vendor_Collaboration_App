@@ -3274,19 +3274,36 @@ function buildDetailRow(d, ctx, { light = false } = {}) {
   );
   let pavExtras = null;
   if (!light) {
+    // De drie zware stappen apart optellen (ctx.stats), zodat Server-Timing laat zien waar de
+    // detail-opbouw zijn tijd laat. Zonder die splitsing is tb_build_rows één ondeelbaar getal en
+    // is niet te zeggen welk deel weg kan. Kost ~3 hrtime-paren per regel, onder 1% van de post.
+    const stats = ctx.stats;
+    const tick = () => (stats ? process.hrtime.bigint() : null);
+    const add = (key, from) => {
+      if (stats && from !== null) stats[key] += Number(process.hrtime.bigint() - from) / 1e6;
+    };
+
+    let t = tick();
     const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
     applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+    add('lookupMs', t);
+
+    t = tick();
     pavExtras = applyProductAttributePivot(
       detailValues,
       detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
       ctx.pavPivot,
       ctx.pavColumns,
     );
+    add('pavMs', t);
+
+    t = tick();
     if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
       applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
     }
     fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
     fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
+    add('formulaMs', t);
   }
   const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
   const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
@@ -4038,10 +4055,15 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   const useLightDetails = Boolean(lightDetailCols);
   mark(`tb_detail_rows_${useLightDetails ? 'light' : 'full'}`);
 
+  // Opsplitsing van tb_build_rows: hoeveel gaat naar de detailregels, en daarbinnen naar lookups,
+  // product-attributen en formules. Bepaalt of het zin heeft die stappen over te slaan bij een
+  // ingeklapt bord (W11) of dat de tijd elders zit.
+  const buildStats = { detailMs: 0, lookupMs: 0, pavMs: 0, formulaMs: 0, detailRows: 0 };
+
   const detailContext = {
     detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
-    compiledDetailFormulas, formulaToday, pavPivot, pavColumns,
+    compiledDetailFormulas, formulaToday, pavPivot, pavColumns, stats: buildStats,
   };
 
   let newCount = 0;
@@ -4111,11 +4133,14 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
         rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsFilter(d, itemsFilterField, itemsFilterKeys));
         if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
       }
+      const detailStart = process.hrtime.bigint();
       details = rawDetailRows.map((d) => {
         const detail = buildDetailRow(d, detailContext, { light: useLightDetails });
         if (detail.isNew || detail.isChanged) hasLineChanges = true;
         return detail;
       });
+      buildStats.detailMs += Number(process.hrtime.bigint() - detailStart) / 1e6;
+      buildStats.detailRows += rawDetailRows.length;
       detailRollup = buildDetailRollup(details);
       for (const detail of details) delete detail.hasRemovalChange;
     }
@@ -4165,6 +4190,16 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
       ...detailRollup,
     };
   });
+
+  // Opsplitsing van tb_build_rows in Server-Timing. Het masterdeel is het verschil tussen
+  // tb_build_rows en tb_build_details; binnen de details laat de rest zien wat lookups,
+  // product-attributen en formules kosten — precies de stappen die bij een ingeklapt bord
+  // overgeslagen zouden kunnen worden.
+  mark('tb_build_details', buildStats.detailMs);
+  mark('tb_build_det_lookups', buildStats.lookupMs);
+  mark('tb_build_det_pav', buildStats.pavMs);
+  mark('tb_build_det_formulas', buildStats.formulaMs);
+  mark('tb_build_det_rows_n', buildStats.detailRows);
 
   let visibleRows = rows;
   if (table.key === 'purchase-orders' && (activeSyncLayers.length || itemsLineFilterActive)) {

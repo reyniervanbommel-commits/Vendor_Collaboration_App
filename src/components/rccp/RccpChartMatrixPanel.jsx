@@ -64,12 +64,13 @@ function RccpChartMatrixPanel({
   itemFocus = null,
   matrixColorFill = true,
   confirmedColor = null,
+  showCapacityRows = true,
 }) {
   const styles = useStyles();
   const {
     orderedRows, matrixRows, periodHeaders, gridWidth, chartWidth,
     weekBoundaryCoordinates, chartRangeBands,
-  } = useRccpChartRowsLayout({ measureRows, periods, chartWeekRanges });
+  } = useRccpChartRowsLayout({ measureRows, periods, chartWeekRanges, showCapacityRows });
   const { visibleKeys, handleToggle } = useRccpChartVisibility({ orderedRows, visibility });
   const {
     hoveredSegment, hoverBoxRef, hoverValue, fallbackDataAreaId,

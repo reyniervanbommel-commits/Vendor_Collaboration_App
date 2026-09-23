@@ -395,6 +395,173 @@ toggles. **W4, W5 en W6 vervallen daarmee.**
 
 ---
 
+## 5m. Verificatie 22-09 — lazy confirmed + signatuur-throttle
+
+### Lazy confirmed (`3f80d7f`, v1.72.0)
+
+| Call | Payload | `app` | walk requested | walk confirmed | `confirmed` in body |
+|---|---|---|---|---|---|
+| `board-kpis` | **147 KB** | 736 ms | 726 ms | — | nee |
+| `board-kpis` #2 | 147 KB | 11 ms | — | — | nee |
+| `?dateMode=confirmed` | 171 KB | 830 ms | 504 ms | 319 ms | ja |
+| `?dateMode=confirmed` #2 | 171 KB | 8 ms | — | — | ja |
+
+Werkt zoals bedoeld: in de standaardstand draait de tweede walk niet meer, en de revisie-cache
+bedient beide standen apart (8–11 ms).
+
+**Correctie op mijn eigen voorspelling.** Ik schreef −50% payload. Het is **−24 KB, oftewel 14%**.
+De redenering klopte niet: uit de eerdere meting kwam `orders (2×) = 146 KB`, en ik nam aan dat de
+twee maps even groot waren. Dat zijn ze niet — `compactByOrder` laat orders zonder cijfers weg, en
+op confirmed-datumbasis vallen er veel meer weg. De confirmed-set is dus de kleine helft.
+
+Wat de wijziging wél oplevert:
+
+- **CPU −319 ms** op de koude call (38% van de rekentijd)
+- **Eerste bezoeker: 1.139 → 736 ms** (−35%)
+- **W6 opgelost**: zonder `confirmed` in de payload aggregeert de client niets dubbel bij elke
+  filterklik
+
+### Signatuur-throttle (`4a7debc`)
+
+| Call | `tb_lookups` | `tb_lookup_sig` |
+|---|---|---|
+| call 1 | 940 ms | 940 ms |
+| call 2 *(direct erna)* | **0 ms** | *afwezig* |
+| *45 s pauze* | | |
+| call 3 | 431 ms | 431 ms |
+| call 4 *(direct erna)* | **0 ms** | *afwezig* |
+
+Exact het bedoelde patroon. Binnen het venster van 30 s is de check gratis; daarbuiten kost hij
+0,4–0,9 s in plaats van een volledige doeltabel-read.
+
+**Netto over de drie stadia van `tb_lookups`:**
+
+| | binnen 30 s | daarbuiten |
+|---|---|---|
+| vóór W14 | 0 ms | 2.200–15.400 ms |
+| W14 zonder throttle | 590–1.157 ms | 590–1.157 ms |
+| **W14 mét throttle** | **0 ms** | **431–940 ms** |
+
+PO-read op DEV na beide wijzigingen: 4.070–5.843 ms `app` (mediaan ~4.539 ms), tegen ~5.280 ms
+vlak na de S2-upgrade.
+
+---
+
+## 5n. Meting 23-09 — server versus browser ✅ *W10 vervalt als prioriteit*
+
+Playwright tegen DEV, drie herladingen van het PO-board, gemeten tot de eerste bordcel in de DOM staat.
+
+| Run | tot eerste cel | API binnen | server `app` | **RENDER** | tot netwerk stil |
+|---|---|---|---|---|---|
+| 1 | 8.167 ms | 7.550 ms | 5.716 ms | **617 ms** | 11.299 ms |
+| 2 | 6.542 ms | 5.695 ms | 4.508 ms | **847 ms** | 9.011 ms |
+| 3 | 6.997 ms | 6.187 ms | 4.456 ms | **810 ms** | 8.890 ms |
+
+**Verdeling van de ~7 s tot de eerste cel:**
+
+| Post | Tijd | Aandeel |
+|---|---|---|
+| Server (`app`) | ~4.500 ms | **64%** |
+| Netwerk + transfer | ~1.200 ms | 17% |
+| **Render (browser)** | **~810 ms** | **12%** |
+| Pagina-boot, JS | ~600 ms | 8% |
+
+**De serverkant is veruit dominant.** De juli-baseline (1.389 ms render op 1.779 ms totaal) suggereerde het tegenovergestelde, maar die draaide op 80 orders waar de server 390 ms deed. Bij 917 orders is de verhouding omgekeerd.
+
+**Waarom render laag blijft:** het bord virtualiseert — 5 rijen in de DOM van 917 (`aria-label="5 in view of 917 total"`). De browser bouwt dus geen 917 rijen op; die 810 ms is vooral JSON parsen en state opbouwen.
+
+**Gevolg: W10 vervalt als prioriteit.** Zelfs een perfecte render wint hooguit 0,8 s van de 7. B en C blijven de enige wegen die er echt toe doen.
+
+**Terzijde:** `tot netwerk stil` ligt 2–4 s ná de eerste cel. Dat is de idle-prefetch (board-kpis, rccp-analysis, bi). Die blokkeert de gebruiker niet, maar belast wel dezelfde pool — dat is W13.
+
+### Twee meetproblemen die hier boven tafel kwamen
+
+1. **`playwright/perf-screening.js` meet het PO-board niet meer.** De wait-selector is `[aria-label^="Select order"]` met 5 s timeout; die aria-label bestaat niet meer (de bordcel heet nu `data-tour="po-cell"`) en 5 s is te krap voor een bord dat er 6–8 s over doet. Alle samples faalden stil, en het rapport toonde `—` voor elke route. **Te repareren als onderdeel van W9.**
+2. **Die run overschreef `test-reports/perf-baseline.json`** met lege waarden. Hersteld uit git. De baseline is getrackt, dus het was terug te draaien — maar het script zou geen baseline moeten wegschrijven als alle metingen faalden.
+
+---
+
+## 5o. Meting 23-09 — `tb_build_rows` opgesplitst 🎯 *B verworpen, grotere kans gevonden*
+
+| Run | `tb_build_rows` | detail-opbouw | **master-opbouw** | lookups | pav | formules | overig |
+|---|---|---|---|---|---|---|---|
+| 1 | 1.892 ms | 725 ms | **1.167 ms** | 517 ms | 15 ms | 3 ms | 190 ms |
+| 2 | 1.766 ms | 571 ms | **1.195 ms** | 84 ms | 14 ms | 3 ms | 470 ms |
+| 3 | 1.116 ms | 392 ms | **724 ms** | 220 ms | 10 ms | 2 ms | 160 ms |
+
+**Verwerpt B (W11-verfijnd).** De stappen die een verfijnde lichte weg zou overslaan — de
+product-attribuut-pivot en de formules — kosten samen **12–18 ms**. Op een `app` van 4.000–6.000 ms
+is dat niet meetbaar. De lookups (84–517 ms) moeten sowieso blijven vanwege de
+ontvangst-koppelingen. **W11 in elke vorm vervalt.**
+
+**Het masterdeel is groter dan het detaildeel** (724–1.195 ms tegen 392–725 ms). Mijn aanname dat de
+73k detailregels de bouwtijd domineerden klopte niet: de 917 masterrijen kosten meer. Wie in de
+opbouw wil winnen, moet daar kijken — maar het gaat om ~1 s van de ~5 s.
+
+### De vondst: driekwart van de gelezen detailregels wordt weggegooid
+
+`tb_build_det_rows_n` = **18.145** verwerkte detailregels. In de cache staan er **73.177**.
+
+Het verschil is het items-syncfilter. `readCacheRows` leest álle detailregels uit SQL
+(`WHERE table_id = @tableId AND scope = 'detail'`, geen verdere filtering), waarna Node ze per
+order filtert met `detailMatchesItemsFilter`. **Van de 73.177 gelezen regels blijven er 18.145
+over — 75% wordt na het lezen weggegooid.**
+
+Dat verklaart waarom `tb_read_details` (2.757–4.061 ms) de grootste post is: het leest vier keer
+zoveel als nodig.
+
+**Dit maakt W12 veruit de grootste resterende kans.** Met `itemNumber` als echte, geïndexeerde
+kolom naast de JSON kan het items-filter in de `WHERE` van de detail-query, in plaats van in Node
+erna. Ruwe schatting: `tb_read_details` van ~3.500 ms naar de orde van 1.000 ms, plus een kleiner
+detaildeel in `tb_build_rows`.
+
+**Let op bij de uitwerking:** het filter mag níét via `JSON_VALUE` in de `WHERE` — dat is precies
+wat in §5c/§5e als tien keer trager is ontmaskerd. Alleen een echte kolom met index lost dit op.
+
+---
+
+## 5p. Nulmeting PROD — 23-09 15:57Z, vóór de promotie
+
+Vastgelegd zodat het effect van de promotie hard aantoonbaar is. PROD draait nog `main`; alleen de
+database-tier (W16) is daar doorgevoerd.
+
+| Run | `app` | `tb_read_details` | `tb_build_rows` | `tb_lookups` |
+|---|---|---|---|---|
+| 1 *(koud)* | 8.079 ms | 3.442 ms | 3.300 ms | **4.363 ms** |
+| 2 | 5.913 ms | 2.429 ms | 2.986 ms | 0 ms |
+| 3 | 5.917 ms | 2.693 ms | 2.904 ms | 0 ms |
+| 4 | 5.885 ms | 2.295 ms | 3.030 ms | 0 ms |
+
+- Payload 2.668 KB, 2.190 rijen · `board-kpis` 7–8 ms warm, 202 KB, zonder `confirmed`
+- Datavolume: 2.190 masters, 70.675 detailregels
+
+**Run 1 laat precies zien wat W14 gaat opleveren:** `tb_lookups` = 4.363 ms bij een koude cache,
+daarna 0 — dat is het oude 30-secondengedrag dat op productie nog draait. Na de promotie hoort die
+piek te verdwijnen.
+
+**Wat de promotie op PROD moet opleveren**, op basis van de DEV-metingen: `tb_lookups`-piek weg,
+`board-kpis`-payload kleiner, en de warmup die de eerste bezoeker na de nachtsync scheelt. De
+`app`-tijd zelf verandert weinig — de grote fix (`8d8fde6`) is daar een *preventie*, geen
+versnelling: zonder die commit zou `56b98bd` de read op PROD naar tientallen seconden brengen.
+
+### Browsertest C/R-toggle (commit `3f80d7f`) — 23-09
+
+| Controle | Uitkomst |
+|---|---|
+| Laden vraagt de requested-set | ✅ `GET /api/rccp/board-kpis` |
+| Omzetten naar Conf. haalt de confirmed-set | ✅ `GET /api/rccp/board-kpis?dateMode=confirmed` |
+| Tegels gevuld op Req., Conf. en terug | ✅ |
+| Console-fouten | ✅ geen |
+
+**Observatie, geen regressie:** op Conf. tonen de tegels 0 terwijl de server wél data levert (246
+van de 916 orders hebben een confirmed datum, samen 30.268 open). De tegels aggregeren over de
+*zichtbare* orders, en die logica zit in `src/utils/poBoardKpis.js` en `rccpKpiCardProps.js` —
+bestanden die commit `3f80d7f` niet aanraakt. Vóór die commit werd dezelfde aggregatie over
+dezelfde orderset gedaan, alleen werd de confirmed-set toen onvoorwaardelijk meegestuurd. Het
+gedrag is dus ouder dan deze wijziging. **Wel het melden waard als functioneel punt.**
+
+---
+
 ## 6. Breder dan de warmup
 
 De warmup (W1) is een pleister: hij zorgt dat de eerste gebruiker de dure read niet zelf betaalt. De read blijft even duur voor wie de cache mist (leverancier, tweede replica, mislukte warmup). Dit stuk gaat over die kosten zelf. Niet zoeken in Redis zolang onderstaande niet gemeten is.
@@ -685,7 +852,10 @@ W1 vóór W2, want een draaiende container met een lege cache lost niets op. W1 
 | 22-09 | **W1 gebouwd en geverifieerd (§5j)** → `6129444` / v1.71.8. Boot-warmup bevestigd in het containerlog; `/rccp/board-kpis` voor de eerste bezoeker van 10.304 → 1.139 ms. Nuance: de resterende 1,1 s is de dubbele KPI-walk (→ W4/W5), en de 23,9 s koude PO-read kwam van de **lookup-cache** (30 s TTL), niet van de board-snapshot |
 | 22-09 | **W14 gebouwd en geverifieerd (§5k)** → `302bc92` / v1.71.9. `tb_lookups` = `tb_lookup_sig` in alle calls: de volledige doeltabel-read is weg, ook ná 45 s pauze. Signatuurquery kost zelf 0,6–1,2 s → vervolg: hooguit één check per 30 s |
 | 22-09 | **W4/W5 gemeten en verworpen (§5l)** → payload is 85% `orders`, 15% `sku`; W5 zou 7% besparen. Lazy `confirmed` levert −50% payload én −50% CPU en lost W6 mee op. **W4, W5, W6 vervallen** |
-| | *volgende: W10/W11 (`tb_build_rows` 3,0–3,3 s op PROD, nu de grootste post), daarna W9 (CI-gate). Vóór promotie: functionele/security-check op de ~49 commits* |
+| 22-09 | **Lazy confirmed + signatuur-throttle geverifieerd (§5m)** → `4a7debc` + `3f80d7f` / v1.72.0. Throttle werkt exact: 0 ms binnen het venster, 0,4–0,9 s daarbuiten. Lazy levert −14% payload (niet de voorspelde −50%), −319 ms CPU en −35% op de eerste call. W6 opgelost |
+| 23-09 | **Server-vs-browser gemeten (§5n)** → render is 12%, server 64%. Het bord virtualiseert al (5 rijen van 917). **W10 vervalt als prioriteit** |
+| 23-09 | **`tb_build_rows` opgesplitst (§5o)** → pav 10–15 ms, formules 2–3 ms: **W11 vervalt in elke vorm**. Masterdeel (724–1.195 ms) groter dan detaildeel. **Vondst: 73.177 detailregels gelezen, 18.145 gebruikt** — het items-filter draait in Node ná een volledige SQL-read |
+| | *volgende: **W12** — `itemNumber` als geïndexeerde kolom naast de JSON, zodat het items-filter in SQL kan. Grootste resterende kans. Daarna W9 (CI-gate, inclusief de kapotte `perf-screening`-selectors). Vóór promotie: functionele/security-check op de ~54 commits* |
 | | *volgende: W0a + W0b, daarna M6* |
 
 ---

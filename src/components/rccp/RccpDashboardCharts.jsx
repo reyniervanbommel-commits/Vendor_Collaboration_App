@@ -89,6 +89,7 @@ function RccpDashboardCharts({
         visibility={chartVisibility}
         matrixColorFill={analysis.config?.matrixColorFill !== false}
         confirmedColor={analysis.config?.confirmedColor}
+        showCapacityRows={analysis.config?.showCapacityRows !== false}
       />
       {kpis?.totalOrdered === 0 && (
         <RccpDiagnosticsCard
