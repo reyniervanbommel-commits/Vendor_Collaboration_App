@@ -221,28 +221,39 @@ describe('board-read contract (purchase-orders)', () => {
     expect(fixture.countMasterReads(queryLog)).toBe(1);
   });
 
-  it('B1: includeRemoved en supplierFilterColumn vallen nu samen in de inflight-key', async () => {
+  it('houdt includeRemoved en supplierFilterColumn uit elkaar in de inflight-key', async () => {
     queryLog.length = 0;
     const base = { tableKey: 'purchase-orders', userId: 7, includeRemoved: false };
     const removed = { ...base, includeRemoved: true };
     const [left, right] = await Promise.all([read(base), read(removed)]);
-    expect(left).toBe(right);
-    expect(fixture.countMasterReads(queryLog)).toBe(1);
+    expect(left).not.toBe(right);
+    expect(fixture.countMasterReads(queryLog)).toBe(2);
 
     queryLog.length = 0;
     const columnA = { tableKey: 'purchase-orders', userId: 11, supplierFilterColumn: 'vendorAccount' };
     const columnB = { ...columnA, supplierFilterColumn: 'invoiceAccount' };
     const [first, second] = await Promise.all([read(columnA), read(columnB)]);
-    expect(first).toBe(second);
-    expect(fixture.countMasterReads(queryLog)).toBe(1);
+    expect(first).not.toBe(second);
+    expect(fixture.countMasterReads(queryLog)).toBe(2);
   });
 
-  it('B1: een weggelaten includeDetails deelt de inflight-key niet met de default true', async () => {
+  it('dedupliceert een weggelaten includeDetails met de default true', async () => {
     queryLog.length = 0;
     await Promise.all([
       read({ tableKey: 'purchase-orders', userId: 12 }),
       read({ tableKey: 'purchase-orders', userId: 12, includeDetails: true }),
     ]);
+    expect(fixture.countMasterReads(queryLog)).toBe(1);
+  });
+
+  it('houdt supplierAccount null en een lege string uit elkaar', async () => {
+    queryLog.length = 0;
+    const [staff, emptySupplier] = await Promise.all([
+      read({ tableKey: 'purchase-orders', userId: 13, supplierAccount: null }),
+      read({ tableKey: 'purchase-orders', userId: 13, supplierAccount: '' }),
+    ]);
+    expect(staff).not.toBe(emptySupplier);
     expect(fixture.countMasterReads(queryLog)).toBe(2);
+    expect(emptySupplier.rows).toEqual([]);
   });
 });
