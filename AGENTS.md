@@ -1,41 +1,12 @@
 # AGENTS.md
 
-## OTAP local-first (standaard)
+## Skills
 
-Geldt voor **Cursor, Claude Code en Codex** tenzij `develop-from-devops` actief is.
+Universeel (alle projecten). Bron: `~\.agents\skills\`. Niet kopiëren naar deze repo. Nieuwe skill: daar aanmaken + `~\.agents\install-skills.ps1`.
 
-| Laag | Omgeving |
-|------|----------|
-| ACC | `localhost` (`npm run dev:all`) — default ontwikkelen/testen |
-| DEV | `develop` in git → Azure DEV — **alleen** na expliciet "push naar dev" |
-| PROD | `main` → productie-deploy |
+## OTAP en kwaliteitspoort
 
-**Ad-hoc (geen feature-branch/worktree, geen DevOps-workflow):** geen `git push`, geen commit zonder expliciet verzoek. Test op localhost.
-
-**DevOps OTAP:** skill `develop-from-devops` → feature-branch + preview-URL (overschrijft local-first).
-
-Volledige regel: `.cursor/rules/otap-local-first.mdc`.
-
-## Kwaliteitspoort — UI, snelheid, security (elke wijziging)
-
-Geldt voor **elke agent** (Cursor, Claude Code, Codex) bij **elke feature en elke snelle fix** in
-`src/` of `server/` — niet alleen wanneer er expliciet om gevraagd wordt. Doorloop vóór het
-klaarmelden van het werk:
-
-1. **UI/Fluent** — toets tegen `docs/guides/UI_DESIGN_STANDARDS.md` en `.cursor/rules/fluentui-valkuilen.mdc`.
-   Daarna `final-check-feature` (die `ui-design-review` aanroept).
-2. **Snelheid** — geen onnodige extra `apiRequest`-calls, queries/berekeningen in loops, of
-   ontbrekende `useMemo`/`useCallback`. Kies bij twijfel de oplossing die de **ervaren** snelheid
-   ten goede komt (caching, optimistic UI, memoization). `final-check-feature` roept `perf-review`
-   aan (geen extra snelheid-skill).
-3. **Security** — input-validatie, geen secrets in code, `requireSession`/`requireRole` op nieuwe
-   routes, SQL via parameters. `final-check-feature` roept `security-review` aan op de diff.
-
-Volledige regel: `.cursor/rules/kwaliteitspoort.mdc`.
-
-Ná feature of bugfix: skill `final-check-feature` — die roept `ui-design-review`,
-`perf-review`, `security-review` en `browser-feature-test` aan (geen extra
-snelheid-skill; meten = `perf-review`).
+Zie `.cursor/rules/otap-local-first.mdc` en `.cursor/rules/kwaliteitspoort.mdc`. Ná code: skill `final-check-feature`.
 
 ## Cursor Cloud specific instructions
 

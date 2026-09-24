@@ -41,7 +41,7 @@ Twijfel over het niveau → behandel als feature/risicovol (niet overslaan bij t
 - Nieuwe backend-calls en zware client-berekeningen krijgen meetpunten (`apiRequest`, `time()`,
   `measure()`) — zie `CLAUDE.md` → Performance/timing
 - **Escaleer via `final-check-feature`** (die roept `perf-review` aan, modus `regression`
-  op hot path). Geen aparte snelheid-skill; geen `perf-pipeline` na elke fix.
+  op hot path). Geen aparte snelheid-skill; geen `perf-orchestrate` na elke fix.
 
 ## 3. Security & privacy
 
@@ -106,5 +106,5 @@ Heeft een test in het node-project tóch DOM-globals nodig (`window`, `document`
 | `security-review` | Security-audit op de diff — via `final-check-feature` |
 | `browser-feature-test` | Functionele browser-check — via `final-check-feature` |
 | `project-cleanup` | Restanten van deze wijziging — via `final-check-feature` |
-| `perf-pipeline` | Autonome optimalisatie-loop — **niet** na elke fix |
+| `perf-orchestrate` | Autonome optimalisatie-loop — **niet** na elke fix |
 | `develop-from-devops` | Roept `final-check-feature` aan in modus `full` (en na build vóór klaarmelden) |
