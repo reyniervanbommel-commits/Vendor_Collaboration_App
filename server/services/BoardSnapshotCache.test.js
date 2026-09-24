@@ -108,6 +108,21 @@ describe('readBoardSnapshot', () => {
     expect(dataService.read).not.toHaveBeenCalled();
   });
 
+  it('leest een gedeeld snapshot user-neutraal, zonder change-decoraties', async () => {
+    mockDataService({
+      rows: [{ id: 1, isNew: false, isChanged: false }],
+    });
+    await readBoardSnapshot({ tableKey: 'snapshot-neutral', userId: 99, supplierAccount: 'V1' });
+    expect(dataService.getRevision).toHaveBeenCalledWith({
+      tableKey: 'snapshot-neutral', userId: null, supplierAccount: 'V1',
+    });
+    expect(dataService.read).toHaveBeenCalledWith(expect.objectContaining({
+      userId: null,
+      supplierAccount: 'V1',
+      includeChangeDecorations: false,
+    }));
+  });
+
   it('invalideert nog steeds direct bij een gebruikersbewerking (maxCustomValueAt wijzigt)', async () => {
     mockDataService({ parts: { syncedAt: 'same', maxCustomValueAt: 'edit-1' } });
     await readBoardSnapshot({ tableKey: 'snapshot-test-7' });
@@ -165,6 +180,7 @@ describe('readRccpPoRows', () => {
     expect(dataService.read).toHaveBeenCalledWith({
       tableKey: 'kpi-test-1',
       supplierAccount: null,
+      userId: null,
       includeChangeDecorations: false,
     });
     expect(first.rows).toEqual([{ recordKey: 'PO-1', details: [] }]);
@@ -237,5 +253,27 @@ describe('readRccpPoRows', () => {
     const second = await readRccpPoRows({ tableKey: 'kpi-guard-1', revision: 1, parts: { syncedAt: 'guard' } });
     expect(dataService.read).not.toHaveBeenCalled();
     expect(second.rows[0].details).toEqual([{ detailKey: 'd1' }]);
+  });
+});
+
+describe('BoardWarmup deelt de staff-scope met BI/RCCP', () => {
+  it('vult snapshot en kpi die de volgende staff-read hergebruikt', async () => {
+    mockDataService({
+      parts: { syncedAt: 'warm' },
+      rows: [{ recordKey: 'PO-W', details: [{ detailKey: '1' }] }],
+    });
+    const { warmBoardCaches } = require('./BoardWarmup');
+    await warmBoardCaches({ reason: 'test' });
+    dataService.read.mockClear();
+
+    const { readBoardSnapshot: readSnap, readRccpPoRows: readKpi } = require('./BoardSnapshotCache');
+    const snap = await readSnap({ tableKey: 'purchase-orders', supplierAccount: null });
+    const kpi = await readKpi({ tableKey: 'purchase-orders', supplierAccount: null });
+
+    expect(dataService.read).not.toHaveBeenCalled();
+    expect(snap.rows[0].recordKey).toBe('PO-W');
+    expect(kpi.rows).toBe(snap.rows);
+    const { invalidate } = require('./board-cache/BoardCacheCoordinator');
+    invalidate('purchase-orders', 'refresh-complete');
   });
 });

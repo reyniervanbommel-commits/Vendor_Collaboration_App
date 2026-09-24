@@ -70,50 +70,11 @@ function normalizeBiDateFilter(raw) {
   };
 }
 
-// --- Board-snapshotcache (punt 3+4): deelt één zware read() over alle aggregates -----------------
-// De rijen komen uit tb_cache (cache-is-leidend) en veranderen alleen bij een sync/refresh,
-// exclusions, custom values of kolomwijzigingen. We cachen { rows, columns } per board en
-// hergebruiken die zolang de content-signatuur gelijk is (los van user- en app-instellingen).
-// Zo kost een vendor-/weekfilterwijziging alleen nog de goedkope JS-aggregatie, geen board-read.
-const BI_SNAPSHOT_TTL_MS = 5 * 60 * 1000;
-const biSnapshotCache = new Map();
-
-// Alleen content-bepalende delen; user-/settings-delen (bv. de gedeelde weekfilter) laten de
-// rijen ongemoeid en horen dus niet in de signatuur.
-function contentSignature(parts = {}) {
-  return JSON.stringify({
-    syncedAt: parts.syncedAt ?? null,
-    maxContentChangedAt: parts.maxContentChangedAt ?? null,
-    maxFirstSeenAt: parts.maxFirstSeenAt ?? null,
-    maxCustomValueAt: parts.maxCustomValueAt ?? null,
-    maxLedgerAt: parts.maxLedgerAt ?? null,
-    maxColumnsAt: parts.maxColumnsAt ?? null,
-    exclusionCount: parts.exclusionCount ?? 0,
-    maxExclusionAt: parts.maxExclusionAt ?? null,
-  });
-}
-
-// Leest het board voor BI met snapshot-hergebruik. Geeft { rows, columns, revision } terug.
-// De scope (supplierAccount/filterColumn) wordt doorgegeven aan read() zodat een supplier
-// alleen zijn eigen rijen aggregeert; de snapshotcache is per account gescheiden zodat er
-// nooit data van een andere leverancier terugkomt.
+// Leest het board voor BI via de gedeelde snapshot. De read is user-neutraal (B2) en per
+// leveranciersaccount gescheiden, zodat een supplier nooit rijen van een ander account ziet.
 async function readBiBoard(boardKey, user) {
-  const userId = user?.id ?? null;
-  const { supplierAccount, supplierFilterColumn } = await resolveBiScope(user);
-  const cacheKey = `${boardKey}|${supplierAccount || ''}`;
-  const { revision, parts } = await time('bi_revision', () => dataService.getRevision({ tableKey: boardKey, userId, supplierAccount }));
-  const signature = contentSignature(parts);
-  const cached = biSnapshotCache.get(cacheKey);
-  if (cached && cached.signature === signature && (Date.now() - cached.cachedAt) < BI_SNAPSHOT_TTL_MS) {
-    return { rows: cached.rows, columns: cached.columns, revision };
-  }
-  const data = await time('bi_board_read', () => dataService.read({
-    tableKey: boardKey, userId, supplierAccount, supplierFilterColumn,
-  }));
-  const columns = data.meta?.columns?.master || [];
-  const rows = data.rows || [];
-  biSnapshotCache.set(cacheKey, { rows, columns, signature, cachedAt: Date.now() });
-  return { rows, columns, revision };
+  const { supplierAccount } = await resolveBiScope(user);
+  return time('bi_board_read', () => readBoardSnapshot({ tableKey: boardKey, supplierAccount }));
 }
 
 function validationError(req, res) {
