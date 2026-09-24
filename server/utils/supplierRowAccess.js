@@ -67,6 +67,22 @@ function selectRecKeysMatchingNativeSupplierColumn(masterJsonByRecKey, supplierA
   return seenNative ? keys : null;
 }
 
+let readPurchaseOrders = null;
+
+function configureSupplierRowAccess({ read } = {}) {
+  if (typeof read !== 'function') {
+    throw new Error('configureSupplierRowAccess requires read');
+  }
+  readPurchaseOrders = read;
+}
+
+function boardRead() {
+  if (!readPurchaseOrders) {
+    throw new Error('Board read is not configured');
+  }
+  return readPurchaseOrders;
+}
+
 async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, userId = null) {
   const cacheKey = cacheKeyFor(supplierAccount, supplierFilterColumn);
   const cached = _visibleKeyCache.get(cacheKey);
@@ -76,8 +92,7 @@ async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn,
   if (inflight) return inflight;
 
   const pending = (async () => {
-    const dataService = require('../services/TableDataService');
-    const data = await dataService.read({
+    const data = await boardRead()({
       tableKey: PURCHASE_ORDERS_TABLE,
       userId,
       supplierAccount,
@@ -106,8 +121,7 @@ async function assertSupplierPurchaseOrderRow(user, { tableKey, partitionKey, re
 
   const supplierAccount = getSupplierAccount(user);
   const supplierFilterColumn = await getSupplierFilterColumnKey();
-  const dataService = require('../services/TableDataService');
-  const data = await dataService.read({
+  const data = await boardRead()({
     tableKey: PURCHASE_ORDERS_TABLE,
     userId: user.id,
     supplierAccount,
@@ -135,6 +149,7 @@ module.exports = {
   filterRowsForSupplier,
   getSupplierFilterColumnKey,
   loadSupplierVisibleRowKeys,
+  configureSupplierRowAccess,
   rememberSupplierVisibleRowKeys,
   selectRecKeysMatchingNativeSupplierColumn,
 };

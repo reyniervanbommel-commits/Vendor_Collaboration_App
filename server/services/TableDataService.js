@@ -3463,22 +3463,32 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   });
 }
 
-const _readInflight = new Map();
+const { createBoardReadService } = require('./board-read/createBoardReadService');
+const { configureSupplierRowAccess } = require('../utils/supplierRowAccess');
 
-function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey, recordKey, hideRemarksColumns }) {
-  return [tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey || '', recordKey || '', hideRemarksColumns ? '1' : '0'].join('\0');
+const boardRead = createBoardReadService({
+  readExecute,
+  readRowDetails: (...args) => executeReadRowDetails(...args),
+  getRevision: (...args) => executeGetRevision(...args),
+});
+
+async function read(opts) {
+  return boardRead.read(opts);
 }
 
-async function read(opts = {}) {
-  const key = readInflightKey(opts);
-  const existing = _readInflight.get(key);
-  if (existing) return existing;
-  const pending = readExecute(opts).finally(() => {
-    if (_readInflight.get(key) === pending) _readInflight.delete(key);
-  });
-  _readInflight.set(key, pending);
-  return pending;
+async function readRowDetails(opts) {
+  return boardRead.readRowDetails(opts);
 }
+
+async function getRevision(opts) {
+  return boardRead.getRevision(opts);
+}
+
+function executeBoardRead(opts) {
+  return readExecute(opts);
+}
+
+configureSupplierRowAccess({ read: boardRead.read });
 
 // ---------------------------------------------------------------------------
 // listVendorValues — lichte read die alleen de master-`data_json` ophaalt om er de
@@ -3640,7 +3650,7 @@ function invalidateLookupEnrichmentCache(tableId = null) {
 
 // Supplier-scoping gebeurt in de route met assertSupplierPurchaseOrderRow (zelfde guard als de
 // andere rij-gerichte endpoints); deze functie gaat ervan uit dat de toegang al is gecontroleerd.
-async function readRowDetails({ tableKey, partitionKey, recordKey, userId = null } = {}) {
+async function executeReadRowDetails({ tableKey, partitionKey, recordKey, userId = null } = {}) {
   const table = await getTableByKey(tableKey);
   const pool = await getPool();
   const recordFilter = { partitionKey: String(partitionKey), recordKey: String(recordKey) };
@@ -3833,7 +3843,7 @@ async function getRevisionByTable(table, { userId = null, supplierAccount = null
 }
 
 // Publieke revision-check op basis van tableKey (los endpoint).
-async function getRevision({ tableKey, userId = null, supplierAccount = null } = {}) {
+async function executeGetRevision({ tableKey, userId = null, supplierAccount = null } = {}) {
   const table = await getTableByKey(tableKey);
   return getRevisionByTable(table, { userId, supplierAccount });
 }
@@ -5074,6 +5084,9 @@ module.exports = {
   refresh,
   getRefreshProgress,
   read,
+  executeBoardRead,
+  executeReadRowDetails,
+  executeGetRevision,
   listVendorValues,
   readRowDetails,
   loadLookupEnrichment,

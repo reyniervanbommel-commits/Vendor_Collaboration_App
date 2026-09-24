@@ -8,13 +8,16 @@ const {
   loadSupplierVisibleRowKeys,
   rememberSupplierVisibleRowKeys,
   selectRecKeysMatchingNativeSupplierColumn,
+  configureSupplierRowAccess,
 } = require('./supplierRowAccess');
-const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
 const originalGetAsync = settingsService.getAsync;
+const readPurchaseOrders = vi.fn();
 
 beforeEach(() => {
-  vi.spyOn(dataService, 'read').mockResolvedValue({ rows: [] });
+  readPurchaseOrders.mockReset();
+  readPurchaseOrders.mockResolvedValue({ rows: [] });
+  configureSupplierRowAccess({ read: readPurchaseOrders });
 });
 
 afterEach(() => {
@@ -79,12 +82,12 @@ describe('assertSupplierPurchaseOrderRow', () => {
       partitionKey: 'whsl',
       recordKey: 'WSPO-0061689',
     });
-    expect(dataService.read).not.toHaveBeenCalled();
+    expect(readPurchaseOrders).not.toHaveBeenCalled();
   });
 
   it('leest alleen de gevraagde order (geen volledige board-read)', async () => {
     settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
-    dataService.read.mockResolvedValue({
+    readPurchaseOrders.mockResolvedValue({
       rows: [{ partitionKey: 'whsl', recordKey: 'WSPO-0061689' }],
     });
 
@@ -94,8 +97,8 @@ describe('assertSupplierPurchaseOrderRow', () => {
       recordKey: 'WSPO-0061689',
     });
 
-    expect(dataService.read).toHaveBeenCalledTimes(1);
-    expect(dataService.read).toHaveBeenCalledWith(expect.objectContaining({
+    expect(readPurchaseOrders).toHaveBeenCalledTimes(1);
+    expect(readPurchaseOrders).toHaveBeenCalledWith(expect.objectContaining({
       tableKey: 'purchase-orders',
       userId: 7,
       supplierAccount: 'V000583',
@@ -108,7 +111,7 @@ describe('assertSupplierPurchaseOrderRow', () => {
 
   it('gooit 403 wanneer de order niet in de vendor-scope zit', async () => {
     settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
-    dataService.read.mockResolvedValue({ rows: [] });
+    readPurchaseOrders.mockResolvedValue({ rows: [] });
 
     await expect(assertSupplierPurchaseOrderRow(supplierUser, {
       tableKey: 'purchase-orders',
@@ -121,13 +124,13 @@ describe('assertSupplierPurchaseOrderRow', () => {
 describe('loadSupplierVisibleRowKeys', () => {
   it('deelt één in-flight board-read tussen parallelle aanroepen', async () => {
     let resolveRead;
-    dataService.read.mockImplementation(() => new Promise((resolve) => {
+    readPurchaseOrders.mockImplementation(() => new Promise((resolve) => {
       resolveRead = resolve;
     }));
 
     const first = loadSupplierVisibleRowKeys('V000583', 'vendorAccount', 7);
     const second = loadSupplierVisibleRowKeys('V000583', 'vendorAccount', 7);
-    expect(dataService.read).toHaveBeenCalledTimes(1);
+    expect(readPurchaseOrders).toHaveBeenCalledTimes(1);
 
     resolveRead({
       rows: [
@@ -138,7 +141,7 @@ describe('loadSupplierVisibleRowKeys', () => {
 
     await expect(first).resolves.toEqual(new Set(['whsl|PO-1', 'whsl|PO-2']));
     await expect(second).resolves.toEqual(new Set(['whsl|PO-1', 'whsl|PO-2']));
-    expect(dataService.read).toHaveBeenCalledTimes(1);
+    expect(readPurchaseOrders).toHaveBeenCalledTimes(1);
   });
 
   it('hergebruikt een keyset die het board al heeft gevuld', async () => {
@@ -149,7 +152,7 @@ describe('loadSupplierVisibleRowKeys', () => {
     const keys = await loadSupplierVisibleRowKeys('V000583', 'vendorAccount', 7);
 
     expect(keys).toEqual(new Set(['whsl|PO-1']));
-    expect(dataService.read).not.toHaveBeenCalled();
+    expect(readPurchaseOrders).not.toHaveBeenCalled();
   });
 });
 
