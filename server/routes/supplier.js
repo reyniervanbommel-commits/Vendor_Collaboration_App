@@ -6,7 +6,7 @@ const { query, validationResult } = require('express-validator');
 const { fetchPurchaseOrders } = require('../services/D365ODataService');
 const { getSqlPool } = require('../utils/sqlPool');
 const { getSupplierAccount, isStaffUser } = require('../utils/supplierScope');
-const { loadRuntimeHeaderLinks, clearRuntimeHeaderLinksCache } = require('../utils/runtimeHeaderLinks');
+const { loadRuntimeHeaderLinks, loadStaffRuntimeHeaderLinks, clearRuntimeHeaderLinksCache } = require('../utils/runtimeHeaderLinks');
 
 const router = express.Router();
 
@@ -405,9 +405,9 @@ router.get('/board-settings/:boardKey', async (req, res, next) => {
     // Zowel vendors als staff moeten daarom de samengevoegde staff-links krijgen; anders
     // toont het bord een kolom als "los" (bewerkbaar) zodra een ándere staff-gebruiker de
     // koppeling heeft aangemaakt, terwijl de Data model-pagina 'm wel als gekoppeld laat zien.
-    const sharedLinks = await loadRuntimeHeaderLinks(pool, req.user.id, boardKey, {
-      includeStaffLinks: true,
-    });
+    const sharedLinks = isStaffUser(req.user)
+      ? await loadRuntimeHeaderLinks(pool, req.user.id, boardKey, { includeStaffLinks: true })
+      : await loadStaffRuntimeHeaderLinks(pool, boardKey);
     parsedSettings = {
       ...(parsedSettings && typeof parsedSettings === 'object' ? parsedSettings : {}),
       lineTotalHeaderLinks: sharedLinks.lineTotalHeaderLinks,
@@ -453,11 +453,14 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
           ? req.body.settings.viewTabSelection
           : {}),
       },
-      // Onboarding is deep-gemerged: een PATCH met één tour mag de andere tours niet wissen.
       onboarding: req.body?.settings?.onboarding !== undefined
         ? mergeOnboarding(existing.onboarding, req.body.settings.onboarding)
         : existing.onboarding,
     }, boardKey);
+    if (!isStaffUser(req.user)) {
+      delete merged.lineTotalHeaderLinks;
+      delete merged.lineValueHeaderLinks;
+    }
     await pool.request()
       .input('userId', sql.Int, req.user.id)
       .input('boardKey', sql.NVarChar(64), boardKey)
@@ -473,7 +476,16 @@ router.patch('/board-settings/:boardKey', async (req, res, next) => {
           VALUES (@userId, @boardKey, @settingsJson, SYSUTCDATETIME());
       `);
 
-    return res.json({ success: true, boardKey, settings: merged });
+    let settings = merged;
+    if (!isStaffUser(req.user)) {
+      const shared = await loadRuntimeHeaderLinks(pool, null, boardKey, { includeStaffLinks: true });
+      settings = {
+        ...merged,
+        lineTotalHeaderLinks: shared.lineTotalHeaderLinks,
+        lineValueHeaderLinks: shared.lineValueHeaderLinks,
+      };
+    }
+    return res.json({ success: true, boardKey, settings });
   } catch (err) {
     return next(err);
   }

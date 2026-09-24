@@ -3,6 +3,7 @@
 const { ROLES } = require('../constants/roles');
 const settingsService = require('../services/SettingsService');
 const { getSupplierAccount } = require('./supplierScope');
+const { peek, rememberSupplierVisibleKeys, clearVariant } = require('../services/board-cache/BoardCacheCoordinator');
 
 const SUPPLIER_FILTER_COLUMN_KEY = 'SUPPLIER_FILTER_COLUMN_KEY';
 const DEFAULT_SUPPLIER_FILTER_COLUMN = 'vendorAccount';
@@ -35,18 +36,27 @@ async function getSupplierFilterColumnKey() {
   return settingsService.getAsync(SUPPLIER_FILTER_COLUMN_KEY, DEFAULT_SUPPLIER_FILTER_COLUMN);
 }
 
-const _visibleKeyCache = new Map();
 const _inflightKeyLoads = new Map();
-const _CACHE_TTL_MS = 60_000;
+const SUPPLIER_KEYS_SIGNATURE = 'live';
+
+function supplierKeyScope(supplierAccount, supplierFilterColumn) {
+  return {
+    tableKey: PURCHASE_ORDERS_TABLE,
+    supplierAccount,
+    supplierFilterColumn,
+    variant: 'supplier-keys',
+    signature: SUPPLIER_KEYS_SIGNATURE,
+  };
+}
 
 function rememberSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, rows) {
   const keys = keysFromRows(rows);
-  _visibleKeyCache.set(cacheKeyFor(supplierAccount, supplierFilterColumn), { keys, ts: Date.now() });
+  rememberSupplierVisibleKeys(supplierKeyScope(supplierAccount, supplierFilterColumn), keys);
   return keys;
 }
 
 function clearSupplierVisibleRowKeyCache() {
-  _visibleKeyCache.clear();
+  clearVariant('supplier-keys');
   _inflightKeyLoads.clear();
 }
 
@@ -85,8 +95,8 @@ function boardRead() {
 
 async function loadSupplierVisibleRowKeys(supplierAccount, supplierFilterColumn, userId = null) {
   const cacheKey = cacheKeyFor(supplierAccount, supplierFilterColumn);
-  const cached = _visibleKeyCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < _CACHE_TTL_MS) return cached.keys;
+  const cached = peek(supplierKeyScope(supplierAccount, supplierFilterColumn));
+  if (cached) return cached;
 
   const inflight = _inflightKeyLoads.get(cacheKey);
   if (inflight) return inflight;
