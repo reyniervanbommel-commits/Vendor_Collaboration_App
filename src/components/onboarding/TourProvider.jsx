@@ -3,6 +3,7 @@ import React, {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useCommentPermissions } from '../../hooks/useCommentPermissions';
 import { ROLES } from '../../constants/roles';
 import { useOnboardingState } from '../../hooks/useOnboardingState';
 import { filterToursForRole, isTourDone, pageTourForPath } from '../../utils/tourSteps';
@@ -42,7 +43,11 @@ export function TourProvider({ enabled, children }) {
   const onboarding = useOnboardingState(active ? user.id : null);
   const { state, loaded, available, markTour, markWelcomeSeen, trackTourStep } = onboarding;
 
-  const tours = useMemo(() => filterToursForRole(TOURS, user?.role), [user?.role]);
+  const { canView } = useCommentPermissions();
+  const tours = useMemo(
+    () => filterToursForRole(TOURS, user?.role).filter((tour) => canView || (tour.id !== 'guideRemarks' && tour.id !== 'guideRemarksColumn')),
+    [canView, user?.role],
+  );
   const pageTour = useMemo(() => pageTourForPath(tours, location.pathname), [tours, location.pathname]);
 
   const [run, setRun] = useState(null); // { tour, stepIndex, direction }

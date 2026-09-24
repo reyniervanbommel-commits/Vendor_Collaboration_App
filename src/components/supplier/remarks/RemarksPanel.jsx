@@ -6,6 +6,7 @@ import RowActivityFeed from './RowActivityFeed';
 import RowHistoryFeed from './RowHistoryFeed';
 import { partitionActivityItems } from './historyTableModel';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
+import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
 import { layout } from '../../../styles/brandTokens';
 import './remarks.css';
 
@@ -22,6 +23,7 @@ function RemarksPanel({
   onLocateRow = null,
   canCompose = true,
 }) {
+  const { canView, canWrite } = useCommentPermissions();
   const controller = usePurchaseOrderRemarksController({
     open,
     onClose,
@@ -42,13 +44,14 @@ function RemarksPanel({
     }),
     [controller.remarks.deleteRemark, controller.remarks.toggleReaction]
   );
+  const selectedTab = canView ? controller.selectedTab : 'history';
   const remarkCount = controller.remarks.total || controller.selectedSummary?.count || 0;
   const historyCount = controller.historyUpdatedCount;
-  const showComposer = canCompose && controller.selectedTab !== 'history';
-  const activeFeed = controller.selectedTab === 'history' ? controller.history : controller.all;
+  const showComposer = canCompose && canWrite && selectedTab !== 'history';
+  const activeFeed = selectedTab === 'history' ? controller.history : controller.all;
   const partitionedAll = useMemo(
-    () => (controller.selectedTab === 'all' ? partitionActivityItems(activeFeed.items) : { remarks: [], history: [] }),
-    [activeFeed.items, controller.selectedTab]
+    () => (selectedTab === 'all' ? partitionActivityItems(activeFeed.items) : { remarks: [], history: [] }),
+    [activeFeed.items, selectedTab]
   );
   const allRemarkItems = useMemo(
     () => partitionedAll.remarks.map((item) => ({ ...item, kind: 'remark' })),
@@ -61,10 +64,10 @@ function RemarksPanel({
   const handleSubmitRemark = useCallback(
     async (body, columnId) => {
       const remark = await controller.remarks.createRemark(body, columnId);
-      if (controller.selectedTab === 'all') await controller.all.refresh();
+      if (selectedTab === 'all') await controller.all.refresh();
       return remark;
     },
-    [controller.all, controller.remarks, controller.selectedTab]
+    [controller.all, controller.remarks, selectedTab]
   );
 
   const panelStyle = useMemo(
@@ -113,13 +116,13 @@ function RemarksPanel({
         <div className="remarks-panel">
           <TabList
             className="remarks-tabs"
-            selectedValue={controller.selectedTab}
+            selectedValue={selectedTab}
             onTabSelect={controller.onTabSelect}
             data-tour="remarks-tabs"
           >
-            <Tab value="remarks">Remarks ({remarkCount})</Tab>
+            {canView ? <Tab value="remarks">Remarks ({remarkCount})</Tab> : null}
             <Tab value="history">History ({historyCount})</Tab>
-            <Tab value="all">All</Tab>
+            {canView ? <Tab value="all">All</Tab> : null}
           </TabList>
 
           {showComposer ? (
@@ -131,7 +134,7 @@ function RemarksPanel({
             />
           ) : null}
 
-          {controller.selectedTab === 'remarks' ? (
+          {selectedTab === 'remarks' ? (
             <RowActivityFeed
               items={remarkItems}
               loading={controller.remarks.loading}
@@ -146,7 +149,7 @@ function RemarksPanel({
             />
           ) : null}
 
-          {controller.selectedTab === 'history' ? (
+          {selectedTab === 'history' ? (
             <RowHistoryFeed
               items={controller.history.items}
               loading={controller.history.loading}
@@ -164,7 +167,7 @@ function RemarksPanel({
             />
           ) : null}
 
-          {controller.selectedTab === 'all' ? (
+          {selectedTab === 'all' ? (
             <>
               {allRemarkItems.length > 0 ? (
                 <RowActivityFeed

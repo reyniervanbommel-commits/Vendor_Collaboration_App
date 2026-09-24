@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
+import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
+import { noteCommentPermissionDenied } from '../../../utils/commentPermissionNotice';
 import { rowKey } from './remarksFormatters';
 
 /**
@@ -8,13 +10,15 @@ import { rowKey } from './remarksFormatters';
  * @returns {{ matchKeys: Set<string>|null, loading: boolean, error: string }}
  */
 export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-orders', mode = 'search' }) {
+  const { canView } = useCommentPermissions();
+  const active = Boolean(enabled && canView);
   const [matchKeys, setMatchKeys] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const controllerRef = useRef(null);
 
   useEffect(() => {
-    if (!enabled) {
+    if (!active) {
       controllerRef.current?.abort();
       controllerRef.current = null;
       setMatchKeys(null);
@@ -42,6 +46,7 @@ export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-or
         setMatchKeys(keys);
       } catch (requestError) {
         if (controller.signal.aborted || controllerRef.current !== controller) return;
+        if (noteCommentPermissionDenied(requestError)) return;
         if (requestError?.name !== 'AbortError') {
           setError(requestError?.message || 'Failed to search remarks');
         }
@@ -55,7 +60,7 @@ export function useRemarksColumnFilter({ query, enabled, tableKey = 'purchase-or
     return () => {
       controller.abort();
     };
-  }, [query, enabled, tableKey, mode]);
+  }, [query, active, tableKey, mode]);
 
   return useMemo(
     () => ({ matchKeys, loading, error }),
