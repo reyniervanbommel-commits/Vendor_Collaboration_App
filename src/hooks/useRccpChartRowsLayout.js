@@ -13,15 +13,23 @@ import { sortRccpMatrixRows } from '../components/rccp/rccpMatrixRows';
  * Derives the row order, period headers and pixel layout shared by the RCCP chart and matrix
  * from the raw measure rows / periods / chart-week-ranges.
  *
- * @param {{ measureRows: Array, periods: Array, chartWeekRanges?: Array }} input
+ * @param {{ measureRows: Array, periods: Array, chartWeekRanges?: Array, showCapacityRows?: boolean }} input
  * @returns {{
  *   orderedRows: Array, matrixRows: Array, periodHeaders: Array,
  *   gridWidth: number, chartWidth: number,
  *   weekBoundaryCoordinates: Array<number>, chartRangeBands: Array,
  * }}
  */
-export function useRccpChartRowsLayout({ measureRows, periods, chartWeekRanges = [] }) {
-  const orderedRows = useMemo(() => sortRccpMatrixRows(measureRows), [measureRows]);
+export function useRccpChartRowsLayout({
+  measureRows, periods, chartWeekRanges = [], showCapacityRows = true,
+}) {
+  const sourceRows = useMemo(
+    () => (showCapacityRows
+      ? (measureRows || [])
+      : (measureRows || []).filter((row) => !row.isCapacity && !row.isOvercapacity)),
+    [measureRows, showCapacityRows],
+  );
+  const orderedRows = useMemo(() => sortRccpMatrixRows(sourceRows), [sourceRows]);
   const matrixRows = useMemo(
     () => orderedRows.filter((row) => !row.isWarning),
     [orderedRows],

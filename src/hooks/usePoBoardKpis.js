@@ -20,7 +20,7 @@ import { aggregatePoBoardKpisFromByOrder, buildKpiQtyOverlay } from '../utils/po
  *   config: object|undefined, buildOverlay: (key: string) => object|null,
  * }}
  */
-export function usePoBoardKpis({ orders, refreshKey, enabled = true }) {
+export function usePoBoardKpis({ orders, refreshKey, enabled = true, dateMode = 'requested' }) {
   const [payload, setPayload] = useState(null);
   const [configured, setConfigured] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export function usePoBoardKpis({ orders, refreshKey, enabled = true }) {
     let active = true;
     setLoading(true);
     setError('');
-    getPoBoardKpis(refreshKey)
+    getPoBoardKpis(refreshKey, dateMode)
       .then((data) => {
         if (!active) return;
         setPayload(data || { sku: [], orders: {} });
@@ -52,7 +52,7 @@ export function usePoBoardKpis({ orders, refreshKey, enabled = true }) {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, [refreshKey, settingsTick, enabled]);
+  }, [refreshKey, settingsTick, enabled, dateMode]);
 
   // Fingerprint i.p.v. de orders-array: het board maakt bij elke KPI-filter een nieuwe
   // rij-identiteit. Die mag dit effect niet opnieuw triggeren (update-loop / crash).
@@ -69,8 +69,9 @@ export function usePoBoardKpis({ orders, refreshKey, enabled = true }) {
     () => aggregatePoBoardKpisFromByOrder(payload, visibleOrderNumbers),
     [payload, visibleOrderNumbers],
   );
-  // C/R-omdraaibare kant: confirmed-datum-basis komt uit `payload.confirmed`, over dezelfde
-  // (tabelgefilterde) orderset.
+  // C/R-omdraaibare kant: de confirmed-datumbasis komt uit `payload.confirmed`, over dezelfde
+  // (tabelgefilterde) orderset. Die set komt alleen mee wanneer `dateMode` erom vroeg, dus in de
+  // standaardstand blijft dit null en wordt er niets dubbel geaggregeerd bij elke filterklik.
   const kpisConfirmed = useMemo(() => {
     if (!payload?.confirmed) return null;
     return aggregatePoBoardKpisFromByOrder(payload.confirmed, visibleOrderNumbers).kpis;

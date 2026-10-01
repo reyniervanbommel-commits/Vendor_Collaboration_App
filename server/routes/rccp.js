@@ -186,7 +186,11 @@ router.post('/import/commit', requireRole(ROLES.ADMIN), upload.single('file'), a
 router.get('/board-kpis', async (req, res, next) => {
   try {
     const supplierAccount = resolveSupplierAccount(req);
-    const data = await analysisService.boardKpis({ supplierAccount });
+    // ?dateMode=confirmed levert de tweede, op confirmed delivery date gebaseerde set mee. Zonder
+    // die vlag blijft hij weg: hij kost een tweede walk over alle PO-regels en verdubbelt de
+    // response, terwijl de C/R-toggle standaard op 'requested' staat.
+    const includeConfirmed = String(req.query.dateMode || '').trim().toLowerCase() === 'confirmed';
+    const data = await analysisService.boardKpis({ supplierAccount, includeConfirmed });
     res.json({ ...data, readOnly: Boolean(req.rccpScope?.readOnly) });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });

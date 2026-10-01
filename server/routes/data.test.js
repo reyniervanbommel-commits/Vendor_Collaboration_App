@@ -16,9 +16,15 @@ const originalRead = dataService.read;
 const originalGetAsync = settingsService.getAsync;
 const originalSetReaction = remarksService.setReaction;
 const originalHasPagePermission = pagePermissions.hasPagePermission;
+const originalListPagePermissions = pagePermissions.listPagePermissions;
 
 beforeEach(() => {
   pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(false);
+  pagePermissions.listPagePermissions = vi.fn().mockResolvedValue([
+    'comments.view',
+    'comments.write',
+    'comments.column',
+  ]);
 });
 
 afterEach(() => {
@@ -26,6 +32,7 @@ afterEach(() => {
   settingsService.getAsync = originalGetAsync;
   remarksService.setReaction = originalSetReaction;
   pagePermissions.hasPagePermission = originalHasPagePermission;
+  pagePermissions.listPagePermissions = originalListPagePermissions;
 });
 
 function buildApp(user) {

@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
+import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
+import { noteCommentPermissionDenied } from '../../../utils/commentPermissionNotice';
 import { rowKey } from './remarksFormatters';
 
 /**
  * Loads table remark summaries and supports scoped optimistic updates for one row.
  */
 export function useRemarksSummary({ enabled = true, tableKey = 'purchase-orders' } = {}) {
+  const { canView } = useCommentPermissions();
+  const active = enabled && canView;
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -13,7 +17,7 @@ export function useRemarksSummary({ enabled = true, tableKey = 'purchase-orders'
   const requestInFlightRef = useRef(false);
 
   const refresh = useCallback(async () => {
-    if (!enabled || requestInFlightRef.current) return;
+    if (!active || requestInFlightRef.current) return;
     controllerRef.current?.abort();
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -26,6 +30,7 @@ export function useRemarksSummary({ enabled = true, tableKey = 'purchase-orders'
       });
       if (!controller.signal.aborted) setRows(Array.isArray(data?.rows) ? data.rows : []);
     } catch (requestError) {
+      if (noteCommentPermissionDenied(requestError)) return;
       if (requestError?.name !== 'AbortError') {
         setError(requestError?.message || 'Failed to load remark summaries');
       }
@@ -35,7 +40,7 @@ export function useRemarksSummary({ enabled = true, tableKey = 'purchase-orders'
         setLoading(false);
       }
     }
-  }, [enabled, tableKey]);
+  }, [active, tableKey]);
 
   const updateRow = useCallback((row, change) => {
     const targetKey = rowKey(row?.partitionKey, row?.recordKey);

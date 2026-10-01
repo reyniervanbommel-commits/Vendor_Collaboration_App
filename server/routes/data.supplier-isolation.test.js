@@ -12,11 +12,13 @@ const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
 const { restrictSupplierDataAccess } = require('../middleware/dataAccess');
 const { clearSupplierVisibleRowKeyCache } = require('../utils/supplierRowAccess');
+const pagePermissions = require('../utils/pagePermissions');
 
 const originalRead = dataService.read;
 const originalReadRowDetails = dataService.readRowDetails;
 const originalSaveCustomValue = dataService.saveCustomValue;
 const originalGetAsync = settingsService.getAsync;
+const originalListPagePermissions = pagePermissions.listPagePermissions;
 
 // De ingelogde vendor en een order dat aan een ándere vendor toebehoort.
 const VENDOR = { id: 5, role: 'supplier', email: 'vendor@x.nl', vendor_account: 'V000583' };
@@ -25,6 +27,11 @@ const FOREIGN_ROW = { partitionKey: 'whsl', recordKey: 'WSPO-9999999' };
 
 beforeEach(() => {
   clearSupplierVisibleRowKeyCache();
+  pagePermissions.listPagePermissions = vi.fn().mockResolvedValue([
+    'comments.view',
+    'comments.write',
+    'comments.column',
+  ]);
   settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
   // De read-pipeline levert alleen rijen binnen de eigen vendor-scope; een order van een andere
   // vendor komt er dus niet uit, ook niet als de client de sleutel raadt.
@@ -41,6 +48,7 @@ afterEach(() => {
   dataService.readRowDetails = originalReadRowDetails;
   dataService.saveCustomValue = originalSaveCustomValue;
   settingsService.getAsync = originalGetAsync;
+  pagePermissions.listPagePermissions = originalListPagePermissions;
 });
 
 async function withServer(user, fn) {

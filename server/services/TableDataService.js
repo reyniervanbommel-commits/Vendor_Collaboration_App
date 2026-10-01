@@ -2780,6 +2780,9 @@ async function loadSingleLookup(pool, table, lk, resolvedSourceField) {
 
   return {
     synthetic,
+    // Waaruit deze lookup is opgebouwd — loadLookupEnrichmentCached leidt hier zijn
+    // cache-signatuur uit af.
+    targetTableId: Number(targetTable.id),
     enrichedLookup: {
       ...lk,
       sourceFieldKey: resolvedSourceField,
@@ -2840,7 +2843,49 @@ async function loadLookupEnrichment(table) {
     enriched.push(result.enrichedLookup);
   }
 
-  return { lookups: enriched, masterCols, detailCols };
+  // De doeltabellen waarvan deze verrijking is afgeleid. loadLookupEnrichmentCached gebruikt ze
+  // om te bepalen of de cache nog klopt: wijzigt geen van die tabellen, dan is de verrijking nog
+  // geldig, hoe oud hij ook is.
+  const targetTableIds = [...new Set(
+    loaded.map((result) => result?.targetTableId).filter((id) => Number.isFinite(id))
+  )];
+
+  return { lookups: enriched, masterCols, detailCols, targetTableIds };
+}
+
+// Goedkope inhouds-signatuur van de lookup-doeltabellen: rijaantal plus de laatste sync- en
+// wijzigingstijd per tabel. Een aggregatie over de geïndexeerde (table_id, scope), geen blob-scan
+// — dus ordes goedkoper dan de volledige lookup-reads die hij overbodig maakt.
+async function loadLookupTargetSignature(targetTableIds) {
+  const ids = (Array.isArray(targetTableIds) ? targetTableIds : []).filter((id) => Number.isFinite(id));
+  if (!ids.length) return 'geen-doeltabellen';
+  const pool = await getPool();
+  const request = pool.request();
+  const params = ids.map((id, i) => {
+    request.input(`lookupTarget${i}`, sql.BigInt, id);
+    return `@lookupTarget${i}`;
+  });
+  const result = await request.query(`
+    SELECT table_id, COUNT(*) AS row_count, MAX(synced_at) AS max_synced, MAX(content_changed_at) AS max_changed
+    FROM dbo.tb_cache WITH (NOLOCK)
+    WHERE table_id IN (${params.join(', ')}) AND scope = 'master'
+    GROUP BY table_id
+  `);
+  return buildLookupSignature(result.recordset);
+}
+
+// Puur, zodat het deterministisch te testen is: volgorde-onafhankelijk en ongevoelig voor het
+// verschil tussen een Date en zijn ISO-string.
+function buildLookupSignature(rows) {
+  const parts = (Array.isArray(rows) ? rows : [])
+    .map((row) => [
+      String(row?.table_id ?? ''),
+      String(row?.row_count ?? 0),
+      row?.max_synced ? new Date(row.max_synced).toISOString() : '',
+      row?.max_changed ? new Date(row.max_changed).toISOString() : '',
+    ].join(':'))
+    .sort();
+  return parts.join('|') || 'leeg';
 }
 
 function applyLookups(valueBag, partitionKey, enrichedLookups, scope, sourceValues = null) {
@@ -3173,27 +3218,93 @@ function buildValuesFromColumns(cols, sourceJson, custom) {
 
 // Eén detailregel projecteren naar de board-vorm. ctx bundelt de gedeelde lookups die
 // zowel de board-read als de per-order details-read opbouwen.
-function buildDetailRow(d, ctx) {
+// Welke detailkolommen een ingeklapt bord écht nodig heeft: `itemNumber` voor de
+// productImageSummary in buildDetailRollup, plus de lijnkolom van elke gekoppelde header-kolom.
+// Geeft null zodra één daarvan géén direct bronveld is — een formule-, lookup-, custom- of
+// product-attribuutkolom heeft juist het werk nodig dat de lichte weg overslaat.
+function resolveLightDetailColumns({ detailCols = [], runtimeLinks = null } = {}) {
+  const byKey = new Map();
+  for (const column of detailCols) {
+    const key = String(column?.key || '').trim().toLowerCase();
+    if (key) byKey.set(key, column);
+  }
+  const isDirectSource = (column) => Boolean(column)
+    && column.source === 'source'
+    && !isFormulaColumn(column)
+    && String(column?.options?.kind || '') !== 'product-attribute';
+
+  const needed = new Map();
+  const itemColumn = byKey.get('itemnumber');
+  if (itemColumn) {
+    if (!isDirectSource(itemColumn)) return null;
+    needed.set('itemnumber', itemColumn);
+  }
+  for (const group of ['lineTotalHeaderLinks', 'lineValueHeaderLinks']) {
+    for (const link of (Array.isArray(runtimeLinks?.[group]) ? runtimeLinks[group] : [])) {
+      const key = String(link?.lineColumnKey || '').trim().toLowerCase();
+      if (!key) continue;
+      const column = byKey.get(key);
+      if (!isDirectSource(column)) return null;
+      needed.set(key, column);
+    }
+  }
+  return [...needed.values()];
+}
+
+/**
+ * @param {object} d - ruwe tb_cache-detailrij
+ * @param {object} ctx - detailContext
+ * @param {{ light?: boolean }} [options] - `light`: de regel gaat niet mee in de response en dient
+ *   alleen als input voor buildDetailRollup en de gekoppelde header-kolommen. Dan blijven lookups,
+ *   product-attributen, formules, history en track-marks achterwege — bij een ingeklapt bord is dat
+ *   werk dat direct daarna wordt weggegooid, en dat voor elke van de ~73k regels. De vlaggen
+ *   hieronder blijven bewust in dezelfde functie, zodat licht en volledig nooit uiteen kunnen lopen.
+ */
+function buildDetailRow(d, ctx, { light = false } = {}) {
   const {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
   } = ctx;
   const detailCustom = customByCell.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`) || {};
   const detailJson = parseJson(d.data_json);
-  const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
-  const detailValues = buildValuesFromColumns(detailCols, detailJson, detailCustom);
-  applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
-  const pavExtras = applyProductAttributePivot(
-    detailValues,
-    detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
-    ctx.pavPivot,
-    ctx.pavColumns,
+  const detailValues = buildValuesFromColumns(
+    light ? (lightDetailCols || detailCols) : detailCols,
+    detailJson,
+    detailCustom,
   );
-  if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
-    applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+  let pavExtras = null;
+  if (!light) {
+    // De drie zware stappen apart optellen (ctx.stats), zodat Server-Timing laat zien waar de
+    // detail-opbouw zijn tijd laat. Zonder die splitsing is tb_build_rows één ondeelbaar getal en
+    // is niet te zeggen welk deel weg kan. Kost ~3 hrtime-paren per regel, onder 1% van de post.
+    const stats = ctx.stats;
+    const tick = () => (stats ? process.hrtime.bigint() : null);
+    const add = (key, from) => {
+      if (stats && from !== null) stats[key] += Number(process.hrtime.bigint() - from) / 1e6;
+    };
+
+    let t = tick();
+    const detailLookupSource = buildDetailLookupSourceValues(detailJson, d.record_key, d.detail_key);
+    applyLookups(detailValues, d.partition_key, enrichment.lookups, 'detail', detailLookupSource);
+    add('lookupMs', t);
+
+    t = tick();
+    pavExtras = applyProductAttributePivot(
+      detailValues,
+      detailValues.itemNumber || detailJson.itemNumber || detailJson.ItemNumber,
+      ctx.pavPivot,
+      ctx.pavColumns,
+    );
+    add('pavMs', t);
+
+    t = tick();
+    if (Array.isArray(ctx.compiledDetailFormulas) && ctx.compiledDetailFormulas.length) {
+      applyFormulaColumnsToRowValues(detailValues, ctx.compiledDetailFormulas, { today: ctx.formulaToday });
+    }
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
+    fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
+    add('formulaMs', t);
   }
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainder', 'remainingPurchaseQuantity');
-  fillEmptyNumberFromFallback(detailValues, 'deliverRemainderApprox', 'remainingPurchaseQuantity');
   const cellKey = historyCellKey(d.partition_key, d.record_key, d.detail_key);
   const ledgerState = lineChanges.get(`${d.partition_key}|${d.record_key}|${d.detail_key}`);
   const detailFirstSeenMs = d.first_seen_at ? new Date(d.first_seen_at).getTime() : null;
@@ -3207,6 +3318,17 @@ function buildDetailRow(d, ctx) {
   const hasRemovalChange = Boolean(ledgerState?.isRemoved)
     || (!hasLedgerWindow && isRemovedAtSource);
   const isRemoved = isRemovedAtSource || Boolean(ledgerState?.isRemoved);
+  if (light) {
+    // Precies wat buildDetailRollup en applyRuntimeLinkedHeaderValues lezen, niets meer.
+    return {
+      values: detailValues,
+      isNew,
+      isChanged,
+      isRemoved,
+      hasRemovalChange,
+      changedFieldKeys: [...(ledgerState?.changedFieldKeys || new Set())],
+    };
+  }
   const detailHistory = historyByCell.get(cellKey);
   const detailTrackMarks = trackMarks.trackMarksByCell.get(cellKey);
   return {
@@ -3677,12 +3799,27 @@ async function planCollapsedDetailRead(input) {
   return plan;
 }
 
+// Mag de read terugvallen op de 'fields'-projectie (JSON_VALUE per veld, buildDetailProjectionSql)?
+// Standaard niet. Gemeten op Azure, 21-09-2026: die projectie kost 44 s waar dezelfde read met de
+// volledige data_json 4,6 s kost — ~73k detailregels, identieke SQL-server en -tier (zie
+// .cursor/plans/2026-09-21-perf-dev-prod-gelijktrekken.plan.md, §5c en §5e). SQL Server parst de
+// blob dan per rij per veld; Node parst hem één keer per rij en houdt bovendien alle velden over.
+// De schakelaar blijft bestaan zodat beide takken meetbaar zijn zonder de code terug te draaien.
+function fieldsProjectionEnabled() {
+  const raw = String(process.env.PO_DETAIL_FIELDS_PROJECTION || '').trim().toLowerCase();
+  return raw === '1' || raw === 'true';
+}
+
 async function resolveCollapsedDetailPlan({
   table, colsPromise, linksPromise, enrichmentPromise, syncStatePromise, viewedPromise,
 }) {
   try {
-    const [[, detailCols], runtimeLinks, enrichment, itemsFilterActive] = await Promise.all([
-      colsPromise, linksPromise, enrichmentPromise, itemsLineFilterConfigured(table),
+    // De rollup heeft alleen kolommen, koppelingen en de items-filtercheck nodig. De
+    // lookup-enrichment is uitsluitend voor de veldprojectie — staat die uit, dan wachten we er
+    // ook niet op. Dat scheelt de detail-read de hele lookup-tijd (gemeten 0,9-1,6 s), want die
+    // read wacht op dit plan.
+    const [[, detailCols], runtimeLinks, itemsFilterActive] = await Promise.all([
+      colsPromise, linksPromise, itemsLineFilterConfigured(table),
     ]);
 
     const rollupPlan = resolveCollapsedRollupPlan({ detailColumns: detailCols, runtimeLinks, itemsFilterActive });
@@ -3698,7 +3835,8 @@ async function resolveCollapsedDetailPlan({
       };
     }
 
-    return planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment });
+    if (!fieldsProjectionEnabled()) return null;
+    return planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment: await enrichmentPromise });
   } catch (err) {
     logger.warn('Leesplan voor collapsed detail-read mislukt; volledige data_json gelezen', {
       error: err.message,
@@ -3744,7 +3882,7 @@ function planCollapsedDetailFields({ detailCols, runtimeLinks, enrichment }) {
 // expanden en haalt de regels dan per order op (readRowDetails). De afgeleiden die het board wél
 // collapsed nodig heeft (aantal, new/changed/removed-vlaggen, linked kolomwaarden, image-preview)
 // blijven meekomen als rollup. Scheelt bij ~2000 orders het leeuwendeel van de payload.
-async function readExecute({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true, includeChangeDecorations = true, partitionKey = null, recordKey = null } = {}) {
+async function readExecute({ tableKey, includeRemoved = false, userId = null, supplierAccount = null, supplierFilterColumn = 'vendorAccount', includeDetails = true, includeChangeDecorations = true, partitionKey = null, recordKey = null, hideRemarksColumns = false } = {}) {
   const table = await time('tb_meta', () => getTableByKey(tableKey));
   const pool = await getPool();
   const recordFilter = (partitionKey && recordKey)
@@ -3909,10 +4047,23 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
   const { orderChanges, lineChanges, lineChangesByOrder } = buildD365ChangeState(d365LedgerRows);
 
   const valuesFor = buildValuesFromColumns;
+  // Gaan de sublijnen niet mee in de response, dan dienen ze alleen als input voor de rollup en de
+  // gekoppelde header-kolommen. Dat scheelt per regel de lookups, product-attributen, formules,
+  // history en track-marks — bij ~73k regels de grootste post in tb_build_rows. Null betekent dat
+  // een van die kolommen berekend of opgezocht is; dan bouwen we de volledige rij, zoals altijd.
+  const lightDetailCols = includeDetails ? null : resolveLightDetailColumns({ detailCols, runtimeLinks });
+  const useLightDetails = Boolean(lightDetailCols);
+  mark(`tb_detail_rows_${useLightDetails ? 'light' : 'full'}`);
+
+  // Opsplitsing van tb_build_rows: hoeveel gaat naar de detailregels, en daarbinnen naar lookups,
+  // product-attributen en formules. Bepaalt of het zin heeft die stappen over te slaan bij een
+  // ingeklapt bord (W11) of dat de tijd elders zit.
+  const buildStats = { detailMs: 0, lookupMs: 0, pavMs: 0, formulaMs: 0, detailRows: 0 };
+
   const detailContext = {
-    detailCols, customByCell, enrichment, historyByCell, trackMarks,
+    detailCols, lightDetailCols, customByCell, enrichment, historyByCell, trackMarks,
     lineChanges, compareAgainstBaseline, hasLedgerWindow,
-    compiledDetailFormulas, formulaToday, pavPivot, pavColumns,
+    compiledDetailFormulas, formulaToday, pavPivot, pavColumns, stats: buildStats,
   };
 
   let newCount = 0;
@@ -3982,11 +4133,14 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
         rawDetailRows = rawDetailRows.filter((d) => detailMatchesItemsFilter(d, itemsFilterField, itemsFilterKeys));
         if (!rawDetailRows.length) ordersHiddenByItemsFilter.add(recKey);
       }
+      const detailStart = process.hrtime.bigint();
       details = rawDetailRows.map((d) => {
-        const detail = buildDetailRow(d, detailContext);
+        const detail = buildDetailRow(d, detailContext, { light: useLightDetails });
         if (detail.isNew || detail.isChanged) hasLineChanges = true;
         return detail;
       });
+      buildStats.detailMs += Number(process.hrtime.bigint() - detailStart) / 1e6;
+      buildStats.detailRows += rawDetailRows.length;
       detailRollup = buildDetailRollup(details);
       for (const detail of details) delete detail.hasRemovalChange;
     }
@@ -4036,6 +4190,16 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
       ...detailRollup,
     };
   });
+
+  // Opsplitsing van tb_build_rows in Server-Timing. Het masterdeel is het verschil tussen
+  // tb_build_rows en tb_build_details; binnen de details laat de rest zien wat lookups,
+  // product-attributen en formules kosten — precies de stappen die bij een ingeklapt bord
+  // overgeslagen zouden kunnen worden.
+  mark('tb_build_details', buildStats.detailMs);
+  mark('tb_build_det_lookups', buildStats.lookupMs);
+  mark('tb_build_det_pav', buildStats.pavMs);
+  mark('tb_build_det_formulas', buildStats.formulaMs);
+  mark('tb_build_det_rows_n', buildStats.detailRows);
 
   let visibleRows = rows;
   if (table.key === 'purchase-orders' && (activeSyncLayers.length || itemsLineFilterActive)) {
@@ -4117,8 +4281,12 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
     staleThresholdMinutes,
     meta: {
       columns: {
-        master: [...masterCols, ...enrichment.masterCols],
-        detail: [...detailCols, ...enrichment.detailCols],
+        master: hideRemarksColumns
+          ? require('../utils/commentPermissions').filterRemarksColumns([...masterCols, ...enrichment.masterCols], false)
+          : [...masterCols, ...enrichment.masterCols],
+        detail: hideRemarksColumns
+          ? require('../utils/commentPermissions').filterRemarksColumns([...detailCols, ...enrichment.detailCols], false)
+          : [...detailCols, ...enrichment.detailCols],
       },
       trackChanges: trackActive
         ? {
@@ -4139,8 +4307,8 @@ async function readExecute({ tableKey, includeRemoved = false, userId = null, su
 
 const _readInflight = new Map();
 
-function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey, recordKey }) {
-  return [tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey || '', recordKey || ''].join('\0');
+function readInflightKey({ tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey, recordKey, hideRemarksColumns }) {
+  return [tableKey, userId, supplierAccount, includeDetails, includeChangeDecorations, partitionKey || '', recordKey || '', hideRemarksColumns ? '1' : '0'].join('\0');
 }
 
 async function read(opts = {}) {
@@ -4237,10 +4405,26 @@ async function listVendorValues({ tableKey, valueColumnKeys = [], includeRemoved
 // gefilterd op één order in plaats van de hele tabel.
 // ---------------------------------------------------------------------------
 
-// De lookup-verrijking leest complete doeltabellen (vendors/items) en kost honderden ms.
-// Voor het openklappen van één order is dat te duur en een paar seconden oude
-// lookup-labels zijn ongevaarlijk; de board-read zelf blijft ongecached.
-const LOOKUP_ENRICHMENT_TTL_MS = 30 * 1000;
+// De lookup-verrijking leest complete doeltabellen (vendors/items/receipt-lines) en kost op
+// productie seconden — gemeten 22-09: 15,4 s toen de cache leeg was.
+//
+// Tot v1.71.8 gooide een klok van 30 seconden die verrijking weg. Overdag is de normale situatie
+// dat er meer dan een halve minuut tussen twee reads zit, dus betaalde bijna elke bezoeker de
+// volledige lookup-read opnieuw — ook als vendors en items de hele dag niet waren veranderd.
+//
+// Nu bepaalt de inhoud of de cache nog klopt, niet de leeftijd: dezelfde aanpak als
+// BoardSnapshotCache ("unlimited-until-revision"). Wijzigt geen van de doeltabellen, dan blijft
+// de verrijking geldig. De ruime TTL hieronder is alleen een vangnet voor het theoretische geval
+// dat er ooit een schrijfweg bijkomt die de signatuur niet raakt; hij verloopt in de praktijk
+// nooit vóór een sync dat al doet.
+const LOOKUP_ENRICHMENT_TTL_MS = 12 * 60 * 60 * 1000;
+
+// Hoe vaak we die signatuur opnieuw ophalen. Gemeten op DEV: de aggregatie kost 0,6-1,2 s — veel
+// goedkoper dan de lookup-reads die ze overslaat, maar niet gratis genoeg om bij élke board-read
+// te draaien. Binnen dit venster vertrouwen we de cache zonder te kijken. De klok bepaalt dus hoe
+// vaak we controleren, de inhoud of we herladen; het ergste gevolg van een gemiste wijziging is
+// hooguit een halve minuut oude lookup-labels.
+const LOOKUP_SIGNATURE_CHECK_MS = 30 * 1000;
 const lookupEnrichmentCache = new Map();
 
 // In-flight loads per tabel, zodat gelijktijdige koude aanvragen (board-read + /columns + bi/meta
@@ -4250,13 +4434,33 @@ const lookupEnrichmentInflight = new Map();
 
 async function loadLookupEnrichmentCached(table) {
   const cached = lookupEnrichmentCache.get(table.id);
-  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) return cached.value;
+  if (cached && Date.now() - cached.loadedAt < LOOKUP_ENRICHMENT_TTL_MS) {
+    // Net gecontroleerd: niet opnieuw kijken. Dit scheelt de signatuurquery bij reads die kort
+    // op elkaar volgen, zonder de verrijking zelf te laten verlopen.
+    if (Date.now() - (cached.checkedAt || 0) < LOOKUP_SIGNATURE_CHECK_MS) return cached.value;
+    // Eén lichte aggregatie tegen de volledige doeltabel-reads die we ermee overslaan. Mislukt
+    // hij, dan houden we de cache aan in plaats van terug te vallen op de dure read: een
+    // haperende signatuurquery mag niet elke board-read seconden duurder maken.
+    const signature = await time('tb_lookup_sig', () => loadLookupTargetSignature(cached.targetTableIds))
+      .catch(() => cached.signature);
+    if (signature === cached.signature) {
+      cached.checkedAt = Date.now();
+      return cached.value;
+    }
+  }
   const pending = lookupEnrichmentInflight.get(table.id);
   if (pending) return pending;
   const promise = (async () => {
     try {
       const value = await loadLookupEnrichment(table);
-      lookupEnrichmentCache.set(table.id, { value, loadedAt: Date.now() });
+      const targetTableIds = Array.isArray(value?.targetTableIds) ? value.targetTableIds : [];
+      // De signatuur hoort bij de zojuist gelezen inhoud. Lukt hij niet, dan bewaren we null en
+      // valt de volgende aanroep terug op herladen — veilig, alleen niet goedkoop.
+      const signature = await loadLookupTargetSignature(targetTableIds).catch(() => null);
+      const now = Date.now();
+      lookupEnrichmentCache.set(table.id, {
+        value, loadedAt: now, checkedAt: now, signature, targetTableIds,
+      });
       return value;
     } finally {
       lookupEnrichmentInflight.delete(table.id);
@@ -5784,5 +5988,9 @@ module.exports = {
   buildLookupTargetAliases,
   combineODataFilters,
   buildOneOfFilterClause,
+  fieldsProjectionEnabled,
+  planCollapsedDetailFields,
+  buildLookupSignature,
+  resolveLightDetailColumns,
   FETCH_ADAPTERS,
 };

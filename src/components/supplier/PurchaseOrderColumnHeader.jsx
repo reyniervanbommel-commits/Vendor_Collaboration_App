@@ -5,8 +5,7 @@ import {
 } from '@fluentui/react-components';
 import PurchaseOrderColumnHeaderDialogs from './PurchaseOrderColumnHeaderDialogs';
 import D365LogoIcon from './D365LogoIcon';
-import { LinkRegular, MoreVerticalRegular } from '@fluentui/react-icons';
-import { getColumnConnectionTooltip, isDateColumnConnectionTarget } from '../../utils/columnOriginMeta';
+import { MoreVerticalRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   header: { width: '100%', minWidth: 0, maxWidth: '100%', minHeight: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', ...shorthands.gap('4px') },
@@ -14,26 +13,7 @@ const useStyles = makeStyles({
   labelText: { minWidth: 0, maxWidth: '100%', display: 'inline-block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   menuButton: { minWidth: '20px', width: '20px', height: '20px', ...shorthands.padding('0') },
   error: { color: tokens.colorPaletteRedForeground1, marginTop: '8px' },
-  sourceLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    lineHeight: 1,
-  },
-  sourceLinkIcon: {
-    color: tokens.colorBrandForeground1,
-    fontSize: tokens.fontSizeBase300,
-    width: '16px',
-    minWidth: '16px',
-  },
 });
-
-function datePeriodSourceTooltip(column, connectionTargets) {
-  const targets = (Array.isArray(connectionTargets) ? connectionTargets : [])
-    .filter((target) => isDateColumnConnectionTarget(target));
-  return getColumnConnectionTooltip(column, targets);
-}
 
 export default function PurchaseOrderColumnHeader({
   column,
@@ -45,7 +25,6 @@ export default function PurchaseOrderColumnHeader({
   autoEdit = false,
   onEditingDone,
   showWriteBackIcon = false,
-  connectionTargets = [],
 }) {
   const styles = useStyles();
   const isCustom = column.source === 'custom';
@@ -95,7 +74,6 @@ export default function PurchaseOrderColumnHeader({
     try { await onRemove(column.id); setConfirmOpen(false); } catch (err) { setError(err.message || 'Delete failed.'); } finally { setBusy(false); }
   }, [onRemove, column.id]);
 
-  const datePeriodTooltip = datePeriodSourceTooltip(column, connectionTargets);
   const columnLabel = (
     <span className={styles.labelWrap}>
       {showD365WriteBackIcon ? (
@@ -104,16 +82,6 @@ export default function PurchaseOrderColumnHeader({
         </span>
       ) : null}
       <span className={styles.labelText}>{column.label}</span>
-      {datePeriodTooltip ? (
-        <span
-          className={styles.sourceLink}
-          data-testid="column-date-period-source-icon"
-          title={datePeriodTooltip}
-          aria-label={datePeriodTooltip}
-        >
-          <LinkRegular className={styles.sourceLinkIcon} />
-        </span>
-      ) : null}
     </span>
   );
 

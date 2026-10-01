@@ -68,14 +68,27 @@ describe('rol wijzigen', () => {
     expect(pool.calls[1].inputs).toEqual({ userId: 9 });
   });
 
-  it('laat de permissies staan bij een wijziging naar employee', async () => {
+  it('zet ontbrekende comment-rechten aan bij een wijziging naar employee', async () => {
     const pool = usePool([{ recordset: [{ id: 9, email: 'x@y.nl', role: 'employee' }] }]);
 
     await withServer(ADMIN, async (patch) => {
       expect((await patch(9, { role: 'employee' })).status).toBe(200);
     });
 
-    expect(pool.calls).toHaveLength(1);
+    expect(pool.calls[1].sql).toContain('comments.view');
+    expect(pool.calls[1].sql).not.toContain('DELETE');
+  });
+
+  it('houdt comment-rechten bij een wissel naar vendor en wist instellingen', async () => {
+    const pool = usePool([{ recordset: [{ id: 9, email: 'x@y.nl', role: 'supplier' }] }]);
+
+    await withServer(ADMIN, async (patch) => {
+      expect((await patch(9, { role: 'supplier' })).status).toBe(200);
+    });
+
+    expect(pool.calls[1].sql).toContain('DELETE FROM dbo.user_permissions');
+    expect(pool.calls[1].sql).toContain('comments.view');
+    expect(pool.calls[2].sql).toContain('INSERT INTO dbo.user_permissions');
   });
 
   it('weigert een admin die zijn eigen rol verlaagt', async () => {

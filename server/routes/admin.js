@@ -22,6 +22,7 @@ const { parseAlertEmails, serializeAlertEmails } = require('../utils/alertEmails
 const poTableZoomSettings = require('../services/PoTableZoomSettings');
 const { ONBOARDING_BOARD_KEY, buildOnboardingProgressRow } = require('../utils/onboardingSettings');
 const { time } = require('../utils/timing');
+const commentPermissions = require('../utils/commentPermissions');
 
 function getPool() {
   return sqlPool.getSqlPool();
@@ -78,6 +79,9 @@ router.post('/users', requireUsersCreateGuard, async (req, res, next) => {
       .input('vendorAccount', sql.NVarChar, normalizeVendorAccount(vendor_account))
       .query('INSERT INTO dbo.users (email, role, display_name, vendor_account) OUTPUT INSERTED.* VALUES (@email, @role, @displayName, @vendorAccount)');
     const newUser = result.recordset[0];
+    if (commentPermissions.grantsCommentPermissionsByDefault(newUser.role)) {
+      await commentPermissions.ensureCommentPermissions(pool, newUser.id);
+    }
     const setPasswordUrl = getAppBaseUrl() + '/set-password?email=' + encodeURIComponent(newUser.email);
     await emailService.sendInviteEmail(newUser.email, setPasswordUrl).catch(() => {});
     await auditLog(req.user.id, req.user.email, 'CREATE_USER', 'users', newUser.id, { email: newUser.email, role: newUser.role });
@@ -121,13 +125,11 @@ router.patch('/users/:id', requireRole(ROLES.ADMIN), async (req, res, next) => {
     if (!result.recordset.length) return res.status(404).json({ error: 'User not found' });
 
     const updated = result.recordset[0];
-    // Granulaire instellingen-permissies gelden alleen voor employees (#AB:326); na een rolwissel
-    // naar admin of vendor zijn achtergebleven rijen misleidend en zouden ze bij een latere
-    // terugwissel naar employee stilzwijgend weer gaan gelden.
-    if (role !== undefined && updated.role !== ROLES.EMPLOYEE) {
-      await pool.request()
-        .input('userId', sql.Int, parseInt(id))
-        .query('DELETE FROM dbo.user_permissions WHERE user_id = @userId');
+    // #AB:326 hield instellingen-rijen alleen voor employees. #AB:328: comment-rijen blijven
+    // bij een wissel naar vendor staan; naar admin gaat alles weg; naar employee komen
+    // ontbrekende comment-rechten erbij.
+    if (role !== undefined) {
+      await commentPermissions.applyRoleChangePermissions(pool, parseInt(id), updated.role);
     }
 
     await auditLog(req.user.id, req.user.email, 'UPDATE_USER', 'users', id, req.body);
@@ -190,19 +192,18 @@ router.patch('/users/:id/permissions', requireRole(ROLES.ADMIN), async (req, res
     const userId = parseInt(req.params.id);
     const { permissions = [] } = req.body;
     const pool = await getPool();
-
-    await pool.request()
+    const userResult = await pool.request()
       .input('userId', sql.Int, userId)
-      .query('DELETE FROM dbo.user_permissions WHERE user_id = @userId');
+      .query('SELECT role FROM dbo.users WHERE id = @userId');
+    const target = userResult.recordset[0];
+    if (!target) return res.status(404).json({ error: 'User not found' });
 
-    for (const { page_name } of permissions) {
-      if (page_name) {
-        await pool.request()
-          .input('userId', sql.Int, userId)
-          .input('pageName', sql.NVarChar, page_name)
-          .query('INSERT INTO dbo.user_permissions (user_id, page_name) VALUES (@userId, @pageName)');
-      }
-    }
+    const pageNames = (Array.isArray(permissions) ? permissions : [permissions])
+      .map((entry) => (entry && typeof entry === 'object' ? entry.page_name : entry));
+    const decision = commentPermissions.classifyPermissionPatch(target.role, pageNames);
+    if (!decision.ok) return res.status(400).json({ error: decision.error });
+
+    await commentPermissions.replaceUserPermissions(pool, userId, decision.pageNames);
 
     await auditLog(req.user.id, req.user.email, 'UPDATE_PERMISSIONS', 'user_permissions', userId, { permissions });
     res.json({ success: true });

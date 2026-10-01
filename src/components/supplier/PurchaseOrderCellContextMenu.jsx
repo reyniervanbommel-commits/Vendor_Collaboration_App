@@ -13,8 +13,10 @@ import {
   FilterRegular,
 } from '@fluentui/react-icons';
 import { copyCellValueToClipboard } from '../../utils/tableViewFilterUtils';
+import { useCommentPermissions } from '../../hooks/useCommentPermissions';
 
 function PurchaseOrderCellContextMenu({ context, actions }) {
+  const { canView } = useCommentPermissions();
   const close = actions?.close;
 
   const handleOpenChange = useCallback((_, data) => {
@@ -53,7 +55,9 @@ function PurchaseOrderCellContextMenu({ context, actions }) {
     >
       <MenuPopover data-tour="cell-context-menu">
         <MenuList>
-          <MenuItem icon={<ChatRegular />} onClick={handleOpenRemarks}>Remarks</MenuItem>
+          {canView ? (
+            <MenuItem icon={<ChatRegular />} onClick={handleOpenRemarks}>Remarks</MenuItem>
+          ) : null}
           {showValueActions ? (
             <>
               <MenuDivider />

@@ -461,6 +461,14 @@ async function finishRun({ status, errorText = null } = {}) {
   lastRun = run;
   activeRun = null;
   queueNightMail(run);
+  // Een geslaagde sync maakt élke gecachete board-snapshot ongeldig (syncedAt zit in de
+  // content-signatuur). Meteen opnieuw opbouwen, zodat de eerste bezoeker van de dag niet de
+  // koude read betaalt. Fire-and-forget: de run is klaar zodra de data er staat, en een
+  // mislukte warmup mag de run niet raken.
+  if (status === 'done') {
+    // eslint-disable-next-line global-require
+    require('./BoardWarmup').warmBoardCaches({ reason: 'refresh-done' }).catch(() => {});
+  }
   return run;
 }
 

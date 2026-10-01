@@ -155,6 +155,18 @@ describe('RccpSettingsService.validateConfig confirmedDateColumnKey', () => {
   });
 });
 
+describe('RccpSettingsService.validateConfig showCapacityRows', () => {
+  const base = {
+    dateColumnKey: 'requestedDeliveryDate',
+    vendorColumnKey: 'vendorAccount',
+  };
+
+  it('shows capacity rows unless the setting is turned off', () => {
+    expect(validateConfig(base).config.showCapacityRows).toBe(true);
+    expect(validateConfig({ ...base, showCapacityRows: false }).config.showCapacityRows).toBe(false);
+  });
+});
+
 describe('RccpSettingsService.validateConfig itemPickerColumnKeys', () => {
   const base = {
     dateColumnKey: 'requestedDeliveryDate',

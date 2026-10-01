@@ -39,7 +39,7 @@ describe('usePoBoardKpis', () => {
   it('haalt de stats op en levert geaggregeerde kpis', async () => {
     const { result } = renderHook(() => usePoBoardKpis({ orders: ORDERS, refreshKey: 'r1' }));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(getPoBoardKpis).toHaveBeenCalledWith('r1');
+    expect(getPoBoardKpis).toHaveBeenCalledWith('r1', 'requested');
     expect(result.current.kpis).toBeTruthy();
     expect(result.current.error).toBe('');
     expect(result.current.configured).toBe(true);
@@ -116,7 +116,7 @@ describe('usePoBoardKpis', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     rerender({ refreshKey: 'r2' });
     await waitFor(() => expect(getPoBoardKpis).toHaveBeenCalledTimes(2));
-    expect(getPoBoardKpis).toHaveBeenLastCalledWith('r2');
+    expect(getPoBoardKpis).toHaveBeenLastCalledWith('r2', 'requested');
   });
 
   it('gooit de cache weg en herlaadt na het opslaan van RCCP-instellingen', async () => {
@@ -132,5 +132,45 @@ describe('usePoBoardKpis', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(typeof result.current.buildOverlay).toBe('function');
     expect(() => result.current.buildOverlay('open')).not.toThrow();
+  });
+
+  // De confirmed-set kost server-side een tweede walk over alle PO-regels en verdubbelt de
+  // response. Hij hoort dus alleen opgehaald te worden als de C/R-toggle erom vraagt.
+  describe('confirmed-set alleen op verzoek', () => {
+    it('vraagt standaard de requested-set op', async () => {
+      const { result } = renderHook(() => usePoBoardKpis({ orders: ORDERS, refreshKey: 'r1' }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(getPoBoardKpis).toHaveBeenCalledWith('r1', 'requested');
+    });
+
+    it('vraagt de confirmed-set op zodra dateMode dat zegt', async () => {
+      const { result } = renderHook(() => usePoBoardKpis({
+        orders: ORDERS, refreshKey: 'r1', dateMode: 'confirmed',
+      }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(getPoBoardKpis).toHaveBeenCalledWith('r1', 'confirmed');
+    });
+
+    it('haalt opnieuw op wanneer de toggle omgaat', async () => {
+      const { rerender, result } = renderHook(
+        ({ dateMode }) => usePoBoardKpis({ orders: ORDERS, refreshKey: 'r1', dateMode }),
+        { initialProps: { dateMode: 'requested' } },
+      );
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      rerender({ dateMode: 'confirmed' });
+      await waitFor(() => expect(getPoBoardKpis).toHaveBeenCalledTimes(2));
+      expect(getPoBoardKpis).toHaveBeenLastCalledWith('r1', 'confirmed');
+    });
+
+    it('laat kpisConfirmed null zolang de payload geen confirmed-set bevat', async () => {
+      // Wat de server in de standaardstand nu teruggeeft: geen confirmed-set.
+      const { confirmed, ...withoutConfirmed } = PAYLOAD;
+      getPoBoardKpis.mockResolvedValue(withoutConfirmed);
+
+      const { result } = renderHook(() => usePoBoardKpis({ orders: ORDERS, refreshKey: 'r1' }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.kpis).toBeTruthy();
+      expect(result.current.kpisConfirmed).toBeNull();
+    });
   });
 });

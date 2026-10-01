@@ -86,6 +86,29 @@ describe('resolveRccpChartView', () => {
     expect(view.cellMap.get('open|2026|10').confirmedQty).toBe(10);
   });
 
+  it('sums every vendor in the same week', () => {
+    const view = resolveRccpChartView({
+      grain: RCCP_PERIOD_GRAIN_WEEK,
+      periods: [{ year: 2026, week: 10, key: '2026-W10' }],
+      chart: [],
+      cells: [
+        {
+          measureKey: 'open', periodYear: 2026, isoWeek: 10, vendorAccount: 'V1',
+          confirmedQty: 10, availableQty: 40, remainingQty: 30, statusColor: 'green', statusLabel: 'OK',
+        },
+        {
+          measureKey: 'open', periodYear: 2026, isoWeek: 10, vendorAccount: 'V2',
+          confirmedQty: 25, availableQty: 10, remainingQty: -15, statusColor: 'red', statusLabel: 'Shortage',
+        },
+      ],
+    });
+    const cell = view.cellMap.get('open|2026|10');
+    expect(cell.confirmedQty).toBe(35);
+    expect(cell.availableQty).toBe(50);
+    expect(cell.remainingQty).toBe(15);
+    expect(cell.statusColor).toBe('red');
+  });
+
   it('rolls ISO weeks into calendar months and sums quantities', () => {
     const view = resolveRccpChartView({
       grain: RCCP_PERIOD_GRAIN_MONTH, periods, chart, cells,

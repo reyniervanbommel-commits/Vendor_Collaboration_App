@@ -16,6 +16,7 @@ import {
 import { Shield24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
 import { ROLES } from '../../constants/roles';
+import { applyCommentPermissionToggle, isCommentPermissionId } from '../../constants/commentPermissions';
 import PermissionsChecklist from './PermissionsChecklist';
 
 const useStyles = makeStyles({
@@ -45,16 +46,18 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
   }, [user?.id]);
 
   useEffect(() => {
-    if (open && user?.id) {
+    if (open && user?.id && user.role !== ROLES.ADMIN) {
       setSuccess(false);
       loadPermissions();
     }
-  }, [open, user?.id, loadPermissions]);
+  }, [open, user?.id, user?.role, loadPermissions]);
 
   const handlePermissionToggle = useCallback((pageName) => {
-    setPermissions((prev) =>
-      prev.includes(pageName) ? prev.filter((p) => p !== pageName) : [...prev, pageName]
-    );
+    setPermissions((prev) => (
+      isCommentPermissionId(pageName)
+        ? applyCommentPermissionToggle(prev, pageName)
+        : (prev.includes(pageName) ? prev.filter((p) => p !== pageName) : [...prev, pageName])
+    ));
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -83,9 +86,11 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
 
   if (!user) return null;
 
-  // Instellingen-permissies gelden alleen voor employees; admins mogen al alles en vendors
-  // bereiken geen enkele instellingentab (#AB:326).
+  // Instellingen-permissies alleen voor employees (#AB:326). Comments voor employee en vendor (#AB:328).
+  // Admin heeft comments altijd en krijgt geen vinkjes.
   const isEmployee = user.role === ROLES.EMPLOYEE;
+  const isSupplier = user.role === ROLES.SUPPLIER;
+  const canEdit = isEmployee || isSupplier;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -106,16 +111,20 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
             {!isEmployee && (
               <Text>Settings permissions can only be granted to employees.</Text>
             )}
-            {isEmployee && loading && <Text>Loading...</Text>}
-            {isEmployee && !loading && (
-              <PermissionsChecklist selected={permissions} onToggle={handlePermissionToggle} />
+            {canEdit && loading && <Text>Loading...</Text>}
+            {canEdit && !loading && (
+              <PermissionsChecklist
+                selected={permissions}
+                onToggle={handlePermissionToggle}
+                includeSettings={isEmployee}
+              />
             )}
           </DialogContent>
           <DialogActions>
             <DialogTrigger disableButtonEnhancement>
-              <Button appearance="secondary">{isEmployee ? 'Cancel' : 'Close'}</Button>
+              <Button appearance="secondary">{canEdit ? 'Cancel' : 'Close'}</Button>
             </DialogTrigger>
-            {isEmployee && (
+            {canEdit && (
               <Button
                 appearance="primary"
                 icon={<Shield24Regular />}

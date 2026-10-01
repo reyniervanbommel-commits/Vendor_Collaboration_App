@@ -320,7 +320,7 @@ function createRowActivityService(deps = {}) {
     return {
       items,
       totals: {
-        remarks: Number(totalsRow.remarks || 0),
+        remarks: options.canViewComments === false ? 0 : Number(totalsRow.remarks || 0),
         history: Number(totalsRow.history || 0),
         historyUpdated: Number(totalsRow.history_updated || 0),
       },

@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { Button, Checkbox } from '@fluentui/react-components';
 import PurchaseOrderRowStatusBadge from './PurchaseOrderRowStatusBadge';
 import { RowRemarksBadge } from './remarks';
+import { useCommentPermissions } from '../../hooks/useCommentPermissions';
 import { getRowFormatControlCellStyle } from './columnTextStyleUtils';
 import { resolveOrderSelectionKey } from '../../hooks/usePurchaseOrderRowSelection';
 import { ROW_LOCATE_HIGHLIGHT_COLOR } from '../../utils/purchaseOrderRowLocate';
@@ -18,6 +19,7 @@ export const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
   rowFormatColor = '',
   isLocated = false,
 }) {
+  const { canView } = useCommentPermissions();
   const selectionKey = resolveOrderSelectionKey(order, rowId);
   const controlCellStyle = useMemo(
     () => (isLocated
@@ -61,12 +63,14 @@ export const PurchaseOrderRowControls = memo(function PurchaseOrderRowControls({
               {isExpanded ? '-' : '+'}
             </Button>
           ) : null}
-          <RowRemarksBadge
-            count={remarks?.summary?.count}
-            orderNumber={order.orderNumber}
-            onOpen={handleOpenRemarks}
-            onFormattedBackground={hasRowFormatColor}
-          />
+          {canView ? (
+            <RowRemarksBadge
+              count={remarks?.summary?.count}
+              orderNumber={order.orderNumber}
+              onOpen={handleOpenRemarks}
+              onFormattedBackground={hasRowFormatColor}
+            />
+          ) : null}
         </div>
         <PurchaseOrderRowStatusBadge order={order} className={styles.rowStatusBadge} />
       </div>

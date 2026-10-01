@@ -24,6 +24,7 @@ const {
 } = require('../services/RowRemarksValidation');
 const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole, requirePagePermission } = require('../middleware/auth');
+const { hasCommentPermission, requireCommentPermission, filterRemarksColumns } = require('../utils/commentPermissions');
 const { ROLES } = require('../constants/roles');
 const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
 const { getSupplierAccount } = require('../utils/supplierScope');
@@ -56,7 +57,7 @@ function toColumnId(raw) {
 }
 
 // GET /api/data/:tableKey/remarks/summary — actieve remarktellers per masterrij.
-router.get('/:tableKey/remarks/summary', async (req, res, next) => {
+router.get('/:tableKey/remarks/summary', requireCommentPermission('comments.view'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const rows = await remarksService.summarizeRemarks(tableKey, remarksActor(req));
@@ -66,7 +67,7 @@ router.get('/:tableKey/remarks/summary', async (req, res, next) => {
   }
 });
 
-router.get('/:tableKey/remarks/search', async (req, res, next) => {
+router.get('/:tableKey/remarks/search', requireCommentPermission('comments.view'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const query = normalizeSearchQuery(req.query.q);
@@ -78,7 +79,7 @@ router.get('/:tableKey/remarks/search', async (req, res, next) => {
 
 // GET /api/data/:tableKey/remarks/has-comment — sleutels van rijen met minstens één actieve
 // remark, voor de Remarks-kolomfilter-operator "has a comment" (geen zoekterm).
-router.get('/:tableKey/remarks/has-comment', async (req, res, next) => {
+router.get('/:tableKey/remarks/has-comment', requireCommentPermission('comments.view'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     return res.json(await hasRemarks(tableKey, remarksActor(req)));
@@ -88,7 +89,7 @@ router.get('/:tableKey/remarks/has-comment', async (req, res, next) => {
 });
 
 // GET /api/data/:tableKey/remarks — stabiel cursor-gepagineerde remarks, inclusief tombstones.
-router.get('/:tableKey/remarks', async (req, res, next) => {
+router.get('/:tableKey/remarks', requireCommentPermission('comments.view'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const row = normalizeRowIdentity(req.query.partitionKey, req.query.recordKey);
@@ -106,7 +107,7 @@ router.get('/:tableKey/remarks', async (req, res, next) => {
 // POST /api/data/:tableKey/remarks — immutable remark toevoegen aan een bestaande masterrij.
 // Staff + suppliers: suppliers mogen uitsluitend op orders binnen hun eigen vendor-scope
 // reageren; die rij-scope wordt afgedwongen in RowRemarksService.context().
-router.post('/:tableKey/remarks', async (req, res, next) => {
+router.post('/:tableKey/remarks', requireCommentPermission('comments.write'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
@@ -123,7 +124,7 @@ router.post('/:tableKey/remarks', async (req, res, next) => {
 });
 
 // DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
-router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), async (req, res, next) => {
+router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), requireCommentPermission('comments.write'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const id = normalizePositiveId(req.params.id, 'remarkId');
@@ -139,7 +140,7 @@ router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLO
 });
 
 // PUT /api/data/:tableKey/remarks/:id/reaction — atomische, idempotente reaction-toggle.
-router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
+router.put('/:tableKey/remarks/:id/reaction', requireCommentPermission('comments.write'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const id = normalizePositiveId(req.params.id, 'remarkId');
@@ -159,11 +160,13 @@ router.put('/:tableKey/remarks/:id/reaction', async (req, res, next) => {
 // GET /api/data/:tableKey/activity — row history of gecombineerde remarks/activity-feed.
 router.get('/:tableKey/activity', async (req, res, next) => {
   try {
+    const canViewComments = await hasCommentPermission(req, 'comments.view');
     const activity = await getRowActivity({
       tableKey: normalizeTableKey(req.params.tableKey),
       partitionKey: req.query.partitionKey,
       recordKey: req.query.recordKey,
-      kind: req.query.kind,
+      kind: canViewComments ? req.query.kind : 'history',
+      canViewComments,
       columnId: req.query.columnId,
       actionFilter: req.query.actionFilter,
       cursor: req.query.cursor,
@@ -206,8 +209,9 @@ router.get('/:tableKey', async (req, res, next) => {
     // het openklappen (GET .../rows/:partitionKey/:recordKey/details). ?includeDetails=1 geeft
     // de oude, volledige vorm terug — handig om te vergelijken bij het debuggen.
     const includeDetails = req.query.includeDetails === '1' || req.query.includeDetails === 'true';
+    const hideRemarksColumns = !(await hasCommentPermission(req, 'comments.column'));
     const data = await dataService.read({
-      tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails,
+      tableKey, userId: req.user.id, supplierAccount, supplierFilterColumn, includeDetails, hideRemarksColumns,
     });
     return res.json(data);
   } catch (err) {
@@ -224,7 +228,8 @@ router.post('/:tableKey/refresh', requirePagePermission('d365-refresh'), async (
     const { tableKey } = req.params;
     const baseline = req.body?.baseline === true;
     const summary = await dataService.refresh(tableKey, { baseline });
-    const data = await dataService.read({ tableKey, userId: req.user.id, includeDetails: false });
+    const hideRemarksColumns = !(await hasCommentPermission(req, 'comments.column'));
+    const data = await dataService.read({ tableKey, userId: req.user.id, includeDetails: false, hideRemarksColumns });
     return res.json({ ...data, refresh: summary, refreshed: true });
   } catch (err) {
     return next(err);
@@ -300,15 +305,21 @@ router.get('/:tableKey/columns', async (req, res, next) => {
       return res.status(400).json({ error: 'Invalid scope' });
     }
     const enriched = req.query.enriched === '1' || req.query.enriched === 'true';
+    const canSeeRemarksColumn = await hasCommentPermission(req, 'comments.column');
     if (enriched && req.params.tableKey === 'purchase-orders') {
       const defs = await dataService.getBoardColumnDefinitions(req.params.tableKey, { scope });
-      if (scope === 'master') return res.json({ columns: defs.master || [] });
-      if (scope === 'detail') return res.json({ columns: defs.detail || [] });
-      return res.json({ columns: [...(defs.master || []), ...(defs.detail || [])] });
+      const master = filterRemarksColumns(defs.master || [], canSeeRemarksColumn);
+      const detail = filterRemarksColumns(defs.detail || [], canSeeRemarksColumn);
+      if (scope === 'master') return res.json({ columns: master });
+      if (scope === 'detail') return res.json({ columns: detail });
+      return res.json({ columns: [...master, ...detail] });
     }
     const table = await registry.getTableByKey(req.params.tableKey);
     const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
-    const columns = await registry.listColumns({ tableId: table.id, scope, includeInactive });
+    const columns = filterRemarksColumns(
+      await registry.listColumns({ tableId: table.id, scope, includeInactive }),
+      canSeeRemarksColumn,
+    );
     return res.json({ columns });
   } catch (err) {
     return next(err);

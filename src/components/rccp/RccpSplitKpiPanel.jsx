@@ -50,11 +50,12 @@ function RccpSplitKpiPanel({ kpiKeys, orders, selectedKey, onKpiFilter, refreshK
   // Kort uitgesteld (niet gelijktijdig met de RCCP-analyse/BI-call om dezelfde trage
   // PO-cache-tabel vragen) — de grafiek/matrix krijgt zo voorrang op de kleine tegels ernaast.
   const dataReady = useIdleReady();
+  // Volgt dezelfde "load date"-toggle (Req./Conf.) als de grafiek op deze tab. De hook haalt de
+  // confirmed-set alleen op wanneer die stand daarom vraagt.
+  const dateMode = primaryRccpPlanningDateMode(planningDateModes);
   const {
     kpis, kpisConfirmed, matchByKey, config, buildOverlay,
-  } = usePoBoardKpis({ orders, refreshKey, enabled: dataReady });
-  // Volgt dezelfde "load date"-toggle (Req./Conf.) als de grafiek op deze tab.
-  const dateMode = primaryRccpPlanningDateMode(planningDateModes);
+  } = usePoBoardKpis({ orders, refreshKey, enabled: dataReady, dateMode });
   const { ref: panelRef, height: panelHeight } = useElementHeight();
 
   const handleActivate = useCallback((key) => {
