@@ -102,6 +102,19 @@ describe('compileSyncRules (D365-syncfilters)', () => {
     expect(compileSyncRules([])).toBe('');
     expect(compileSyncRules(null)).toBe('');
   });
+
+  it('stuurt startswith/contains op OrderVendorAccountNumber niet naar D365', () => {
+    expect(compileSyncRules([
+      { field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder', valueType: 'enum', enumType: 'PurchStatus' },
+      { field: 'OrderVendorAccountNumber', operator: 'notstartswith', value: 'Q', valueType: 'text' },
+    ])).toBe("PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'");
+    expect(compileSyncRules([
+      { field: 'OrderVendorAccountNumber', operator: 'startswith', value: 'Q', valueType: 'text' },
+    ])).toBe('');
+    expect(compileSyncRules([
+      { field: 'InvoiceVendorAccountNumber', operator: 'contains', value: 'Q', valueType: 'text' },
+    ])).toBe('');
+  });
 });
 
 describe('parseSyncRules', () => {
@@ -140,6 +153,14 @@ describe('recordMatchesSyncRules', () => {
 
   it('geeft true bij geen actieve regels', () => {
     expect(recordMatchesSyncRules([], { status: 'Invoiced' }, [])).toBe(true);
+  });
+
+  it('past notstartswith op vendoraccount lokaal toe', () => {
+    const rules = [
+      { field: 'OrderVendorAccountNumber', operator: 'notstartswith', value: 'Q', valueType: 'text' },
+    ];
+    expect(recordMatchesSyncRules(rules, { vendorAccount: '1001' }, [])).toBe(true);
+    expect(recordMatchesSyncRules(rules, { vendorAccount: 'Q1001' }, [])).toBe(false);
   });
 });
 
@@ -257,5 +278,20 @@ describe('compileSyncLayerChunks (afplatting over lagen)', () => {
 
   it('geeft [\'\'] bij geen actieve lagen (ongefilterd)', () => {
     expect(compileSyncLayerChunks([])).toEqual(['']);
+  });
+
+  it('laat alleen D365-queryable regels in de OData-chunk', () => {
+    const layers = [{
+      id: 'layer-1',
+      name: 'Layer 1',
+      active: true,
+      rules: [
+        { field: 'PurchaseOrderStatus', operator: 'eq', value: 'Backorder', valueType: 'enum', enumType: 'PurchStatus' },
+        { field: 'OrderVendorAccountNumber', operator: 'notstartswith', value: 'Q', valueType: 'text' },
+      ],
+    }];
+    expect(compileSyncLayerChunks(layers)).toEqual([
+      "PurchaseOrderStatus eq Microsoft.Dynamics.DataEntities.PurchStatus'Backorder'",
+    ]);
   });
 });

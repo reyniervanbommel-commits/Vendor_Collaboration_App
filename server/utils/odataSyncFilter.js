@@ -13,6 +13,14 @@ const OPERATORS = [
   'contains', 'notcontains', 'startswith', 'notstartswith', 'oneof',
 ];
 const TEXT_FUNCTION_OPERATORS = ['contains', 'notcontains', 'startswith', 'notstartswith'];
+// OrderVendorAccountNumber (en zuster-accountvelden) zijn in F&O OData alleen met eq/ne/oneof
+// filterbaar. startswith/contains/ge geven 400: "The type 'System.String' is not Queryable".
+const NON_QUERYABLE_STRING_FIELDS = new Set([
+  'OrderVendorAccountNumber',
+  'InvoiceVendorAccountNumber',
+  'VendorAccountNumber',
+]);
+const D365_QUERYABLE_STRING_OPERATORS = new Set(['eq', 'ne', 'oneof']);
 const VALUE_TYPES = ['text', 'number', 'date', 'enum'];
 const LEVELS = ['header', 'line'];
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -129,17 +137,30 @@ function compileRule(rule, index) {
  * Compileert een lijst regels naar één $filter-expressie (AND-gecombineerd).
  * Gooit een 400-fout bij ongeldige input; lege lijst → lege string.
  */
+function isD365QueryableRule(rule) {
+  const field = String(rule?.field || '').trim();
+  if (!NON_QUERYABLE_STRING_FIELDS.has(field)) return true;
+  return D365_QUERYABLE_STRING_OPERATORS.has(String(rule?.operator || '').trim());
+}
+
+function listD365QueryableRules(rules) {
+  return (Array.isArray(rules) ? rules : []).filter(isD365QueryableRule);
+}
+
 function compileSyncRules(rules) {
   if (!Array.isArray(rules) || !rules.length) return '';
   if (rules.length > MAX_RULES) throw badRequest(`Maximum ${MAX_RULES} filter rules`);
-  const largeOneOfCount = rules.filter((rule) => (
+  rules.forEach((rule, index) => compileRule(rule, index));
+  const queryable = listD365QueryableRules(rules);
+  if (!queryable.length) return '';
+  const largeOneOfCount = queryable.filter((rule) => (
     String(rule?.operator || '').trim() === 'oneof'
     && listOneOfValues(rule.value).length > D365_FILTER_CHUNK_SIZE
   )).length;
   if (largeOneOfCount > 1) {
     throw badRequest('Only one "is one of" filter can contain more than 20 values');
   }
-  return rules.map(compileRule).join(' and ');
+  return queryable.map(compileRule).join(' and ');
 }
 
 /**
