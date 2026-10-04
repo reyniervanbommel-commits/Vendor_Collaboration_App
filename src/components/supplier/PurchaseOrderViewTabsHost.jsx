@@ -33,6 +33,7 @@ export default function PurchaseOrderViewTabsHost({
         onRemoveTab={viewTabs.removeTab}
         onSetGroupColor={viewTabs.setGroupColor}
         columns={columns}
+        viewBaseFilters={viewTabs.viewBaseFilters}
       />
     </div>
   );

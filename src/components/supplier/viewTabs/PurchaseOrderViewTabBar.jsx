@@ -51,6 +51,7 @@ export default function PurchaseOrderViewTabBar({
   extraTabs,
   groups,
   columns = [],
+  viewBaseFilters = {},
   canManage,
   unsavedExtraTabIds = [],
   onSelectTab,
@@ -166,7 +167,12 @@ export default function PurchaseOrderViewTabBar({
           })}
         </TabList>
       </PurchaseOrderViewTabBarScroller>
-      <PurchaseOrderViewTabHoverCard tab={isDragging ? null : hover?.tab} columns={columns} anchorRect={hover?.rect} />
+      <PurchaseOrderViewTabHoverCard
+        tab={isDragging ? null : hover?.tab}
+        columns={columns}
+        viewBaseFilters={viewBaseFilters}
+        anchorRect={hover?.rect}
+      />
       <PurchaseOrderViewTabContextMenu
         open={context.open}
         x={context.x}

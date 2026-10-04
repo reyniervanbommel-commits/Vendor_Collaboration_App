@@ -325,9 +325,17 @@ export function describeTabExtraFilters(tab, columns = []) {
   });
 }
 
-export function tabHoverFilterRows(tab, columns = []) {
-  if (!tab || tab.id === ALL_TAB_ID) return [{ label: '', detail: 'View filters only' }];
-  const rows = describeTabExtraFilters(tab, columns);
+export function tabHoverFilterRows(tab, columns = [], viewBaseFilters = {}) {
+  const extra = normalizeExtraFilters(tab?.extraFilters);
+  const merged = { ...normalizeExtraFilters(viewBaseFilters) };
+  Object.entries(extra).forEach(([key, filter]) => {
+    if (filter) merged[key] = filter;
+    else delete merged[key];
+  });
+  const rows = describeTabExtraFilters({ extraFilters: merged }, columns);
+  if (!tab || tab.id === ALL_TAB_ID) {
+    return rows.length ? rows : [{ label: '', detail: 'View filters only' }];
+  }
   return rows.length ? rows : [{ label: '', detail: 'No extra filters' }];
 }
 
