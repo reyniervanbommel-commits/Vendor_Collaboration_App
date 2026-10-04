@@ -1,9 +1,9 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { columnUsesNumberSemantics } from '../utils/datePeriodColumnUtils';
 import { readLastPoTableSession } from '../utils/poTableSessionState';
+import { itemColumnMatchesFilter } from '../utils/itemColumnFilterMatch';
 import {
   buildFilterFromCellValue,
-  columnValueMatchesFilter,
   hasActiveFilter,
   isDateColumn,
   resolveFilterModel,
@@ -261,7 +261,7 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     const filtered = (valueFilters.length || colorFilters.length)
       ? items.filter((order) => {
         const valueMatch = valueFilters.every(([column, filter]) => (
-          columnValueMatchesFilter(column, order?.values?.[column.key], filter, datePeriodDisplayModes)
+          itemColumnMatchesFilter(order, column, filter, datePeriodDisplayModes)
         ));
         if (!valueMatch) return false;
         if (!colorFilters.length) return true;

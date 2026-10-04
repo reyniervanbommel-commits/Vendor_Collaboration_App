@@ -676,10 +676,11 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
   const rawMax = await settingsService.getAsync('PO_SYNC_MAX_ORDERS', String(table.maxRows || 2500));
   const maxItems = resolveConfiguredMaxItems(rawMax, table.maxRows, 2500);
   let filterChunks = [''];
+  let syncLayers = [];
   try {
     const layers = await getTableSyncLayers(table);
-    const resolvedLayers = await resolveSyncLayers(layers, { forD365: true });
-    filterChunks = compileSyncLayerChunks(resolvedLayers);
+    syncLayers = await resolveSyncLayers(layers, { forD365: true });
+    filterChunks = compileSyncLayerChunks(syncLayers);
   } catch (err) {
     logger.warn('PO_SYNC_RULES ongeldig; generieke table-sync draait zonder filterregels', { error: err.message });
   }
@@ -720,6 +721,7 @@ async function purchaseOrdersFetch(table, { onProgress } = {}) {
     truncated = truncated || Boolean(result.truncated);
     for (const item of Array.isArray(result.items) ? result.items : []) {
       const raw = item?.raw || {};
+      if (!recordMatchesAnyLayer(syncLayers, raw, item.lines)) continue;
       const key = `${String(raw.dataAreaId || company || '').trim()}|${String(item.orderNumber || raw.PurchaseOrderNumber || '').trim()}`;
       if (key !== '|' && !seen.has(key)) seen.set(key, item);
     }

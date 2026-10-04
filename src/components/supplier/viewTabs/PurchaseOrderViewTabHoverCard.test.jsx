@@ -28,6 +28,29 @@ describe('PurchaseOrderViewTabHoverCard', () => {
     expect(screen.getByText('is exactly Open')).toBeTruthy();
   });
 
+  it('toont view-base filters op een kolom-tab', () => {
+    render(
+      <FluentProvider theme={webLightTheme}>
+        <PurchaseOrderViewTabHoverCard
+          tab={{
+            id: 'tab_1',
+            name: 'Marisport',
+            extraFilters: { vendorName: { operator: 'equals', value: 'Marisport' } },
+          }}
+          columns={[
+            { key: 'itemValues', label: 'Artikel values', dataType: 'text' },
+            { key: 'vendorName', label: 'Leveranciersnaam', dataType: 'text' },
+          ]}
+          viewBaseFilters={{ itemValues: { operator: 'contains', value: 's' } }}
+          anchorRect={{ left: 20, top: 80 }}
+        />
+      </FluentProvider>
+    );
+    expect(screen.getByText('Artikel values:')).toBeTruthy();
+    expect(screen.getByText('contains s')).toBeTruthy();
+    expect(screen.getByText('Leveranciersnaam:')).toBeTruthy();
+  });
+
   it('toont view-filters-only voor de All-tab', () => {
     render(
       <FluentProvider theme={webLightTheme}>

@@ -43,10 +43,10 @@ const useStyles = makeStyles({
   },
 });
 
-export default function PurchaseOrderViewTabHoverCard({ tab, columns = [], anchorRect }) {
+export default function PurchaseOrderViewTabHoverCard({ tab, columns = [], viewBaseFilters = {}, anchorRect }) {
   const styles = useStyles();
   if (!tab || !anchorRect) return null;
-  const rows = tabHoverFilterRows(tab, columns);
+  const rows = tabHoverFilterRows(tab, columns, viewBaseFilters);
   const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - 328));
 
   return (

@@ -1,10 +1,10 @@
 # /check-ui — UI design review (Fluent UI v9)
 
-Voer een UI design review uit op recente wijzigingen. Volg de skill `.claude/skills/ui-design-review/SKILL.md` volledig.
+Voer een UI design review uit op recente wijzigingen. Volg skill `ui-design-review`.
 
 ## Wat te doen
 
-1. Lees `.claude/skills/ui-design-review/SKILL.md`
+1. Lees de skill `ui-design-review`
 2. Lees `docs/guides/UI_DESIGN_STANDARDS.md`
 3. Voer de workflow uit (scope → static audit → golden reference → browser indien mogelijk → rapport)
 4. Kies **light** mode als ≤3 UI-bestanden gewijzigd zijn

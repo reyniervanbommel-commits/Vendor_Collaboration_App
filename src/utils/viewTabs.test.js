@@ -92,6 +92,24 @@ describe('viewTabs', () => {
     }, columns)).toEqual([{ label: 'Status:', detail: 'is exactly Open' }]);
   });
 
+  it('toont view-base filters ook op een kolom-tab', () => {
+    const columns = [
+      { key: 'itemValues', label: 'Artikel values', dataType: 'text' },
+      { key: 'vendorName', label: 'Leveranciersnaam', dataType: 'text' },
+    ];
+    const viewBase = { itemValues: { operator: 'contains', value: 's', secondaryValue: '' } };
+    expect(tabHoverFilterRows({
+      id: 'tab_vendor',
+      extraFilters: { vendorName: { operator: 'equals', value: 'Marisport', secondaryValue: '' } },
+    }, columns, viewBase)).toEqual([
+      { label: 'Artikel values:', detail: 'contains s' },
+      { label: 'Leveranciersnaam:', detail: 'is exactly Marisport' },
+    ]);
+    expect(tabHoverFilterRows({ id: ALL_TAB_ID }, columns, viewBase)).toEqual([
+      { label: 'Artikel values:', detail: 'contains s' },
+    ]);
+  });
+
   it('splitst extra filters t.o.v. de view-base', () => {
     const extra = splitExtraFilters(
       {

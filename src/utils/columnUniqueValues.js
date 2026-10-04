@@ -1,4 +1,5 @@
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
+import { rawValuesForColumnFilter } from './itemColumnFilterMatch';
 import { filterItemsByColumnFilters } from './tableViewFilterUtils';
 
 export const UNIQUE_VALUE_SUGGESTION_LIMIT = 100;
@@ -14,20 +15,21 @@ export function getUniqueColumnValues(column, items, columns, filterByColumn, da
   const seen = new Set();
   const values = [];
   scopedItems.forEach((item) => {
-    const raw = item?.values?.[column?.key];
-    if (raw === null || raw === undefined || raw === '') return;
-    if (isNumber) {
-      const num = Number(raw);
-      if (!Number.isFinite(num) || seen.has(num)) return;
-      seen.add(num);
-      values.push(num);
-      return;
-    }
-    const text = String(raw);
-    const dedupeKey = text.toLowerCase();
-    if (seen.has(dedupeKey)) return;
-    seen.add(dedupeKey);
-    values.push(text);
+    rawValuesForColumnFilter(item, column?.key).forEach((raw) => {
+      if (raw === null || raw === undefined || raw === '') return;
+      if (isNumber) {
+        const num = Number(raw);
+        if (!Number.isFinite(num) || seen.has(num)) return;
+        seen.add(num);
+        values.push(num);
+        return;
+      }
+      const text = String(raw);
+      const dedupeKey = text.toLowerCase();
+      if (seen.has(dedupeKey)) return;
+      seen.add(dedupeKey);
+      values.push(text);
+    });
   });
   values.sort((a, b) => (
     isNumber ? a - b : String(a).localeCompare(String(b), 'nl-NL', { sensitivity: 'base' })

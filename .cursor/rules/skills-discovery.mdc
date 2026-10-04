@@ -1,41 +1,27 @@
 ---
-description: Scan alle beschikbare skills bij het begin van een taak (nieuwe feature/skill/refactor/plan)
+description: Skills leven in ~/.agents/skills — niet scannen, niet kopiëren
 alwaysApply: false
 ---
 
-# Skills discovery
+# Skills
 
-## Bij het begin van elke sessie
+Vertrouw de catalogus in de systeemprompt. **Niet** alle `SKILL.md`-mappen globben of frontmatter inlezen.
 
-Voordat je een taak start die mogelijk een skill raakt (feature bouwen, refactoren, plannen, analyseren, opruimen), scan eerst de volledige skills-mappen:
+## Bron (één)
 
-1. `C:\Users\reynier\.cursor\skills\` (persoonlijk Cursor — alle projecten)
-2. `C:\Users\reynier\.claude\skills\` (persoonlijk Claude Code — alle projecten)
-3. `C:\Users\reynier\.agents\skills\` (Codex / cross-runtime)
-4. `.cursor\skills\` én `.claude\skills\` (deze repo)
+`C:\Users\reynier\.agents\skills\<naam>\`
 
-Draai een Glob op `**/SKILL.md` in die mappen en lees de frontmatter (name + description) van skills die je niet kent. Dit voorkomt dat je:
-- Een skill dupliceert die al bestaat
-- Een workflow mist die al is ingericht
-- Output opslaat op een plek die een bestaande skill al afhandelt
+Cursor: junction in `~\.cursor\skills\`. Claude Code: bron via `~\.claude\CLAUDE.md` (geen extra junctions — dat verdubbelt de catalogus). Codex leest de bron direct.
 
-## Bij het aanmaken van een nieuwe skill
+## Nieuwe skill
 
-Voordat je een nieuwe skill schrijft:
+1. Alleen aanmaken in `~\.agents\skills\<naam>\`
+2. `SKILL.md` lean (routing); details in `reference.md`
+3. `~\.agents\install-skills.ps1` draaien
+4. **Niet** kopiëren naar een repo of naar `~\.cursor\skills` / `~\.claude\skills`
 
-1. Scan de mappen hierboven
-2. Controleer of er al een skill is die hetzelfde doel dient
-3. Als er overlap is: breid de bestaande skill uit in plaats van een nieuwe te maken
-4. Sla een **persoonlijke** skill op in Cursor + Claude + `.agents`; een **repo**-skill
-   ook in `.cursor/skills/` en `.claude/skills/` van dit project
+Bestaat er al een skill met hetzelfde doel: uitbreiden, geen tweede maken.
 
-## Skills-mappen
+## Niet aanpassen
 
-| Locatie | Pad | Scope |
-|---------|-----|-------|
-| Persoonlijk Cursor | `C:\Users\reynier\.cursor\skills\` | Alle Cursor-projecten |
-| Persoonlijk Claude | `C:\Users\reynier\.claude\skills\` | Alle Claude Code-projecten |
-| Cross-runtime | `C:\Users\reynier\.agents\skills\` | Codex e.d. |
-| Repo Cursor | `.cursor\skills\` | Dit project |
-| Repo Claude | `.claude\skills\` | Dit project (Claude Code in de repo) |
-| Cursor intern | `C:\Users\reynier\.cursor\skills-cursor\` | Niet aanpassen |
+`~\.cursor\skills-cursor\` (Cursor intern)

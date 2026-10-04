@@ -1,11 +1,10 @@
 # /perf-check — Performance review (laadtijden & tab-switches)
 
-Meet en verklaar de laadtijden die de gebruiker voelt. Volg de skill
-`.claude/skills/perf-review/SKILL.md` volledig.
+Meet en verklaar de laadtijden die de gebruiker voelt. Volg skill `perf-review`.
 
 ## Wat te doen
 
-1. Lees `.claude/skills/perf-review/SKILL.md` en `.claude/skills/perf-review/reference.md`
+1. Lees de skill `perf-review` (inclusief `reference.md` indien nodig)
 2. Bepaal de modus (default: **screening**)
 3. Voer de workflow uit: voorbereiding → meten → toerekenen → diagnose (top 3) → rapport + baseline → meetgaten
 4. Meet elke actie 3× en rapporteer de mediaan

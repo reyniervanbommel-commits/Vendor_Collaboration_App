@@ -52,7 +52,7 @@ Wanneer de skill **`develop-from-devops`** actief is (work item, feature-branch,
 - **Niet** direct naar `develop` pushen; merge via PR.
 - Preview-URL is dan de gedeelde ACC — localhost is secundair.
 
-Zie `.cursor/skills/develop-from-devops/SKILL.md`.
+Zie skill `develop-from-devops` (`~\.agents\skills\develop-from-devops\`).
 
 ## Conflictoplossing
 

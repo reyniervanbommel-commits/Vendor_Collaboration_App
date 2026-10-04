@@ -132,6 +132,38 @@ describe('oneOf filter — number-kolommen', () => {
   });
 });
 
+describe('startsWith on pushed line values', () => {
+  const column = { key: 'itemValues', dataType: 'text', label: 'External item number values' };
+
+  it('matcht startsWith tegen elke regelwaarde, niet alleen de samengevoegde headerstring', () => {
+    const items = [
+      {
+        values: { itemValues: 'Boot, Shoe' },
+        linkedLineValues: { itemValues: ['Boot', 'Shoe'] },
+      },
+    ];
+    const filtered = filterItemsByColumnFilters(
+      items,
+      [column],
+      { itemValues: { operator: 'startsWith', value: 's' } },
+    );
+    expect(filtered).toHaveLength(1);
+  });
+
+  it('houdt notStartsWith alleen over als geen enkele regelwaarde met de prefix begint', () => {
+    const items = [
+      { values: { itemValues: 'Boot, Shoe' }, linkedLineValues: { itemValues: ['Boot', 'Shoe'] } },
+      { values: { itemValues: 'Boot, Coat' }, linkedLineValues: { itemValues: ['Boot', 'Coat'] } },
+    ];
+    const filtered = filterItemsByColumnFilters(
+      items,
+      [column],
+      { itemValues: { operator: 'notStartsWith', value: 's' } },
+    );
+    expect(filtered).toEqual([items[1]]);
+  });
+});
+
 describe('filterItemsByColumnFilters', () => {
   const columns = [
     { key: 'vendor', dataType: 'text' },
