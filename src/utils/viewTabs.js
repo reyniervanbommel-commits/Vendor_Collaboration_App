@@ -1,8 +1,8 @@
 import { applyOpacity } from './hexColor';
 import { STATUS_COLOR_PALETTE } from './statusColumnUtils';
+import { itemColumnMatchesFilter } from './itemColumnFilterMatch';
 import {
   buildFilterFromCellValue,
-  columnValueMatchesFilter,
   COLOR_FILTER_OPERATOR,
   DATE_FILTER_OPERATORS,
   hasActiveFilter,
@@ -156,7 +156,7 @@ export function filterRowsByFilters(rows, columns, filterByColumn, datePeriodDis
     .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
   if (!active.length) return list;
   return list.filter((row) => active.every(([column, filter]) => (
-    columnValueMatchesFilter(column, row?.values?.[column.key], filter, datePeriodDisplayModes)
+    itemColumnMatchesFilter(row, column, filter, datePeriodDisplayModes)
   )));
 }
 

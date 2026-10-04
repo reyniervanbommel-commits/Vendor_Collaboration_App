@@ -273,6 +273,88 @@ describe('usePurchaseOrderSavedViewState session snapshot', () => {
   });
 });
 
+describe('usePurchaseOrderSavedViewState startsWith na bestaande tabs', () => {
+  beforeEach(() => {
+    window.sessionStorage.clear();
+    updateView.mockClear();
+    apiRequest.mockReset();
+    apiRequest.mockResolvedValue({ settings: null });
+  });
+
+  it('schrijft een later All-tab startsWith-filter weg als view-base bij bestaande tabs', async () => {
+    let current = { filterByColumn: {} };
+    const boardView = {
+      ...createBoardView(),
+      exportFilterSortGrouping: () => current,
+      applyFilterSortGrouping: vi.fn((state) => {
+        current = { ...current, ...state };
+      }),
+      get filterByColumn() {
+        return current.filterByColumn;
+      },
+    };
+    const { result } = renderHook(() => usePurchaseOrderSavedViewState({
+      orders: [
+        { values: { vendorName: 'Acme', itemValues: 'Boot, Shoe' } },
+        { values: { vendorName: 'Beta', itemValues: 'Sock' } },
+      ],
+      loading: false,
+      exportColumnLayout: () => ({}),
+      applyColumnLayout: vi.fn(),
+      boardView,
+      isSupplier: false,
+      columns: [
+        { key: 'vendorName', label: 'Leveranciersnaam', dataType: 'text' },
+        { key: 'itemValues', label: 'External item number values', dataType: 'text' },
+      ],
+    }));
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: { columns: {}, table: { filterByColumn: {} }, tabs: { extraTabs: [], groups: [] } },
+      });
+    });
+    act(() => {
+      result.current.viewTabs.addTabsFromColumn({ columnKey: 'vendorName', color: '#579bfc' });
+    });
+    await act(async () => {
+      await result.current.handleUpdateActive({ id: 7 });
+    });
+
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          itemValues: { operator: 'startsWith', value: 's', secondaryValue: '' },
+        },
+      });
+    });
+    await act(async () => {
+      await result.current.handleUpdateActive({ id: 7 });
+    });
+
+    const saved = updateView.mock.calls.at(-1)[1].viewState;
+    expect(saved.table.filterByColumn.itemValues).toEqual({
+      operator: 'startsWith',
+      value: 's',
+      secondaryValue: '',
+    });
+    expect(saved.tabs.extraTabs.length).toBeGreaterThan(0);
+    expect(saved.tabs.extraTabs.every((tab) => !tab.extraFilters?.itemValues)).toBe(true);
+
+    act(() => {
+      result.current.applyViewState({
+        id: 7,
+        viewState: { ...saved, lastTabId: saved.tabs.extraTabs[0].id },
+      });
+    });
+    const applied = boardView.applyFilterSortGrouping.mock.calls.at(-1)[0].filterByColumn;
+    expect(applied.itemValues.operator).toBe('startsWith');
+    expect(applied.itemValues.value).toBe('s');
+    expect(applied.vendorName.operator).toBe('equals');
+  });
+});
+
 describe('usePurchaseOrderSavedViewState unsaved diff', () => {
   beforeEach(() => {
     window.sessionStorage.clear();

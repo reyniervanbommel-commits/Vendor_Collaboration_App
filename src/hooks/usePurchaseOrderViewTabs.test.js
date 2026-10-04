@@ -229,4 +229,65 @@ describe('usePurchaseOrderViewTabs', () => {
     expect(result.current.extraTabs).toHaveLength(0);
     expect(result.current.activeTabId).toBe(ALL_TAB_ID);
   });
+
+  it('houdt een later startsWith-filter op All bij bestaande kolom-tabs na opslaan', () => {
+    const boardView = createBoardView();
+    const columns = [
+      { key: 'vendorName', label: 'Leveranciersnaam', dataType: 'text' },
+      { key: 'itemValues', label: 'External item number values', dataType: 'text' },
+    ];
+    const { result, rerender } = renderHook(() => usePurchaseOrderViewTabs({
+      activeViewId: 11,
+      boardView,
+      columns,
+      allItems: [
+        { values: { vendorName: 'Acme', itemValues: 'Boot, Shoe' } },
+        { values: { vendorName: 'Beta', itemValues: 'Sock' } },
+      ],
+    }));
+
+    act(() => {
+      result.current.addTabsFromColumn({ columnKey: 'vendorName', color: '#579bfc' });
+    });
+    expect(result.current.extraTabs).toHaveLength(2);
+    expect(result.current.activeTabId).toBe(ALL_TAB_ID);
+
+    act(() => {
+      result.current.snapshotCurrentTab();
+    });
+    const firstSave = result.current.peekTabsState();
+    expect(firstSave.viewBaseFilters.itemValues).toBeUndefined();
+
+    act(() => {
+      boardView.applyFilterSortGrouping({
+        filterByColumn: {
+          itemValues: { operator: 'startsWith', value: 's', secondaryValue: '' },
+        },
+      });
+    });
+    rerender();
+
+    act(() => {
+      result.current.snapshotCurrentTab();
+    });
+    const secondSave = result.current.peekTabsState();
+    expect(secondSave.viewBaseFilters.itemValues).toEqual({
+      operator: 'startsWith',
+      value: 's',
+      secondaryValue: '',
+    });
+    expect(secondSave.extraTabs.every((tab) => !tab.extraFilters?.itemValues)).toBe(true);
+
+    const firstTabId = result.current.extraTabs[0].id;
+    act(() => {
+      result.current.selectTab(firstTabId);
+    });
+    const live = boardView.exportFilterSortGrouping().filterByColumn;
+    expect(live.itemValues).toEqual({
+      operator: 'startsWith',
+      value: 's',
+      secondaryValue: '',
+    });
+    expect(live.vendorName?.operator).toBe('equals');
+  });
 });
