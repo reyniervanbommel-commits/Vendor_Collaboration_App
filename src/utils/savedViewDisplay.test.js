@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { truncateViewName, viewShowsAsTab, VIEW_NAME_MAX_LENGTH } from './savedViewDisplay';
+import { viewShowsAsTab, VIEW_NAME_MAX_LENGTH } from './savedViewDisplay';
 
 describe('savedViewDisplay', () => {
-  it('kapt viewnamen af op 25 tekens', () => {
+  it('beperkt nieuwe viewnamen tot 25 tekens', () => {
     expect(VIEW_NAME_MAX_LENGTH).toBe(25);
-    expect(truncateViewName('testrccp')).toBe('testrccp');
-    expect(truncateViewName('  abc  ')).toBe('abc');
-    expect(truncateViewName('abcdefghijklmnopqrstuvwxyz')).toBe('abcdefghijklmnopqrstuvwxy');
-    expect(truncateViewName('')).toBe('');
   });
 
   it('toont een view als tab alleen met id en showAsTab', () => {

@@ -11,8 +11,15 @@ import PurchaseOrderViewTabContextMenu from './PurchaseOrderViewTabContextMenu';
 import PurchaseOrderViewTabHoverCard from './PurchaseOrderViewTabHoverCard';
 import PurchaseOrderViewTabCaption from './PurchaseOrderViewTabCaption';
 import PurchaseOrderViewTabBarScroller from './PurchaseOrderViewTabBarScroller';
+import TabReorderDialog from './TabReorderDialog';
 import { useTabBarOverflow } from './useTabBarOverflow';
-import { ALL_TAB_ID, groupColorForTab, hasExtraViewTabs } from '../../../utils/viewTabs';
+import {
+  ALL_TAB_ID,
+  groupColorForTab,
+  hasExtraViewTabs,
+  inferGroupColumnKey,
+} from '../../../utils/viewTabs';
+import { sortItemsByName } from '../../../utils/tabOrder';
 
 const ALL_HOVER_TAB = { id: ALL_TAB_ID, name: 'All', extraFilters: {} };
 
@@ -57,9 +64,17 @@ export default function PurchaseOrderViewTabBar({
   onSelectTab,
   onRemoveTab,
   onSetGroupColor,
+  onReorderTabs = null,
 }) {
   const styles = useStyles();
   const [context, setContext] = useState({ open: false, x: 0, y: 0, tabId: '' });
+  const [reorderOpen, setReorderOpen] = useState(false);
+  const reorderItems = useMemo(() => extraTabs.map((tab) => ({
+    id: tab.id,
+    name: tab.name,
+    color: groupColorForTab(tab, groups),
+    groupKey: inferGroupColumnKey(tab),
+  })), [extraTabs, groups]);
   const [hover, setHover] = useState(null);
   const contentKey = useMemo(
     () => extraTabs.map((tab) => tab.id).join('|'),
@@ -108,6 +123,14 @@ export default function PurchaseOrderViewTabBar({
   const handleContextOpenChange = useCallback((open) => {
     setContext((prev) => ({ ...prev, open }));
   }, []);
+
+  // Sorting keeps each column group in place and sorts the tabs inside it.
+  const handleSort = useCallback((direction) => {
+    const sorted = sortItemsByName(extraTabs, direction, { getGroupKey: inferGroupColumnKey });
+    onReorderTabs?.(sorted.map((tab) => tab.id));
+  }, [extraTabs, onReorderTabs]);
+
+  const handleOpenReorder = useCallback(() => setReorderOpen(true), []);
 
   if (!hasExtraViewTabs(extraTabs)) return null;
 
@@ -185,7 +208,21 @@ export default function PurchaseOrderViewTabBar({
         onOpenChange={handleContextOpenChange}
         onRemoveTab={onRemoveTab}
         onSetGroupColor={onSetGroupColor}
+        canArrange={Boolean(onReorderTabs) && extraTabs.length > 1}
+        onSort={handleSort}
+        onOpenReorder={handleOpenReorder}
       />
+      {onReorderTabs ? (
+        <TabReorderDialog
+          open={reorderOpen}
+          title="Reorder tabs"
+          items={reorderItems}
+          getGroupKey={(item) => item.groupKey}
+          hint="Save the view to keep this order."
+          onOpenChange={setReorderOpen}
+          onApply={onReorderTabs}
+        />
+      ) : null}
     </div>
   );
 }

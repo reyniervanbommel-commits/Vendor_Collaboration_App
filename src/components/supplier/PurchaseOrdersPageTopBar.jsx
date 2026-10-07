@@ -27,6 +27,7 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    columnGap: '24px',
     marginBottom: '8px',
   },
   titleWrap: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, flex: 1 },

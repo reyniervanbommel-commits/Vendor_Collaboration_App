@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-export function useColumnReorderDrag({ onReorder, disabled = false }) {
+function dropPosition(event, axis) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  if (axis === 'y') return (event.clientY - rect.top) > (rect.height / 2) ? 'after' : 'before';
+  return (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
+}
+
+/** Native HTML5 drag-reorder. `axis` 'x' (columns, default) or 'y' (vertical lists). */
+export function useColumnReorderDrag({ onReorder, disabled = false, axis = 'x' }) {
   const [draggingKey, setDraggingKey] = useState('');
   const [dropTarget, setDropTarget] = useState({ key: '', position: 'before' });
   const canDrag = !disabled && typeof onReorder === 'function';
@@ -31,10 +38,9 @@ export function useColumnReorderDrag({ onReorder, disabled = false }) {
     if (!canDrag) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
+    const position = dropPosition(event, axis);
     setDropTarget((prev) => (prev.key === columnKey && prev.position === position ? prev : { key: columnKey, position }));
-  }, [canDrag]);
+  }, [axis, canDrag]);
 
   const handleDragLeave = useCallback((event) => {
     const nextTarget = event.relatedTarget;
@@ -44,14 +50,13 @@ export function useColumnReorderDrag({ onReorder, disabled = false }) {
 
   const handleDrop = useCallback(async (event, columnKey) => {
     event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const position = (event.clientX - rect.left) > (rect.width / 2) ? 'after' : 'before';
+    const position = dropPosition(event, axis);
     const sourceKey = String(event.dataTransfer.getData('text/plain') || '');
     resetDragState();
     if (!canDrag) return;
     if (!sourceKey || sourceKey === columnKey) return;
     await onReorder(sourceKey, columnKey, position);
-  }, [canDrag, onReorder, resetDragState]);
+  }, [axis, canDrag, onReorder, resetDragState]);
 
   const handleDragEnd = useCallback(() => {
     resetDragState();

@@ -12,6 +12,7 @@
 
 const viewsByBoard = new Map();
 const settingsByBoard = new Map();
+const settingsListeners = new Set();
 
 export function getCachedBoardViews(boardKey) {
   return boardKey && viewsByBoard.has(boardKey) ? viewsByBoard.get(boardKey) : null;
@@ -29,6 +30,13 @@ export function getCachedBoardSettings(boardKey) {
 export function setCachedBoardSettings(boardKey, settings) {
   if (!boardKey || !settings || typeof settings !== 'object') return;
   settingsByBoard.set(boardKey, settings);
+  settingsListeners.forEach((listener) => listener(boardKey));
+}
+
+/** Notified after every settings write (fetch, column prefs, pinned order). Returns unsubscribe. */
+export function subscribeBoardSettings(listener) {
+  settingsListeners.add(listener);
+  return () => settingsListeners.delete(listener);
 }
 
 export function clearBoardPresentationCache() {

@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderPinnedViewTabs from './PurchaseOrderPinnedViewTabs';
 import PurchaseOrderViewTabMenuSection from './viewTabs/PurchaseOrderViewTabMenuSection';
+import { VIEW_TITLE_SLOT_WIDTH } from './PurchaseOrderSavedViewTitleTrigger';
+import { canToggleViewMeta } from './PurchaseOrderSavedViewMenuItems';
+import { usePinnedViewOrder } from '../../hooks/usePinnedViewOrder';
 
 const useStyles = makeStyles({
   row: {
@@ -10,13 +13,16 @@ const useStyles = makeStyles({
     alignItems: 'center',
     minWidth: 0,
     maxWidth: '100%',
-    columnGap: tokens.spacingHorizontalL,
+    columnGap: tokens.spacingHorizontalM,
   },
+  // Slot in the title font: the first pinned tab starts at the same x for any name <= 25 chars.
   viewTitle: {
     flexShrink: 0,
-    width: '25ch',
-    minWidth: '25ch',
-    overflow: 'visible',
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: tokens.fontSizeHero700,
+    minWidth: VIEW_TITLE_SLOT_WIDTH,
+    maxWidth: '70%',
   },
 });
 
@@ -44,6 +50,9 @@ export default function PurchaseOrderViewTitleRow({
     allOrdersShowHistoryIndicators,
     viewTabs,
   } = savedViewsState;
+  const pinnedOrder = usePinnedViewOrder();
+  const canUnpin = useCallback((view) => canToggleViewMeta(view, isStaff), [isStaff]);
+  const handleUnpin = useCallback((view) => handleToggleShowAsTab(view, false), [handleToggleShowAsTab]);
 
   return (
     <div className={styles.row}>
@@ -82,6 +91,10 @@ export default function PurchaseOrderViewTitleRow({
         views={savedViews.views}
         activeViewId={activeViewId}
         onApplyView={applyViewState}
+        order={pinnedOrder.order}
+        onReorder={pinnedOrder.setOrder}
+        canUnpin={canUnpin}
+        onUnpin={handleUnpin}
       />
     </div>
   );

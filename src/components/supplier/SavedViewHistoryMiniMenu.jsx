@@ -6,10 +6,11 @@ import {
   PopoverTrigger,
   Switch,
   makeStyles,
+  mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ChevronRightRegular, ClockRegular } from '@fluentui/react-icons';
+import { ChevronRight12Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   trigger: {
@@ -17,26 +18,23 @@ const useStyles = makeStyles({
     width: '22px',
     height: '22px',
     ...shorthands.padding('0'),
+    color: tokens.colorNeutralForeground3,
+  },
+  // Accent when history is off, so the non-default state is visible without hovering.
+  triggerOff: {
+    color: tokens.colorBrandForeground1,
   },
   surface: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
-  },
-  label: {
-    display: 'flex',
-    alignItems: 'center',
-    ...shorthands.gap(tokens.spacingHorizontalXS),
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground1,
+    ...shorthands.padding(tokens.spacingVerticalXXS, tokens.spacingHorizontalS),
   },
   switch: {
-    transform: 'scale(0.72)',
-    transformOrigin: 'center right',
+    fontSize: tokens.fontSizeBase200,
   },
 });
 
+/**
+ * Per-view options shown on hover over the chevron (click/keyboard also open it).
+ */
 export default function SavedViewHistoryMiniMenu({
   checked,
   disabled,
@@ -44,8 +42,13 @@ export default function SavedViewHistoryMiniMenu({
 }) {
   const styles = useStyles();
 
-  const handleClick = useCallback((event) => {
+  const stop = useCallback((event) => {
     event.stopPropagation();
+  }, []);
+
+  // Enter/Space on the chevron must not also apply the view via the parent MenuItem.
+  const stopActivationKeys = useCallback((event) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
   }, []);
 
   const handleChange = useCallback((event, data) => {
@@ -54,27 +57,30 @@ export default function SavedViewHistoryMiniMenu({
   }, [onChange]);
 
   return (
-    <span onClick={handleClick}>
-      <Popover positioning="after" trapFocus>
+    <span onClick={stop} onKeyDown={stopActivationKeys}>
+      <Popover
+        openOnHover
+        mouseLeaveDelay={250}
+        positioning="after-top"
+        withArrow
+        size="small"
+      >
         <PopoverTrigger disableButtonEnhancement>
           <Button
             appearance="subtle"
-            className={styles.trigger}
-            icon={<ChevronRightRegular />}
-            aria-label="View options"
+            size="small"
+            className={mergeClasses(styles.trigger, !checked && styles.triggerOff)}
+            icon={<ChevronRight12Regular />}
+            aria-label={`View options (history ${checked ? 'on' : 'off'})`}
           />
         </PopoverTrigger>
-        <PopoverSurface className={styles.surface}>
-          <span className={styles.label}>
-            <ClockRegular aria-hidden />
-            History
-          </span>
+        <PopoverSurface className={styles.surface} onClick={stop}>
           <Switch
             className={styles.switch}
+            label="Show history"
+            labelPosition="before"
             checked={checked}
             disabled={disabled}
-            aria-label="Show history indicators"
-            onClick={handleClick}
             onChange={handleChange}
           />
         </PopoverSurface>

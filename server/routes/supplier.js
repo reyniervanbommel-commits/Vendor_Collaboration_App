@@ -225,6 +225,8 @@ function normalizeBoardSettings(rawSettings, boardKey) {
     collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
     productImageColumnVisible: input.productImageColumnVisible !== false,
     viewTabSelection: normalizeViewTabSelection(input.viewTabSelection),
+    // Per-user order of pinned saved views (view ids); pinning itself lives on the view.
+    pinnedViewOrder: normalizeStringArray(input.pinnedViewOrder),
     kpiCardStyles: normalizeKpiCardStyles(input.kpiCardStyles),
   };
   // Onboarding-voortgang hoort alleen bij de eigen board key; andere boards dragen de sleutel niet.

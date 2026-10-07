@@ -1,20 +1,26 @@
 import React, { useCallback } from 'react';
 import {
+  Button,
   MenuItem,
-  Switch,
   makeStyles,
   mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { StarFilled } from '@fluentui/react-icons';
+import { Pin16Filled, Pin16Regular, StarFilled } from '@fluentui/react-icons';
 import { viewScopeLabel } from '../../utils/viewTabs';
-import { truncateViewName, viewShowsAsTab } from '../../utils/savedViewDisplay';
+import { viewShowsAsTab } from '../../utils/savedViewDisplay';
 import SavedViewScopeIcon from './SavedViewScopeIcon';
 import SavedViewHistoryMiniMenu from './SavedViewHistoryMiniMenu';
 
+const PIN_CLASS = 'po-view-pin';
+
 const useStyles = makeStyles({
   viewMenuItem: {
+    // Idle pins are faint; they surface on row hover/focus so the list stays calm.
+    [`&:hover .${PIN_CLASS}, &:focus-within .${PIN_CLASS}`]: {
+      opacity: 1,
+    },
     ...shorthands.padding('0'),
     maxWidth: '100%',
     minWidth: 0,
@@ -38,7 +44,7 @@ const useStyles = makeStyles({
   },
   viewMenuItemRow: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 22px auto',
+    gridTemplateColumns: 'minmax(0, 1fr) 22px 24px',
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalXS,
     width: '100%',
@@ -54,11 +60,13 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     ...shorthands.gap(tokens.spacingHorizontalXS),
   },
+  // Full name, wrapping onto a second line when the menu is too narrow.
   viewName: {
     minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    lineHeight: tokens.lineHeightBase300,
+    ...shorthands.padding('2px', '0'),
     fontWeight: tokens.fontWeightRegular,
     color: tokens.colorNeutralForeground1,
   },
@@ -67,18 +75,32 @@ const useStyles = makeStyles({
     color: tokens.colorBrandForeground1,
     flexShrink: 0,
   },
-  tabSwitch: {
-    flexShrink: 0,
-    transform: 'scale(0.72)',
-    transformOrigin: 'center center',
-    marginLeft: '-6px',
+  pin: {
+    minWidth: '24px',
+    width: '24px',
+    height: '24px',
+    ...shorthands.padding('0'),
+    color: tokens.colorNeutralForeground3,
+    opacity: 0.45,
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+    },
+  },
+  pinOn: {
+    opacity: 1,
+    color: tokens.colorBrandForeground1,
   },
 });
 
-function canToggleViewMeta(view, canManageGlobal) {
+export function canToggleViewMeta(view, canManageGlobal) {
   if (!view.id) return true;
   if (view.scope === 'personal') return true;
   return canManageGlobal;
+}
+
+function pinTitle(pinned, canToggle) {
+  if (!canToggle) return pinned ? 'Pinned (only staff can change shared views)' : 'Only staff can pin shared views';
+  return pinned ? 'Unpin from the tab bar' : 'Pin to the tab bar';
 }
 
 export function SavedViewMenuItem({
@@ -94,7 +116,6 @@ export function SavedViewMenuItem({
   const showHistory = view.viewState?.showHistoryIndicators !== false;
   const showAsTab = viewShowsAsTab(view);
   const canToggleMeta = canToggleViewMeta(view, canManageGlobal);
-  const displayName = truncateViewName(view.name);
   const labelText = [view.name, viewScopeLabel(view)].filter(Boolean).join(' ');
 
   const handleToggleHistory = useCallback((event, data) => {
@@ -102,13 +123,14 @@ export function SavedViewMenuItem({
     onToggleShowHistory(view, data.checked);
   }, [onToggleShowHistory, view]);
 
-  const handleToggleTab = useCallback((event, data) => {
+  const handleTogglePin = useCallback((event) => {
     event.stopPropagation();
-    onToggleShowAsTab(view, data.checked);
-  }, [onToggleShowAsTab, view]);
+    onToggleShowAsTab(view, !showAsTab);
+  }, [onToggleShowAsTab, showAsTab, view]);
 
-  const handleSwitchClick = useCallback((event) => {
-    event.stopPropagation();
+  // Enter/Space on the pin must not also apply the view via the parent MenuItem.
+  const handlePinKeyDown = useCallback((event) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
   }, []);
 
   const handleApply = useCallback(() => {
@@ -125,7 +147,7 @@ export function SavedViewMenuItem({
       <span className={styles.viewMenuItemRow}>
         <span className={styles.viewNameCell} title={labelText}>
           <SavedViewScopeIcon scope={view.scope} hasId={Boolean(view.id)} />
-          <span className={styles.viewName}>{displayName}</span>
+          <span className={styles.viewName}>{view.name}</span>
           {view.isDefault ? <StarFilled className={styles.star} aria-label="Default view" /> : null}
         </span>
         <SavedViewHistoryMiniMenu
@@ -134,14 +156,17 @@ export function SavedViewMenuItem({
           onChange={handleToggleHistory}
         />
         {view.id ? (
-          <Switch
-            className={styles.tabSwitch}
-            checked={showAsTab}
-            disabled={!canToggleMeta}
-            aria-label="Show as tab"
-            title="Show as tab"
-            onClick={handleSwitchClick}
-            onChange={handleToggleTab}
+          <Button
+            appearance="transparent"
+            size="small"
+            className={mergeClasses(PIN_CLASS, styles.pin, showAsTab && styles.pinOn)}
+            icon={showAsTab ? <Pin16Filled /> : <Pin16Regular />}
+            aria-pressed={showAsTab}
+            aria-label={showAsTab ? `Unpin ${view.name}` : `Pin ${view.name} as a tab`}
+            title={pinTitle(showAsTab, canToggleMeta)}
+            disabledFocusable={!canToggleMeta}
+            onClick={handleTogglePin}
+            onKeyDown={handlePinKeyDown}
           />
         ) : (
           <span />

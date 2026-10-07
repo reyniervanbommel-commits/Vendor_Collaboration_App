@@ -10,6 +10,7 @@ import {
 } from '@fluentui/react-components';
 import { DeleteRegular } from '@fluentui/react-icons';
 import PurchaseOrderViewTabGroupColorItem from './PurchaseOrderViewTabGroupColorItem';
+import TabArrangeMenuItems from './TabArrangeMenuItems';
 import { ALL_TAB_ID, inferGroupColumnKey } from '../../../utils/viewTabs';
 
 const useStyles = makeStyles({
@@ -33,6 +34,9 @@ export default function PurchaseOrderViewTabContextMenu({
   onOpenChange,
   onRemoveTab,
   onSetGroupColor,
+  canArrange = false,
+  onSort,
+  onOpenReorder,
 }) {
   const styles = useStyles();
   const tab = useMemo(
@@ -66,6 +70,16 @@ export default function PurchaseOrderViewTabContextMenu({
       </MenuTrigger>
       <MenuPopover>
         <MenuList>
+          {canArrange ? (
+            <>
+              <TabArrangeMenuItems
+                sortHint={groups.length ? 'Per group' : ''}
+                onSort={onSort}
+                onOpenReorder={onOpenReorder}
+              />
+              <MenuDivider />
+            </>
+          ) : null}
           {groupKey ? (
             <PurchaseOrderViewTabGroupColorItem
               columnKey={groupKey}
