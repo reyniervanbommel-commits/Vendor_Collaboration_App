@@ -9,7 +9,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ClockRegular, MoreHorizontalRegular } from '@fluentui/react-icons';
+import { ChevronRightRegular, ClockRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   trigger: {
@@ -60,7 +60,7 @@ export default function SavedViewHistoryMiniMenu({
           <Button
             appearance="subtle"
             className={styles.trigger}
-            icon={<MoreHorizontalRegular />}
+            icon={<ChevronRightRegular />}
             aria-label="View options"
           />
         </PopoverTrigger>

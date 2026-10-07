@@ -14,8 +14,8 @@ const useStyles = makeStyles({
   },
   viewTitle: {
     flexShrink: 0,
+    width: '25ch',
     minWidth: '25ch',
-    width: 'fit-content',
     overflow: 'visible',
   },
 });

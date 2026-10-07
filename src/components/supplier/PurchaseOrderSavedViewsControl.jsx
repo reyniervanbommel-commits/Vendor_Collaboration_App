@@ -124,7 +124,6 @@ export default function PurchaseOrderSavedViewsControl({
           {titleMode ? (
             <PurchaseOrderSavedViewTitleTrigger
               name={triggerLabel}
-              isDefault={Boolean(activeView?.isDefault)}
               hasUnsavedChanges={hasUnsavedChanges}
               saving={saving}
             />
