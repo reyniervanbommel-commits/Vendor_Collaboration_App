@@ -17,6 +17,7 @@ import { useKpiCardStyle } from './useKpiCardStyles';
 import { useSplitPanelKpiToggle } from '../../hooks/useSplitPanelKpiToggle';
 import { RccpHoverHint } from './rccpFieldLabel';
 import { AuthContext } from '../../context/AuthContext';
+import { isStaffRole } from '../../constants/roles';
 
 const HIT_SIZE = '32px';
 const FOLD_SIZE = '10px';
@@ -138,7 +139,7 @@ function KpiFormulaFold({ formula, kpiKey }) {
   // Alleen employee/admin mogen de kaart-kleur en -opacity aanpassen; suppliers zien enkel de formule.
   const auth = useContext(AuthContext);
   const userRole = auth?.user?.role;
-  const canEditCardStyle = userRole === 'employee' || userRole === 'admin';
+  const canEditCardStyle = isStaffRole(userRole);
   // De split-panel-toggle wijzigt een gedeelde instelling (RCCP_CONFIG, geldt voor alle
   // gebruikers/views) — bewust strenger dan de kaart-kleur hierboven, die per gebruiker is.
   const isAdmin = userRole === 'admin';

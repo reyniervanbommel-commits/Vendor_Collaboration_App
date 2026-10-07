@@ -3,7 +3,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireSession, requireAnyRole } = require('../middleware/auth');
-const { ROLES } = require('../constants/roles');
+const { ROLES, STAFF_ROLES } = require('../constants/roles');
 const { time } = require('../utils/timing');
 const {
   createProductImageService,
@@ -59,7 +59,7 @@ function createMediaRouter({
   timeFn = time,
 } = {}) {
   const router = express.Router();
-  const staffOnly = requireAnyRoleFn([ROLES.ADMIN, ROLES.EMPLOYEE]);
+  const staffOnly = requireAnyRoleFn(STAFF_ROLES);
 
   router.use((_req, res, next) => {
     res.set('Cache-Control', 'no-store');

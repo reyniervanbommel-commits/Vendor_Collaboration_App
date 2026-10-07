@@ -158,4 +158,59 @@ describe('remarks components', () => {
     expect(screen.getByRole('button', { name: /Open remarks for purchase order PO-3/ }).textContent).toBe('No remarks');
     expect(container.querySelector('.remarks-latest-preview--empty')).toBeTruthy();
   });
+
+  describe('zichtbaarheid', () => {
+    const base = { id: 1, body: 'x', author: { id: 2, displayName: 'Ann' }, reactions: [], createdAt: '2026-10-07T10:00:00Z' };
+    const renderCard = (remark) => renderWithFluent(
+      <RemarkMessageCard remark={remark} currentUser={{ id: 9 }} onDelete={vi.fn()} onReaction={vi.fn()} />
+    );
+
+    it('toont alleen de term Internal', () => {
+      renderCard({ ...base, visibility: 'internal' });
+      expect(screen.getByText('Internal')).toBeTruthy();
+      expect(screen.queryByText('Vendor')).toBeNull();
+    });
+
+    it('toont alleen de term Vendor', () => {
+      renderCard({ ...base, visibility: 'vendor' });
+      expect(screen.getByText('Vendor')).toBeTruthy();
+      expect(screen.queryByText(/Shared with/)).toBeNull();
+      expect(screen.queryByText('Internal')).toBeNull();
+    });
+
+    it('toont geen badges zonder visibility (employee/vendor)', () => {
+      renderCard(base);
+      expect(screen.queryByText('Internal')).toBeNull();
+      expect(screen.queryByText('Vendor')).toBeNull();
+    });
+
+    it('markeert de kaart met een accent per zichtbaarheid', () => {
+      renderCard({ ...base, visibility: 'internal' });
+      expect(screen.getByRole('article').classList.contains('remark-card--internal')).toBe(true);
+    });
+
+    it('zet datum en tijd op een eigen regel onder de naam', () => {
+      renderCard(base);
+      const name = screen.getByText('Ann');
+      const date = screen.getByText((_, el) => el?.classList?.contains('remark-card-date'));
+      expect(date.textContent).not.toContain('·');
+      expect(name.parentElement).toBe(date.parentElement);
+      expect(name.parentElement.classList.contains('remark-author-text')).toBe(true);
+    });
+
+    it('latest-cel toont slot bij interne laatste remark', () => {
+      renderWithFluent(
+        <RemarksLatestCell summary={{ latest: { bodyPreview: 'x', visibility: 'internal', createdAt: '2026-10-07T10:00:00Z' } }} onOpen={vi.fn()} />
+      );
+      expect(screen.getByRole('img', { name: 'Internal remark' })).toBeTruthy();
+      expect(screen.getByRole('button').getAttribute('title')).toMatch(/^Internal · /);
+    });
+
+    it('latest-cel zonder slot bij vendor-remark', () => {
+      renderWithFluent(
+        <RemarksLatestCell summary={{ latest: { bodyPreview: 'x', visibility: 'vendor', createdAt: '2026-10-07T10:00:00Z' } }} onOpen={vi.fn()} />
+      );
+      expect(screen.queryByRole('img', { name: 'Internal remark' })).toBeNull();
+    });
+  });
 });

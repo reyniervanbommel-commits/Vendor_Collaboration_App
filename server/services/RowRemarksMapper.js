@@ -28,6 +28,11 @@ function mapRemarkRows(rows, actor) {
         createdAt: iso(row.created_at),
         deletedAt: iso(row.deleted_at),
         reactions: [],
+        // Alleen admin/supply_chain zien voor wie een remark is (badges in de UI).
+        ...(actor?.seesVisibility ? {
+          visibility: row.visibility,
+          fromVendor: row.author_role === 'supplier',
+        } : {}),
         // Suppliers mogen nooit remarks verwijderen, ook niet hun eigen (server blokkeert dit ook in deleteRemark).
         canDelete: !isDeleted && !actor?.isSupplier && Boolean(
           actor?.isAdmin || Number(row.created_by) === Number(actor?.id)

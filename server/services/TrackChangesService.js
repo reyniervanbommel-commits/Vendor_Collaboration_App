@@ -16,7 +16,7 @@ const { ALLOWED_ROLES } = require('../constants/roles');
 
 const CONFIG_KEY = 'TRACK_CHANGES_CONFIG';
 const VALID_MODES = Object.freeze(['session', 'week']);
-const DEFAULT_SESSION_ROLES = Object.freeze(['admin', 'employee']);
+const DEFAULT_SESSION_ROLES = Object.freeze(['admin', 'employee', 'supply_chain']);
 const MAX_SESSION_BOUNDARIES = 8;
 
 function defaultConfig() {

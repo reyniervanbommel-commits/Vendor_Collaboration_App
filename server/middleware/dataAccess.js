@@ -5,7 +5,7 @@
 // - supplier: lezen van eigen purchase-orders (board + opengeklapte sublijnen) +
 //   remarks/history/activity op eigen rijen, reaction-toggle op remarks en het
 //   plaatsen van eigen comments (rij-scope via assertSupplierPurchaseOrderRow).
-const { ROLES } = require('../constants/roles');
+const { ROLES, isStaffRole } = require('../constants/roles');
 
 const SUPPLIER_READ_PATHS = new Set(['/purchase-orders', '/purchase-orders/columns']);
 
@@ -53,7 +53,7 @@ function restrictSupplierDataAccess(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Not authenticated' });
 
   const role = req.user.role;
-  if (role === ROLES.ADMIN || role === ROLES.EMPLOYEE) return next();
+  if (isStaffRole(role)) return next();
 
   if (role === ROLES.SUPPLIER && isSupplierAllowedDataRequest(req)) return next();
 

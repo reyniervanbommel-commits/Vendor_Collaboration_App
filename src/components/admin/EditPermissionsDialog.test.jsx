@@ -44,4 +44,11 @@ describe('EditPermissionsDialog comments', () => {
     expect(screen.queryByText('View comments')).toBeNull();
     expect(apiRequest).not.toHaveBeenCalled();
   });
+
+  it('toont een Supply Chain-gebruiker de instellingen-permissies zoals een employee', async () => {
+    renderDialog({ id: 6, email: 'sc@x.nl', role: 'supply_chain' });
+    expect(await screen.findByText('View comments')).toBeTruthy();
+    expect(screen.getByText('OData')).toBeTruthy();
+    expect(screen.queryByText(/can only be granted to employees/i)).toBeNull();
+  });
 });

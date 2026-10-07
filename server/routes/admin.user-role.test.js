@@ -79,6 +79,20 @@ describe('rol wijzigen', () => {
     expect(pool.calls[1].sql).not.toContain('DELETE');
   });
 
+  it('zet een gebruiker op supply_chain en vult comment-rechten aan zonder te wissen', async () => {
+    const pool = usePool([{ recordset: [{ id: 9, email: 'x@y.nl', role: 'supply_chain' }] }]);
+
+    await withServer(ADMIN, async (patch) => {
+      const res = await patch(9, { role: 'supply_chain' });
+      expect(res.status).toBe(200);
+      expect((await res.json()).user.role).toBe('supply_chain');
+    });
+
+    expect(pool.calls[0].inputs.role).toBe('supply_chain');
+    expect(pool.calls[1].sql).toContain('comments.view');
+    expect(pool.calls[1].sql).not.toContain('DELETE');
+  });
+
   it('houdt comment-rechten bij een wissel naar vendor en wist instellingen', async () => {
     const pool = usePool([{ recordset: [{ id: 9, email: 'x@y.nl', role: 'supplier' }] }]);
 

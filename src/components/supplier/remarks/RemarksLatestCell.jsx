@@ -1,4 +1,5 @@
 import React, { memo, useCallback } from 'react';
+import { LockClosedRegular } from '@fluentui/react-icons';
 import { formatDateTime } from './remarksFormatters';
 
 function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackground = false }) {
@@ -6,8 +7,9 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackg
   const isEmpty = !latest;
   const preview = latest?.bodyPreview || latest?.body || 'No remarks';
   const authorName = latest?.authorName || latest?.author?.displayName || 'Unknown user';
+  const isInternal = latest?.visibility === 'internal';
   const title = latest
-    ? `${preview} · ${authorName} · ${formatDateTime(latest.createdAt)}`
+    ? `${isInternal ? 'Internal · ' : ''}${preview} · ${authorName} · ${formatDateTime(latest.createdAt)}`
     : preview;
 
   const handleOpen = useCallback(
@@ -27,6 +29,9 @@ function RemarksLatestCell({ summary, onOpen, orderNumber = '', onFormattedBackg
       data-tour="remarks-latest-cell"
     >
       <div className={`remarks-latest-preview${isEmpty ? ' remarks-latest-preview--empty' : ''}`}>
+        {isInternal ? (
+          <LockClosedRegular className="remarks-latest-lock" role="img" aria-label="Internal remark" />
+        ) : null}
         {preview}
       </div>
     </button>

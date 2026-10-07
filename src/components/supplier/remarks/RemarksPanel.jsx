@@ -1,12 +1,14 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Button, Tab, TabList } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
+import RemarkVisibilityPicker from './RemarkVisibilityPicker';
 import RowActivityFeed from './RowActivityFeed';
 import RowHistoryFeed from './RowHistoryFeed';
 import { partitionActivityItems } from './historyTableModel';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
 import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
+import { canChooseRemarkVisibility } from '../../../constants/roles';
 import { layout } from '../../../styles/brandTokens';
 import './remarks.css';
 
@@ -24,6 +26,10 @@ function RemarksPanel({
   canCompose = true,
 }) {
   const { canView, canWrite } = useCommentPermissions();
+  // Admin/supply_chain: All toont alles (geen post), Vendor/Internal filtert en bepaalt de post.
+  const canChooseVisibility = canChooseRemarkVisibility(currentUser?.role);
+  const [visibilityView, setVisibilityView] = useState('all');
+  const visibilityFilter = canChooseVisibility && visibilityView !== 'all' ? visibilityView : null;
   const controller = usePurchaseOrderRemarksController({
     open,
     onClose,
@@ -34,8 +40,10 @@ function RemarksPanel({
     summaryState,
   });
   const remarkItems = useMemo(
-    () => controller.remarks.items.map((item) => ({ ...item, kind: 'remark' })),
-    [controller.remarks.items]
+    () => controller.remarks.items
+      .filter((item) => !visibilityFilter || item.visibility === visibilityFilter)
+      .map((item) => ({ ...item, kind: 'remark' })),
+    [controller.remarks.items, visibilityFilter]
   );
   const remarkActions = useMemo(
     () => ({
@@ -54,16 +62,18 @@ function RemarksPanel({
     [activeFeed.items, selectedTab]
   );
   const allRemarkItems = useMemo(
-    () => partitionedAll.remarks.map((item) => ({ ...item, kind: 'remark' })),
-    [partitionedAll.remarks]
+    () => partitionedAll.remarks
+      .filter((item) => !visibilityFilter || item.visibility === visibilityFilter)
+      .map((item) => ({ ...item, kind: 'remark' })),
+    [partitionedAll.remarks, visibilityFilter]
   );
   const orderNumber = row?.recordKey || row?.orderNumber || '';
   const handleLocateRow = useCallback(() => {
     onLocateRow?.();
   }, [onLocateRow]);
   const handleSubmitRemark = useCallback(
-    async (body, columnId) => {
-      const remark = await controller.remarks.createRemark(body, columnId);
+    async (body, columnId, visibility) => {
+      const remark = await controller.remarks.createRemark(body, columnId, visibility);
       if (selectedTab === 'all') await controller.all.refresh();
       return remark;
     },
@@ -125,12 +135,17 @@ function RemarksPanel({
             {canView ? <Tab value="all">All</Tab> : null}
           </TabList>
 
+          {canChooseVisibility && canView && selectedTab !== 'history' ? (
+            <RemarkVisibilityPicker value={visibilityView} onChange={setVisibilityView} />
+          ) : null}
+
           {showComposer ? (
             <RemarkComposer
               currentUser={currentUser}
               column={initialColumn}
               onSubmit={handleSubmitRemark}
               textareaRef={controller.composerRef}
+              visibility={visibilityFilter}
             />
           ) : null}
 
@@ -140,7 +155,9 @@ function RemarksPanel({
               loading={controller.remarks.loading}
               error={controller.remarks.error}
               hasMore={controller.remarks.hasMore}
-              emptyMessage="No remarks have been added yet."
+              emptyMessage={visibilityFilter
+                ? `No ${visibilityFilter} remarks have been added yet.`
+                : 'No remarks have been added yet.'}
               currentUser={currentUser}
               onLoadOlder={controller.remarks.loadOlder}
               onRetry={controller.remarks.retry}

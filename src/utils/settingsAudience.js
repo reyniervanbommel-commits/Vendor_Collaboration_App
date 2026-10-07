@@ -1,16 +1,12 @@
-import { ROLES } from '../constants/roles';
+import { ROLES, ROLE_LABELS as BASE_ROLE_LABELS, STAFF_ROLES, hasEmployeeAccess } from '../constants/roles';
 
 export const SETTINGS_AUDIENCE = Object.freeze({
-  ALL: Object.freeze([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]),
-  STAFF: Object.freeze([ROLES.ADMIN, ROLES.EMPLOYEE]),
+  ALL: Object.freeze([...STAFF_ROLES, ROLES.SUPPLIER]),
+  STAFF: STAFF_ROLES,
   ADMIN: Object.freeze([ROLES.ADMIN]),
 });
 
-export const ROLE_LABELS = Object.freeze({
-  [ROLES.ADMIN]: 'Admin',
-  [ROLES.EMPLOYEE]: 'Employee',
-  [ROLES.SUPPLIER]: 'Vendor',
-});
+export const ROLE_LABELS = BASE_ROLE_LABELS;
 
 // `grantable`: de tab kan per employee worden vrijgegeven via dbo.user_permissions (#AB:326).
 // `general` is niet grantable en blijft daarmee altijd zichtbaar voor iedereen die het bereikt.
@@ -77,7 +73,7 @@ export function canSeeSettingsTab(tabRoles, userRole) {
 export function canAccessSettingsTab(item, userRole, userPermissions = []) {
   if (userRole === ROLES.ADMIN) return true;
   if (!item.grantable) return canSeeSettingsTab(item.roles, userRole);
-  if (userRole !== ROLES.EMPLOYEE) return false;
+  if (!hasEmployeeAccess(userRole)) return false;
   return Array.isArray(userPermissions) && userPermissions.includes(item.id);
 }
 

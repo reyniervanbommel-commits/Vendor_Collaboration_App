@@ -3,7 +3,7 @@
 // Gedeelde supplier-scoping. Convention in deze app: het leveranciersaccount is het
 // expliciete veld op de user, of anders het local-part van het e-mailadres. Zowel de
 // legacy /api/supplier-route als de generieke /api/data-read gebruiken deze bron.
-const { ROLES } = require('../constants/roles');
+const { isStaffRole } = require('../constants/roles');
 
 function getSupplierAccount(user) {
   const explicitAccount = (user && (user.supplierAccount || user.vendorAccount || user.vendor_account)) || '';
@@ -15,7 +15,7 @@ function getSupplierAccount(user) {
 }
 
 function isStaffUser(user) {
-  return user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+  return isStaffRole(user?.role);
 }
 
 module.exports = { getSupplierAccount, isStaffUser };

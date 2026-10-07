@@ -4,6 +4,12 @@ const sql = require('mssql');
 const { getPool, getTableByKey, getColumnById } = require('./TableRegistryService');
 const { time } = require('../utils/timing');
 const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
+const { ROLES } = require('../constants/roles');
+const {
+  canSeeVisibilityDetails,
+  readVisibilityFilter,
+  visibilitySql,
+} = require('../utils/remarkVisibility');
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
@@ -118,6 +124,8 @@ function mapActivityRow(row) {
     actor: row.user_id
       ? { id: Number(row.user_id), name: row.user_name || null, email: row.user_email || null }
       : null,
+    visibility: row.visibility || null,
+    authorRole: row.author_role || null,
   };
 }
 
@@ -129,19 +137,24 @@ function compareActivity(a, b) {
 }
 
 function enrichRemarkActivity(item, reactions, currentUser) {
-  if (item.type !== 'remark') return item;
+  const { visibility, authorRole, ...rest } = item;
+  if (item.type !== 'remark') return rest;
   const author = item.actor
     ? { id: item.actor.id, displayName: item.actor.name || item.actor.email || null }
     : null;
   return {
-    ...item,
+    ...rest,
     author,
     column: item.columnId ? { id: item.columnId, label: item.columnLabel } : null,
     reactions: reactions || [],
-    canDelete: !item.isDeleted && Boolean(
-      currentUser?.role === 'admin'
+    canDelete: !item.isDeleted && currentUser?.role !== ROLES.SUPPLIER && Boolean(
+      currentUser?.role === ROLES.ADMIN
       || (author?.id && String(author.id) === String(currentUser?.id))
     ),
+    // Alleen admin/supply_chain zien voor wie een remark is (badges in de UI).
+    ...(canSeeVisibilityDetails(currentUser?.role)
+      ? { visibility, fromVendor: authorRole === ROLES.SUPPLIER }
+      : {}),
   };
 }
 
@@ -155,7 +168,7 @@ function validateRowKeys(partitionKey, recordKey) {
   return { partition, record };
 }
 
-function buildQuery() {
+function buildQuery(visibilityFilter = null) {
   return `
     ;WITH activity AS (
       SELECT l.id source_id, CASE WHEN l.source='D365' THEN 'd365' ELSE 'row' END activity_type,
@@ -166,7 +179,7 @@ function buildQuery() {
         CAST(NULL AS DECIMAL(38,10)) new_value_number, CAST(NULL AS DATETIME2) new_value_date,
         CAST(NULL AS BIT) new_value_bool, CAST(NULL AS NVARCHAR(16)) status,
         CAST(NULL AS NVARCHAR(MAX)) error, CAST(NULL AS NVARCHAR(2000)) body,
-        CAST(0 AS BIT) is_deleted, u.id user_id, COALESCE(u.display_name, u.email) user_name, u.email user_email
+        CAST(0 AS BIT) is_deleted, u.id user_id, COALESCE(u.display_name, u.email) user_name, u.email user_email, CAST(NULL AS NVARCHAR(16)) visibility, CAST(NULL AS NVARCHAR(50)) author_role
       FROM dbo.tb_change_ledger l
       OUTER APPLY (
         SELECT TOP (1) matched.id, matched.label
@@ -184,7 +197,8 @@ function buildQuery() {
       SELECT h.id, 'custom', 2, h.changed_at, h.action, c.[key], c.id, c.label,
         h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
         h.new_value_text, h.new_value_number, h.new_value_date, h.new_value_bool,
-        NULL, NULL, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email
+        NULL, NULL, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email,
+        NULL, NULL
       FROM dbo.tb_cell_history h
       INNER JOIN dbo.tb_columns c ON c.id=h.column_id
       LEFT JOIN dbo.users u ON u.id=h.changed_by
@@ -194,7 +208,8 @@ function buildQuery() {
       UNION ALL
       SELECT f.id, 'writeback', 1, f.created_at, 'correct', c.[key], c.id, c.label,
         f.old_value, NULL, NULL, NULL, f.new_value, NULL, NULL, NULL,
-        f.status, f.error, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email
+        f.status, f.error, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email,
+        NULL, NULL
       FROM dbo.tb_field_corrections f
       INNER JOIN dbo.tb_columns c ON c.id=f.column_id
       LEFT JOIN dbo.users u ON u.id=f.created_by
@@ -205,13 +220,14 @@ function buildQuery() {
       SELECT r.id, 'remark', 5, r.created_at, 'remark', NULL, r.column_id, c.label,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
         CASE WHEN r.is_deleted=1 THEN NULL ELSE r.body END, r.is_deleted,
-        u.id, COALESCE(u.display_name, u.email), u.email
+        u.id, COALESCE(u.display_name, u.email), u.email, r.visibility, u.role
       FROM dbo.tb_row_remarks r
       LEFT JOIN dbo.tb_columns c ON c.id=r.column_id
       LEFT JOIN dbo.users u ON u.id=r.created_by
       WHERE @includeRemarks=1 AND r.table_id=@tableId AND r.partition_key=@partitionKey
         AND r.record_key=@recordKey AND r.detail_key=-1
         AND (@columnId IS NULL OR r.column_id=@columnId)
+        ${visibilitySql('r', visibilityFilter)}
     )
     SELECT *, CONVERT(NVARCHAR(27), created_at, 126)+'Z' created_at_iso
     INTO #activity FROM activity;
@@ -261,6 +277,8 @@ function createRowActivityService(deps = {}) {
     });
     const kind = options.kind || 'history';
     if (!['history', 'all'].includes(kind)) throw badRequest('kind must be history or all');
+    // Remarks zitten alleen in de All-feed; daar geldt het zichtbaarheidsfilter van de rol.
+    const visibilityFilter = kind === 'all' ? readVisibilityFilter(options.currentUser?.role) : null;
     const actionFilter = parseActionFilter(options.actionFilter);
     if (options.cursor && options.afterCursor) throw badRequest('cursor and afterCursor cannot be combined');
     const limit = parseLimit(options.limit);
@@ -292,7 +310,8 @@ function createRowActivityService(deps = {}) {
       .input('afterRank', sql.Int, after?.r || null)
       .input('afterId', sql.BigInt, after?.id || null)
       .input('currentUserId', sql.Int, options.currentUser?.id || null);
-    const result = await registry.time('remarks_activity', () => request.query(buildQuery()));
+    if (visibilityFilter) request.input('visibility', sql.NVarChar(16), visibilityFilter);
+    const result = await registry.time('remarks_activity', () => request.query(buildQuery(visibilityFilter)));
     const mapped = (result.recordsets?.[0] || result.recordset || [])
       .map(mapActivityRow)
       .filter((item) => item.type !== 'row' || item.fieldKey === null)

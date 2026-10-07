@@ -105,7 +105,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   }, [nextCursor, request, row, tableKey]);
 
   const createRemark = useCallback(
-    async (body, columnId = null) => {
+    async (body, columnId = null, visibility = null) => {
       const normalizedBody = String(body ?? '')
         .normalize('NFC')
         .trim();
@@ -119,6 +119,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
           recordKey: row.recordKey,
           body: normalizedBody,
           ...(columnId ? { columnId } : {}),
+          ...(visibility ? { visibility } : {}),
         },
       });
       const remark = data?.remark;

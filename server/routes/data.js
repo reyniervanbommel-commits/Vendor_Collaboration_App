@@ -25,7 +25,7 @@ const {
 const { hasRemarks, searchRemarks } = require('../services/RowRemarksSearchService');
 const { requireRole, requireAnyRole, requirePagePermission } = require('../middleware/auth');
 const { hasCommentPermission, requireCommentPermission, filterRemarksColumns } = require('../utils/commentPermissions');
-const { ROLES } = require('../constants/roles');
+const { ROLES, STAFF_ROLES } = require('../constants/roles');
 const pavBoardColumns = require('../services/ProductAttributeBoardColumnsService');
 const { getSupplierAccount } = require('../utils/supplierScope');
 const { assertSupplierPurchaseOrderRow } = require('../utils/supplierRowAccess');
@@ -113,8 +113,10 @@ router.post('/:tableKey/remarks', requireCommentPermission('comments.write'), as
     const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
     const body = normalizeBody(req.body?.body);
     const columnId = normalizeOptionalColumnId(req.body?.columnId);
+    // De service bepaalt de uiteindelijke zichtbaarheid; alleen admin/supply_chain kiezen echt.
+    const visibility = typeof req.body?.visibility === 'string' ? req.body.visibility : undefined;
     const remark = await remarksService.addRemark(
-      { tableKey, ...row, body, columnId },
+      { tableKey, ...row, body, columnId, visibility },
       remarksActor(req),
     );
     return res.status(201).json({ remark });
@@ -124,7 +126,7 @@ router.post('/:tableKey/remarks', requireCommentPermission('comments.write'), as
 });
 
 // DELETE /api/data/:tableKey/remarks/:id — owner/admin soft delete met rijbinding.
-router.delete('/:tableKey/remarks/:id', requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), requireCommentPermission('comments.write'), async (req, res, next) => {
+router.delete('/:tableKey/remarks/:id', requireAnyRole(STAFF_ROLES), requireCommentPermission('comments.write'), async (req, res, next) => {
   try {
     const tableKey = normalizeTableKey(req.params.tableKey);
     const id = normalizePositiveId(req.params.id, 'remarkId');

@@ -51,3 +51,10 @@ describe('isStaffUser', () => {
     expect(isStaffUser(null)).toBe(false);
   });
 });
+
+describe('isStaffUser', () => {
+  it('telt supply_chain als staff', () => {
+    expect(isStaffUser({ role: 'supply_chain' })).toBe(true);
+    expect(isStaffUser({ role: 'supplier' })).toBe(false);
+  });
+});

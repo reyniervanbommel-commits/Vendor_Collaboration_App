@@ -15,6 +15,7 @@ const errorHandler = require('../middleware/errorHandler');
 const originalRead = dataService.read;
 const originalGetAsync = settingsService.getAsync;
 const originalSetReaction = remarksService.setReaction;
+const originalAddRemark = remarksService.addRemark;
 const originalHasPagePermission = pagePermissions.hasPagePermission;
 const originalListPagePermissions = pagePermissions.listPagePermissions;
 
@@ -31,6 +32,7 @@ afterEach(() => {
   dataService.read = originalRead;
   settingsService.getAsync = originalGetAsync;
   remarksService.setReaction = originalSetReaction;
+  remarksService.addRemark = originalAddRemark;
   pagePermissions.hasPagePermission = originalHasPagePermission;
   pagePermissions.listPagePermissions = originalListPagePermissions;
 });
@@ -213,5 +215,43 @@ describe('POST /:tableKey/correct — D365-foutdetail (#AB:295)', () => {
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }
+  });
+});
+
+describe('POST /:tableKey/remarks — zichtbaarheid', () => {
+  const post = (baseUrl, body) => fetch(`${baseUrl}/api/data/purchase-orders/remarks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ partitionKey: 'whsl', recordKey: 'PO-1', body: 'Hi', ...body }),
+  });
+
+  it('geeft visibility door aan de service', async () => {
+    remarksService.addRemark = vi.fn().mockResolvedValue({ id: 1 });
+    await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
+      expect((await post(baseUrl, { visibility: 'internal' })).status).toBe(201);
+    });
+    expect(remarksService.addRemark).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'internal' }),
+      { id: 4, role: 'supply_chain', vendor_account: null },
+    );
+  });
+
+  it('laat een 400 uit de service door als 400 met de melding', async () => {
+    remarksService.addRemark = vi.fn().mockRejectedValue(
+      Object.assign(new Error('Choose who can see this remark'), { status: 400 }),
+    );
+    await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
+      const res = await post(baseUrl, {});
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toBe('Choose who can see this remark');
+    });
+  });
+
+  it('negeert een niet-string visibility', async () => {
+    remarksService.addRemark = vi.fn().mockResolvedValue({ id: 1 });
+    await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
+      await post(baseUrl, { visibility: ['internal'] });
+    });
+    expect(remarksService.addRemark.mock.calls[0][0].visibility).toBeUndefined();
   });
 });

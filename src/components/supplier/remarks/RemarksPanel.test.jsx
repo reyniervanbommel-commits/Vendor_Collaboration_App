@@ -99,4 +99,49 @@ describe('RemarksPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Go to purchase order PO-207 in table' }));
     expect(onLocateRow).toHaveBeenCalledTimes(1);
   });
+
+  describe('zichtbaarheidstoggle', () => {
+    const SC = { id: 4, role: 'supply_chain', displayName: 'Sam Chain' };
+    const remarks = [
+      { id: 1, body: 'Message for vendor', visibility: 'vendor', author: { id: 7, displayName: 'Ann' }, reactions: [], createdAt: '2026-10-07T10:00:00Z' },
+      { id: 2, body: 'Internal message', visibility: 'internal', author: { id: 8, displayName: 'Bob' }, reactions: [], createdAt: '2026-10-07T09:00:00Z' },
+    ];
+
+    beforeEach(() => {
+      apiRequest.mockImplementation((path) => (
+        path.includes('/remarks?') ? { items: remarks, total: 2, nextCursor: null } : responseFor(path)
+      ));
+    });
+
+    it('staat standaard op All: alles zichtbaar, plaatsen uit', async () => {
+      renderPanel({ currentUser: SC });
+      expect(await screen.findByText('Message for vendor')).toBeTruthy();
+      expect(screen.getByText('Internal message')).toBeTruthy();
+      expect(screen.getByRole('radio', { name: 'All' }).checked).toBe(true);
+      expect(screen.getByLabelText(/Add a remark/).disabled).toBe(true);
+    });
+
+    it('Vendor toont alleen vendor-remarks en zet plaatsen aan', async () => {
+      renderPanel({ currentUser: SC });
+      await screen.findByText('Message for vendor');
+      fireEvent.click(screen.getByRole('radio', { name: 'Vendor' }));
+      expect(screen.getByText('Message for vendor')).toBeTruthy();
+      expect(screen.queryByText('Internal message')).toBeNull();
+      expect(screen.getByLabelText(/Add a remark/).disabled).toBe(false);
+    });
+
+    it('Internal toont alleen interne remarks', async () => {
+      renderPanel({ currentUser: SC });
+      await screen.findByText('Message for vendor');
+      fireEvent.click(screen.getByRole('radio', { name: 'Internal' }));
+      expect(screen.getByText('Internal message')).toBeTruthy();
+      expect(screen.queryByText('Message for vendor')).toBeNull();
+    });
+
+    it('employee krijgt geen toggle', async () => {
+      renderPanel({ currentUser: { id: 2, role: 'employee', displayName: 'Emp' } });
+      await screen.findByRole('tab', { name: 'Remarks (2)' });
+      expect(screen.queryByRole('radiogroup')).toBeNull();
+    });
+  });
 });

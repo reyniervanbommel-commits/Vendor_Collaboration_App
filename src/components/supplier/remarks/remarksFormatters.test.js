@@ -35,4 +35,15 @@ describe('remarksFormatters', () => {
     expect(mapped.id).toBe(9);
     expect(mapped.author.displayName).toBe('Reynier van Bommel');
   });
+
+  it('neemt visibility mee uit een activity-remark', () => {
+    const mapped = toRemark({ type: 'remark', sourceId: '5', body: 'x', visibility: 'internal' });
+    expect(mapped).toMatchObject({ id: 5, visibility: 'internal' });
+  });
+
+  it('laat visibility weg als de server die niet stuurt', () => {
+    const mapped = toRemark({ type: 'remark', sourceId: '5', body: 'x' });
+    expect(mapped).not.toHaveProperty('visibility');
+    expect(mapped).not.toHaveProperty('fromVendor');
+  });
 });

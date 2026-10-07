@@ -14,6 +14,7 @@ import { usePurchaseOrderDatePeriodDialogState } from '../../hooks/usePurchaseOr
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 import { exportPurchaseOrdersToExcel, buildExportFileName } from '../../utils/purchaseOrderBoardExport';
+import { isStaffRole } from '../../constants/roles';
 
 export default function PurchaseOrdersPage() {
   const { user } = useAuth();
@@ -59,7 +60,7 @@ export default function PurchaseOrdersPage() {
   const isAdmin = user?.role === 'admin';
   const onAttachedRunFinishedRef = useRef(null);
   const { running: progressRunning, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress({ enabled: isAdmin, onAttachedRunFinishedRef });
-  const isStaff = user?.role === 'admin' || user?.role === 'employee';
+  const isStaff = isStaffRole(user?.role);
   const isSupplier = user?.role === 'supplier';
   const boardView = usePurchaseOrderBoardView({
     items: orders,

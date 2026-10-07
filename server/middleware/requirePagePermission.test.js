@@ -35,6 +35,19 @@ describe('requirePagePermission', () => {
     expect(pagePermissions.hasPagePermission).toHaveBeenCalledWith(7, 'odata');
   });
 
+  it('behandelt supply_chain als employee: met permissie door, zonder 403', async () => {
+    pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(true);
+    const next = createMockNext();
+    await requirePagePermission('odata')(createMockReq({ user: { id: 5, role: 'supply_chain' } }), createMockRes(), next);
+    expect(next.calls).toHaveLength(1);
+    expect(pagePermissions.hasPagePermission).toHaveBeenCalledWith(5, 'odata');
+
+    pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(false);
+    const res = createMockRes();
+    await requirePagePermission('odata')(createMockReq({ user: { id: 5, role: 'supply_chain' } }), res, createMockNext());
+    expect(res.statusCode).toBe(403);
+  });
+
   it('weigert een employee zonder de permissie met 403', async () => {
     pagePermissions.hasPagePermission = vi.fn().mockResolvedValue(false);
     const req = createMockReq({ user: { id: 7, role: 'employee' } });

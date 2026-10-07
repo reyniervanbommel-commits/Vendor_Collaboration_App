@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useState } from 'react';
 import { Avatar, Button } from '@fluentui/react-components';
 import RemarkReactionBar from './RemarkReactionBar';
+import RemarkVisibilityBadge from './RemarkVisibilityBadge';
 import { formatDateTime } from './remarksFormatters';
 
 function RemarkMessageCard({ remark, currentUser, onDelete, onReaction }) {
@@ -33,14 +34,18 @@ function RemarkMessageCard({ remark, currentUser, onDelete, onReaction }) {
   }, [onDelete, remark.id]);
 
   return (
-    <article className="remark-card" aria-label={`Remark by ${authorName}`}>
+    <article
+      className={`remark-card${remark?.visibility ? ` remark-card--${remark.visibility}` : ''}`}
+      aria-label={`Remark by ${authorName}`}
+    >
       <header className="remark-card-header">
         <div className="remark-author">
           <Avatar name={authorName} size={28} color="colorful" />
-          <span>
+          <span className="remark-author-text">
             <strong>{authorName}</strong>
-            <span className="remarks-meta"> · {formatDateTime(remark?.createdAt)}</span>
+            <span className="remarks-meta remark-card-date">{formatDateTime(remark?.createdAt)}</span>
           </span>
+          <RemarkVisibilityBadge visibility={remark?.visibility} />
         </div>
         {remark?.canDelete && !remark?.isDeleted && !confirmDelete ? (
           <Button appearance="subtle" size="small" onClick={showDeleteConfirmation}>

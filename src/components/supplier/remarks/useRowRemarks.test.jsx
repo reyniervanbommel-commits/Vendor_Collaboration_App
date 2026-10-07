@@ -169,4 +169,22 @@ describe('useRowRemarks', () => {
     expect(result.current.items.map((item) => item.id)).toEqual([1, 0]);
     unmount();
   });
+
+  it('stuurt visibility alleen mee als die gekozen is', async () => {
+    apiRequest.mockResolvedValue({ items: [], total: 0, nextCursor: null, remark: { id: 7, body: 'x' } });
+    const { result, unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.createRemark('With choice', null, 'internal');
+      await result.current.createRemark('Without choice');
+    });
+
+    const posts = apiRequest.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts[0][1].body).toMatchObject({ body: 'With choice', visibility: 'internal' });
+    expect(posts[1][1].body).not.toHaveProperty('visibility');
+    unmount();
+  });
 });

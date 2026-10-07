@@ -1,6 +1,6 @@
-import { ROLES } from '../../constants/roles';
+import { STAFF_ROLES } from '../../constants/roles';
 
-export const STAFF = [ROLES.ADMIN, ROLES.EMPLOYEE];
+export const STAFF = STAFF_ROLES;
 
 /** Selector for a [data-tour] anchor. */
 export const t = (name) => `[data-tour="${name}"]`;

@@ -65,6 +65,7 @@ export function toRemark(item) {
       column: item.column ?? (item.columnId ? { id: item.columnId, label: item.columnLabel } : null),
       reactions: item.reactions ?? [],
       canDelete: item.canDelete,
+      ...(item.visibility ? { visibility: item.visibility } : {}),
     };
   }
   return { ...item, id: normalizeRemarkId(item.id) };

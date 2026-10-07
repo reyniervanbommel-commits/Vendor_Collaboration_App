@@ -40,7 +40,11 @@ const {
   listRemarks,
   setReaction,
   setTestDependencies,
+  summarizeRemarks,
 } = require('./RowRemarksService');
+const dataService = require('./TableDataService');
+const settingsService = require('./SettingsService');
+const { clearSupplierVisibleRowKeyCache } = require('../utils/supplierRowAccess');
 const {
   encodeCursor,
   normalizeBody,
@@ -226,5 +230,144 @@ describe('RowRemarksService reactions', () => {
     await expect(setReaction({ ...baseInput, id: 41, emoji: '😊', active: true }, employee))
       .rejects.toMatchObject({ status: 403 });
     expect(mocks.transactions[0].rollback).toHaveBeenCalledOnce();
+  });
+});
+
+describe('RowRemarksService zichtbaarheid', () => {
+  const supplier = { id: 30, role: 'supplier', email: 'v@x.nl', vendor_account: 'V001' };
+  const supplyChain = { id: 40, role: 'supply_chain' };
+  const originalRead = dataService.read;
+  const originalGetAsync = settingsService.getAsync;
+
+  beforeEach(() => {
+    clearSupplierVisibleRowKeyCache?.();
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    dataService.read = vi.fn(async () => ({
+      rows: [{ partitionKey: 'whsl', recordKey: 'PO-1', values: { vendorAccount: 'V001' } }],
+    }));
+  });
+
+  afterEach(() => {
+    dataService.read = originalRead;
+    settingsService.getAsync = originalGetAsync;
+  });
+
+  const listQuery = () => mocks.queries.find(({ text }) => text.includes('WITH paged') && text.includes('COUNT_BIG'));
+
+  it.each([
+    ['employee', employee, 'internal'],
+    ['supplier', supplier, 'vendor'],
+  ])('listRemarks filtert lijst én total voor %s', async (_label, actor, expected) => {
+    await listRemarks(baseInput, actor);
+    const q = listQuery();
+    expect(q.inputs.visibility).toBe(expected);
+    expect(q.text.match(/r\.visibility = @visibility/g)).toHaveLength(2);
+  });
+
+  it.each([
+    ['admin', admin],
+    ['supply_chain', supplyChain],
+  ])('listRemarks zonder filter voor %s', async (_label, actor) => {
+    await listRemarks(baseInput, actor);
+    expect(listQuery().text).not.toContain('@visibility');
+    expect(listQuery().inputs).not.toHaveProperty('visibility');
+  });
+
+  it('addRemark: employee schrijft internal ondanks meegestuurd vendor', async () => {
+    await addRemark({ ...baseInput, body: 'x', visibility: 'vendor' }, employee);
+    const insert = mocks.queries.find(({ text }) => text.includes('INSERT INTO dbo.tb_row_remarks'));
+    expect(insert.inputs.newVisibility).toBe('internal');
+    expect(insert.text).toContain('@newVisibility');
+  });
+
+  it('addRemark: supplier schrijft vendor ondanks meegestuurd internal', async () => {
+    await addRemark({ ...baseInput, body: 'x', visibility: 'internal' }, supplier);
+    const insert = mocks.queries.find(({ text }) => text.includes('INSERT INTO dbo.tb_row_remarks'));
+    expect(insert.inputs.newVisibility).toBe('vendor');
+  });
+
+  it('addRemark: supply_chain zonder keuze → 400 en geen insert', async () => {
+    await expect(addRemark({ ...baseInput, body: 'x' }, supplyChain)).rejects.toMatchObject({ status: 400 });
+    expect(mocks.queries.some(({ text }) => text.includes('INSERT INTO'))).toBe(false);
+  });
+
+  it('addRemark: supply_chain kiest internal en krijgt visibility in de DTO', async () => {
+    mocks.queryHandler = (ctx) => (ctx.text.includes('r.id = @remarkId')
+      ? result([remarkRow({ id: ctx.inputs.remarkId, created_by: 40, visibility: 'internal', author_role: 'supply_chain' })])
+      : defaultQueryHandler(ctx));
+    const remark = await addRemark({ ...baseInput, body: 'x', visibility: 'internal' }, supplyChain);
+    const insert = mocks.queries.find(({ text }) => text.includes('INSERT INTO dbo.tb_row_remarks'));
+    expect(insert.inputs.newVisibility).toBe('internal');
+    expect(remark).toMatchObject({ visibility: 'internal', fromVendor: false });
+  });
+
+  it('DTO markeert vendor-auteur voor admin', async () => {
+    mocks.queryHandler = (ctx) => {
+      if (ctx.text.includes('WITH paged') && !ctx.text.includes('r.id = @remarkId')) {
+        const rows = [remarkRow({ visibility: 'vendor', author_role: 'supplier' })];
+        return result(rows, [rows, [{ total: 1 }]]);
+      }
+      return defaultQueryHandler(ctx);
+    };
+    const page = await listRemarks(baseInput, admin);
+    expect(page.items[0]).toMatchObject({ visibility: 'vendor', fromVendor: true });
+  });
+
+  it('DTO verbergt visibility voor employee en supplier', async () => {
+    const forEmployee = await listRemarks(baseInput, employee);
+    expect(forEmployee.items[0]).not.toHaveProperty('visibility');
+    expect(forEmployee.items[0]).not.toHaveProperty('fromVendor');
+    const forSupplier = await listRemarks(baseInput, supplier);
+    expect(forSupplier.items[0]).not.toHaveProperty('visibility');
+  });
+
+  it('setReaction op onzichtbare remark → 404', async () => {
+    let lockText = '';
+    mocks.queryHandler = (ctx) => {
+      if (ctx.text.includes('WITH (UPDLOCK, HOLDLOCK)') && ctx.text.includes('r.created_by')) {
+        lockText = ctx.text;
+        return result([]);
+      }
+      return defaultQueryHandler(ctx);
+    };
+    await expect(setReaction({ ...baseInput, id: 41, emoji: '👍', active: true }, employee))
+      .rejects.toMatchObject({ status: 404 });
+    expect(lockText).toContain('r.visibility = @visibility');
+  });
+
+  it('deleteRemark op onzichtbare remark → 404', async () => {
+    let updateText = '';
+    mocks.queryHandler = (ctx) => {
+      if (ctx.text.includes('UPDATE r')) {
+        updateText = ctx.text;
+        return result([], [[], []]);
+      }
+      return defaultQueryHandler(ctx);
+    };
+    await expect(deleteRemark({ ...baseInput, id: 41 }, employee)).rejects.toMatchObject({ status: 404 });
+    expect(updateText.match(/r\.visibility = @visibility/g)).toHaveLength(2);
+  });
+
+  it('summarizeRemarks telt en kiest latest binnen het filter (employee)', async () => {
+    let summary = null;
+    mocks.queryHandler = (ctx) => {
+      summary = ctx;
+      return result([{ partition_key: 'whsl', record_key: 'PO-1', remark_count: 1, id: 41, body: 'b', author_name: 'A', created_at: new Date(), visibility: 'internal' }]);
+    };
+    const rows = await summarizeRemarks('purchase-orders', employee);
+    expect(summary.inputs.visibility).toBe('internal');
+    expect(summary.text.match(/r\.visibility = @visibility/g)).toHaveLength(2);
+    expect(rows[0].latest).not.toHaveProperty('visibility');
+  });
+
+  it('summarizeRemarks geeft latest.visibility aan supply_chain, zonder filter', async () => {
+    let summary = null;
+    mocks.queryHandler = (ctx) => {
+      summary = ctx;
+      return result([{ partition_key: 'whsl', record_key: 'PO-1', remark_count: 1, id: 41, body: 'b', author_name: 'A', created_at: new Date(), visibility: 'internal' }]);
+    };
+    const rows = await summarizeRemarks('purchase-orders', supplyChain);
+    expect(summary.text).not.toContain('@visibility');
+    expect(rows[0].latest.visibility).toBe('internal');
   });
 });

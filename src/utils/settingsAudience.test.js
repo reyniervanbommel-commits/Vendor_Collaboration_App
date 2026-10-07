@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ROLES } from '../constants/roles';
 import {
+  canAccessSettingsTab,
   GRANTABLE_SETTINGS_TAB_IDS,
   SETTINGS_AUDIENCE,
   canSeeSettingsTab,
@@ -11,8 +12,8 @@ import {
 
 describe('settingsAudience', () => {
   it('labels vendor as Vendor', () => {
-    expect(formatAudience(SETTINGS_AUDIENCE.ALL)).toBe('Admin, Employee, Vendor');
-    expect(formatAudience(SETTINGS_AUDIENCE.STAFF)).toBe('Admin, Employee');
+    expect(formatAudience(SETTINGS_AUDIENCE.ALL)).toBe('Admin, Employee, Supply Chain, Vendor');
+    expect(formatAudience(SETTINGS_AUDIENCE.STAFF)).toBe('Admin, Employee, Supply Chain');
     expect(formatAudience(SETTINGS_AUDIENCE.ADMIN)).toBe('Admin');
   });
 
@@ -70,5 +71,12 @@ describe('settingsAudience', () => {
   it('keeps an admin-only tab invisible for a plain role check', () => {
     expect(canSeeSettingsTab(SETTINGS_AUDIENCE.ADMIN, ROLES.EMPLOYEE)).toBe(false);
     expect(canSeeSettingsTab(SETTINGS_AUDIENCE.ALL, ROLES.SUPPLIER)).toBe(true);
+  });
+
+  it('treats supply_chain like an employee for grantable tabs', () => {
+    const users = { id: 'users', roles: SETTINGS_AUDIENCE.ADMIN, grantable: true };
+    expect(canAccessSettingsTab(users, ROLES.SUPPLY_CHAIN, ['users'])).toBe(true);
+    expect(canAccessSettingsTab(users, ROLES.SUPPLY_CHAIN, [])).toBe(false);
+    expect(SETTINGS_AUDIENCE.STAFF).toContain(ROLES.SUPPLY_CHAIN);
   });
 });

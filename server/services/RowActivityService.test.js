@@ -174,7 +174,7 @@ describe('RowActivityService query', () => {
     ];
     const { getRowActivity } = createHarness({ rows, totals: { remarks: 1, history: 5 } });
 
-    const result = await getRowActivity({ ...BASE_OPTIONS, kind: 'all' });
+    const result = await getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 7, role: 'admin' } });
 
     expect(result.items.map((item) => item.id)).toEqual([
       'd365:4', 'remark:2', 'row:5', 'custom:9', 'custom:8',
@@ -190,7 +190,9 @@ describe('RowActivityService query', () => {
     ];
     const harness = createHarness({ rows, totals: { remarks: 4, history: 12 } });
 
-    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', limit: 2 });
+    const result = await harness.getRowActivity({
+      ...BASE_OPTIONS, kind: 'all', limit: 2, currentUser: { id: 7, role: 'admin' },
+    });
 
     expect(result.items).toHaveLength(2);
     expect(result.totals).toEqual({ remarks: 4, history: 12, historyUpdated: 0 });
@@ -254,5 +256,68 @@ describe('RowActivityService query', () => {
     expect(harness.calls.inputs.actionFilter).toBe('updated');
     expect(harness.calls.query).toContain("UPPER(ISNULL(h.action, '')) = 'UPDATE'");
     expect(result.totals.historyUpdated).toBe(1);
+  });
+});
+
+describe('RowActivityService zichtbaarheid', () => {
+  const remarkRow = (overrides = {}) => activityRow({
+    source_id: 2, activity_type: 'remark', type_rank: 5, field_key: null, body: 'hi',
+    visibility: 'internal', author_role: 'supplier', ...overrides,
+  });
+
+  it('filtert remarks in de All-feed voor employee op internal', async () => {
+    const harness = createHarness({ rows: [remarkRow()], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 1, role: 'employee' } });
+    expect(harness.calls.inputs.visibility).toBe('internal');
+    expect(harness.calls.query).toMatch(/r\.visibility = @visibility/);
+    expect(result.items[0]).not.toHaveProperty('visibility');
+    expect(result.items[0]).not.toHaveProperty('fromVendor');
+  });
+
+  it('filtert remarks voor supplier op vendor', async () => {
+    const dataService = require('./TableDataService');
+    const settingsService = require('./SettingsService');
+    const { clearSupplierVisibleRowKeyCache } = require('../utils/supplierRowAccess');
+    const originalRead = dataService.read;
+    const originalGetAsync = settingsService.getAsync;
+    clearSupplierVisibleRowKeyCache();
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    dataService.read = vi.fn(async () => ({ rows: [{ partitionKey: 'whsl', recordKey: 'PO-1' }] }));
+    try {
+      const harness = createHarness({ rows: [], totals: { remarks: 0, history: 0 } });
+      await harness.getRowActivity({
+        ...BASE_OPTIONS, kind: 'all', currentUser: { id: 3, role: 'supplier', vendor_account: 'V1' },
+      });
+      expect(harness.calls.inputs.visibility).toBe('vendor');
+      expect(harness.calls.query).toMatch(/r\.visibility = @visibility/);
+    } finally {
+      dataService.read = originalRead;
+      settingsService.getAsync = originalGetAsync;
+    }
+  });
+
+  it('geen filter voor admin; remark-item krijgt visibility en fromVendor', async () => {
+    const harness = createHarness({ rows: [remarkRow()], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 9, role: 'admin' } });
+    expect(harness.calls.query).not.toContain('@visibility');
+    expect(harness.calls.inputs).not.toHaveProperty('visibility');
+    expect(result.items[0]).toMatchObject({ visibility: 'internal', fromVendor: true });
+  });
+
+  it('All-feed zonder bekende rol → 403', async () => {
+    const harness = createHarness({ rows: [] });
+    await expect(harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all' })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('history-feed heeft geen rolfilter nodig', async () => {
+    const harness = createHarness({ rows: [] });
+    await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'history' });
+    expect(harness.calls.inputs).not.toHaveProperty('visibility');
+  });
+
+  it('non-remark items dragen geen visibility-velden', () => {
+    const mapped = enrichRemarkActivity(mapActivityRow(activityRow()), [], { id: 1, role: 'admin' });
+    expect(mapped).not.toHaveProperty('visibility');
+    expect(mapped).not.toHaveProperty('authorRole');
   });
 });

@@ -57,7 +57,7 @@ describe('TrackChangesService.validateConfig', () => {
   it('provides a sane default config', () => {
     const cfg = defaultConfig();
     expect(cfg.mode).toBe('session');
-    expect(cfg.sessionRoles).toEqual(['admin', 'employee']);
+    expect(cfg.sessionRoles).toEqual(['admin', 'employee', 'supply_chain']);
     expect(cfg.columns).toEqual({});
   });
 });
