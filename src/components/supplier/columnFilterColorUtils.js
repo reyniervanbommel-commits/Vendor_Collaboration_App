@@ -95,12 +95,7 @@ export function columnSupportsColorFilter(column, ruleSet) {
 
 /** True wanneer een filter een actief kleurfilter is. */
 export function isColorFilterActive(filter) {
-  return Boolean(
-    filter
-    && filter.operator === COLOR_FILTER_OPERATOR
-    && Array.isArray(filter.colors)
-    && filter.colors.length > 0
-  );
+  return Boolean(filter && Array.isArray(filter.colors) && filter.colors.length > 0);
 }
 
 /** Normaliseert een lijst kleuren tot geldige, unieke hex-waarden (+ de 'none'-sentinel). */

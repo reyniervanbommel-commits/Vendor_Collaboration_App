@@ -6,14 +6,20 @@
  * BI-aggregate-endpoint verwacht. */
 export function filtersFromColumnMap(filterByColumn) {
   if (!filterByColumn || typeof filterByColumn !== 'object') return [];
-  return Object.entries(filterByColumn)
-    .filter(([columnKey, filter]) => columnKey !== 'remarks' && filter && filter.operator)
-    .map(([columnKey, filter]) => ({
-      columnKey,
-      operator: filter.operator,
-      value: filter.value ?? '',
-      secondaryValue: filter.secondaryValue ?? '',
-    }));
+  return Object.entries(filterByColumn).flatMap(([columnKey, filter]) => {
+    if (columnKey === 'remarks' || !filter) return [];
+    const rules = Array.isArray(filter.rules)
+      ? filter.rules
+      : (filter.operator && filter.operator !== 'colorIs' ? [filter] : []);
+    return rules
+      .filter((rule) => rule?.operator && rule.operator !== 'colorIs')
+      .map((rule) => ({
+        columnKey,
+        operator: rule.operator,
+        value: rule.value ?? '',
+        secondaryValue: rule.secondaryValue ?? '',
+      }));
+  });
 }
 
 /**

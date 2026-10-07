@@ -25,8 +25,7 @@ function getOperatorLabel(column, operator, datePeriodDisplayModes) {
   return TEXT_FILTER_OPERATORS[operator] || operator;
 }
 
-function formatHoverFilterSummary(column, filter, datePeriodDisplayModes) {
-  if (!isColumnFilterActive(column, filter, datePeriodDisplayModes)) return '';
+function formatOneRuleSummary(column, filter, datePeriodDisplayModes) {
   if (filter.operator === COLOR_FILTER_OPERATOR) {
     const count = Array.isArray(filter.colors) ? filter.colors.length : 0;
     return `color is: ${count} ${count === 1 ? 'color' : 'colors'}`;
@@ -39,6 +38,18 @@ function formatHoverFilterSummary(column, filter, datePeriodDisplayModes) {
   if (!operatorLabel) return value;
   if (!value) return operatorLabel;
   return `${operatorLabel}: ${value}`;
+}
+
+function formatHoverFilterSummary(column, filter, datePeriodDisplayModes) {
+  if (!isColumnFilterActive(column, filter, datePeriodDisplayModes)) return '';
+  const rules = Array.isArray(filter?.rules) ? filter.rules : [];
+  const parts = (rules.length ? rules : (filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR ? [filter] : []))
+    .map((rule) => formatOneRuleSummary(column, rule, datePeriodDisplayModes))
+    .filter(Boolean);
+  if (Array.isArray(filter?.colors) && filter.colors.length) {
+    parts.push(formatOneRuleSummary(column, { operator: COLOR_FILTER_OPERATOR, colors: filter.colors }, datePeriodDisplayModes));
+  }
+  return parts.join(' and ');
 }
 
 function lineColumnLabel(lineColumns, columnKey) {

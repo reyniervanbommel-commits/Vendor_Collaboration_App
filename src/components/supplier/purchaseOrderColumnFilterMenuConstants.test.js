@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getColumnSourceMeta, getDraftFromFilter, getStickyColumnMenuText, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
+import { getColumnSourceMeta, getDraftFromFilter, getDraftsFromFilter, getStickyColumnMenuText, isColumnFilterActive } from './purchaseOrderColumnFilterMenuConstants';
 
 describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   const textColumn = { key: 'vendor', dataType: 'text' };
@@ -17,6 +17,19 @@ describe('purchaseOrderColumnFilterMenuConstants — oneOf', () => {
   it('getDraftFromFilter zonder filter gebruikt de kolom-default (contains) met string-waarde', () => {
     const draft = getDraftFromFilter(textColumn, null);
     expect(draft).toEqual({ operator: 'contains', value: '', secondaryValue: '' });
+  });
+
+  it('getDraftsFromFilter maakt een draft per AND-voorwaarde', () => {
+    const drafts = getDraftsFromFilter(textColumn, {
+      rules: [
+        { operator: 'startsWith', value: 'S' },
+        { operator: 'notContains', value: 'closed' },
+      ],
+    });
+    expect(drafts).toEqual([
+      { operator: 'startsWith', value: 'S', secondaryValue: '' },
+      { operator: 'notContains', value: 'closed', secondaryValue: '' },
+    ]);
   });
 
   it('isColumnFilterActive is alleen actief met een niet-lege oneOf-array', () => {

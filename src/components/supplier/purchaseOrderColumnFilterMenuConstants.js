@@ -68,6 +68,15 @@ function getDefaultOperator(column, datePeriodDisplayModes = {}) {
   return 'contains';
 }
 
+export function getDraftsFromFilter(column, filter, datePeriodDisplayModes = {}) {
+  const rules = Array.isArray(filter?.rules) ? filter.rules : [];
+  const valueFilters = rules.length
+    ? rules
+    : (filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR ? [filter] : []);
+  if (!valueFilters.length) return [getDraftFromFilter(column, null, datePeriodDisplayModes)];
+  return valueFilters.map((rule) => getDraftFromFilter(column, rule, datePeriodDisplayModes));
+}
+
 export function getDraftFromFilter(column, filter, datePeriodDisplayModes = {}) {
   // Een actief kleurfilter is losgekoppeld van het waarde-filter; val terug op de
   // standaard-operator zodat de waarde-invoer niet met 'colorIs' breekt.

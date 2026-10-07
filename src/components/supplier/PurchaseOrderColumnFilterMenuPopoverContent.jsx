@@ -46,17 +46,19 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
   clearSort,
   isDate,
   isNumber,
-  draft,
+  drafts,
   operatorLabels,
   operatorEntries,
-  handleOperatorSelect,
-  handleValueChange,
-  handleDraftValueChange,
-  handleApplyFilterWithValue,
+  handleRuleOperatorSelect,
+  handleRuleValueChange,
+  handleRuleDraftValueChange,
+  handleApplyFilterWithValueAt,
   uniqueColumnValues,
-  handleSecondaryValueChange,
-  handleApplyFilter,
+  handleRuleSecondaryValueChange,
+  handleApplyAllFilters,
   handleClearFilter,
+  handleAddCondition,
+  handleRemoveCondition,
   colorFilter,
   handleAddType,
   remarksAlreadyAdded,
@@ -138,17 +140,19 @@ export default function PurchaseOrderColumnFilterMenuPopoverContent({
         clearSort={clearSort}
         isDate={isDate}
         isNumber={isNumber}
-        draft={draft}
+        drafts={drafts}
         operatorLabels={operatorLabels}
         operatorEntries={operatorEntries}
-        handleOperatorSelect={handleOperatorSelect}
-        handleValueChange={handleValueChange}
-        handleDraftValueChange={handleDraftValueChange}
-        handleApplyFilterWithValue={handleApplyFilterWithValue}
+        handleRuleOperatorSelect={handleRuleOperatorSelect}
+        handleRuleValueChange={handleRuleValueChange}
+        handleRuleDraftValueChange={handleRuleDraftValueChange}
+        handleApplyFilterWithValueAt={handleApplyFilterWithValueAt}
         uniqueColumnValues={uniqueColumnValues}
-        handleSecondaryValueChange={handleSecondaryValueChange}
-        handleApplyFilter={handleApplyFilter}
+        handleRuleSecondaryValueChange={handleRuleSecondaryValueChange}
+        handleApplyAllFilters={handleApplyAllFilters}
         handleClearFilter={handleClearFilter}
+        handleAddCondition={handleAddCondition}
+        handleRemoveCondition={handleRemoveCondition}
         colorFilter={colorFilter}
       />
       <FilterMenuSubPane

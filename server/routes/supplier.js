@@ -258,10 +258,29 @@ function normalizeViewState(rawState) {
     const filter = filterByColumn[rawKey];
     if (!filter || typeof filter !== 'object') return;
     const key = String(rawKey).slice(0, 64);
+    const colors = Array.isArray(filter.colors)
+      ? filter.colors.map((color) => String(color || '').slice(0, 32)).filter(Boolean).slice(0, 20)
+      : undefined;
+    const normalizeRule = (rule) => {
+      if (!rule || typeof rule !== 'object') return null;
+      return {
+        operator: String(rule.operator || '').slice(0, 32),
+        value: Array.isArray(rule.value)
+          ? rule.value.map((entry) => String(entry).slice(0, 200)).slice(0, 50)
+          : String(rule.value === null || rule.value === undefined ? '' : rule.value).slice(0, 200),
+        secondaryValue: String(rule.secondaryValue === null || rule.secondaryValue === undefined ? '' : rule.secondaryValue).slice(0, 200),
+      };
+    };
+    if (Array.isArray(filter.rules)) {
+      normalizedFilters[key] = {
+        rules: filter.rules.slice(0, 5).map(normalizeRule).filter(Boolean),
+        colors,
+      };
+      return;
+    }
     normalizedFilters[key] = {
-      operator: String(filter.operator || '').slice(0, 32),
-      value: String(filter.value === null || filter.value === undefined ? '' : filter.value).slice(0, 200),
-      secondaryValue: String(filter.secondaryValue === null || filter.secondaryValue === undefined ? '' : filter.secondaryValue).slice(0, 200),
+      ...normalizeRule(filter),
+      colors,
     };
   });
 

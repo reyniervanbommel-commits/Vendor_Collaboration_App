@@ -197,6 +197,21 @@ describe('filterItemsByColumnFilters', () => {
     };
     expect(filterItemsByColumnFilters(items, columns, filterByColumn, {}, 'status')).toEqual(items);
   });
+
+  it('combineert meerdere voorwaarden op één kolom met AND', () => {
+    const filterByColumn = {
+      vendor: {
+        rules: [
+          { operator: 'startsWith', value: 'A' },
+          { operator: 'notContains', value: 'Beta' },
+        ],
+      },
+    };
+    expect(filterItemsByColumnFilters(items, columns, filterByColumn)).toEqual([
+      { values: { vendor: 'Acme', status: 'Open' } },
+      { values: { vendor: 'Acme', status: 'Closed' } },
+    ]);
+  });
 });
 
 describe('remarks column — value-pass skip and min-2 helper', () => {

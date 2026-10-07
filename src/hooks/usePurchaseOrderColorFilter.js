@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
 import {
-  COLOR_FILTER_OPERATOR,
   NO_COLOR_FILTER_VALUE,
   getColumnAvailableFilterColors,
   getRowFormatFilterColors,
@@ -40,7 +39,7 @@ export function usePurchaseOrderColorFilter({
   }, [column, columnFormatRuleSet, columns, columnFormatRules]);
 
   const selectedColors = useMemo(
-    () => (filter?.operator === COLOR_FILTER_OPERATOR ? normalizeFilterColors(filter.colors) : []),
+    () => (Array.isArray(filter?.colors) ? normalizeFilterColors(filter.colors) : []),
     [filter]
   );
 

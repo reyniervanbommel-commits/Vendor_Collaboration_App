@@ -24,11 +24,23 @@ describe('summarizeColumnFilter', () => {
     )).toBe('contains Acme');
   });
 
+  it('zet spaties tussen operator, waarde en and', () => {
+    expect(summarizeColumnFilter(
+      { key: 'vendor', dataType: 'text' },
+      {
+        rules: [
+          { operator: 'contains', value: 'c' },
+          { operator: 'contains', value: 'g' },
+        ],
+      },
+    )).toBe('contains c and contains g');
+  });
+
   it('summarizes color filters without scanning rows', () => {
     expect(summarizeColumnFilter(
       { key: 'status', dataType: 'status' },
       { operator: 'colorIs', colors: ['#c02f64', '#6161ff'] },
-    )).toBe('2 colors');
+    )).toBe('color is 2 colors');
   });
 });
 
