@@ -83,7 +83,7 @@ export default function PurchaseOrdersPage() {
     reloadAfterRefresh();
     hiddenRows.reload();
   };
-  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs, clearActiveViewFilterSession } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, handleToggleShowAsTab, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs, clearActiveViewFilterSession } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -262,6 +262,7 @@ export default function PurchaseOrdersPage() {
         handleSetDefault,
         handleDeleteView,
         handleToggleShowHistory,
+        handleToggleShowAsTab,
         allOrdersShowHistoryIndicators,
         viewTabs,
       }}

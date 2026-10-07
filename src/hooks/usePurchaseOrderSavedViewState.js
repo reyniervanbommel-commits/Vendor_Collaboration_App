@@ -51,9 +51,11 @@ export function usePurchaseOrderSavedViewState({
   const buildCurrentViewState = useCallback(() => {
     const peek = viewTabs.peekTabsState();
     const table = boardView.exportFilterSortGrouping();
+    const activeSaved = savedViews.views.find((view) => view.id === activeViewId);
     return {
       showHistoryIndicators,
-      vendorAccount: savedViews.views.find((view) => view.id === activeViewId)?.viewState?.vendorAccount || '',
+      showAsTab: Boolean(activeSaved?.viewState?.showAsTab),
+      vendorAccount: activeSaved?.viewState?.vendorAccount || '',
       columns: {
         ...exportColumnLayout(),
         stickyColumnKeys,
@@ -101,6 +103,7 @@ export function usePurchaseOrderSavedViewState({
         viewTabs.loadFromViewState({ ...state, viewId: view.id });
         const nextSaved = {
           ...state,
+          showAsTab: Boolean(state.showAsTab),
           vendorAccount: state.vendorAccount || '',
           tabs: normalizeTabsState(state.tabs),
         };
@@ -206,6 +209,19 @@ export function usePurchaseOrderSavedViewState({
     }
   }, [savedViews, activeViewId, allOrdersShowHistoryIndicators, tableSession, viewTabs]);
 
+  const handleToggleShowAsTab = useCallback(async (view, enabled) => {
+    if (!view?.id) return;
+    const nextViewState = {
+      ...(view.viewState || {}),
+      showAsTab: Boolean(enabled),
+    };
+    await savedViews.updateView(view.id, { viewState: nextViewState });
+    if (view.id === activeViewId) {
+      savedViewStateRef.current = nextViewState;
+      setSavedStateFingerprint(stableSerializeViewState(nextViewState));
+    }
+  }, [activeViewId, savedViews]);
+
   const handleToggleShowHistory = useCallback(async (view, enabled) => {
     const nextEnabled = Boolean(enabled);
     const decision = describeHistoryToggle({
@@ -273,6 +289,7 @@ export function usePurchaseOrderSavedViewState({
     handleSetDefault,
     handleDeleteView,
     handleToggleShowHistory,
+    handleToggleShowAsTab,
     hasUnsavedChanges,
     getUnsavedViewDiff,
     showHistoryIndicators,
@@ -292,6 +309,7 @@ export function usePurchaseOrderSavedViewState({
     handleSetDefault,
     handleDeleteView,
     handleToggleShowHistory,
+    handleToggleShowAsTab,
     hasUnsavedChanges,
     getUnsavedViewDiff,
     showHistoryIndicators,

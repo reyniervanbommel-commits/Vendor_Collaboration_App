@@ -24,4 +24,9 @@ describe('normalizeViewState columnSumKeys', () => {
     expect(withoutKeys.table.columnSumKeys).toEqual([]);
     expect(withoutKeys.table.grouping.summaryColumnKeys).toEqual(['qty']);
   });
+
+  it('keeps showAsTab on the view state', () => {
+    expect(supplierRouter.normalizeViewState({ showAsTab: true }).showAsTab).toBe(true);
+    expect(supplierRouter.normalizeViewState({}).showAsTab).toBe(false);
+  });
 });

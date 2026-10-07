@@ -23,10 +23,9 @@ import {
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
-import UnsavedYellowDot from './UnsavedYellowDot';
 import PurchaseOrderUpdateCurrentViewItem from './PurchaseOrderUpdateCurrentViewItem';
+import PurchaseOrderSavedViewTitleTrigger from './PurchaseOrderSavedViewTitleTrigger';
 import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
-import { viewScopeLabel } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   trigger: {
@@ -36,46 +35,6 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-  },
-  titleTrigger: {
-    maxWidth: '100%',
-    minWidth: 0,
-    width: 'max-content',
-    height: 'auto',
-    minHeight: 'unset',
-    overflow: 'visible',
-    lineHeight: '1.35',
-    ...shorthands.padding('2px', '0', '4px'),
-    ...shorthands.border('none'),
-    justifyContent: 'flex-start',
-    alignItems: 'baseline',
-    ...shorthands.gap(tokens.spacingHorizontalS),
-    color: tokens.colorNeutralForeground1,
-    backgroundColor: 'transparent',
-  },
-  titleName: {
-    fontSize: tokens.fontSizeHero700,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: '1.35',
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  titleScope: {
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: tokens.fontWeightRegular,
-    color: tokens.colorNeutralForeground3,
-    flexShrink: 0,
-    lineHeight: tokens.lineHeightBase300,
-  },
-  titleDot: {
-    alignSelf: 'center',
-  },
-  titleChevron: {
-    fontSize: '20px',
-    flexShrink: 0,
-    alignSelf: 'center',
   },
   menuPopover: {
     minWidth: '280px',
@@ -115,6 +74,7 @@ export default function PurchaseOrderSavedViewsControl({
   onSetDefault,
   onDeleteView,
   onToggleShowHistory = () => {},
+  onToggleShowAsTab = () => {},
   onExportExcel = null,
   allOrdersShowHistoryIndicators = true,
   tabMenu = null,
@@ -150,7 +110,6 @@ export default function PurchaseOrderSavedViewsControl({
   }, [activeView, onUpdateActive]);
 
   const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
-  const triggerScope = viewScopeLabel(activeView);
   const allOrdersView = useMemo(() => ({
     id: null,
     name: NO_VIEW_LABEL,
@@ -163,20 +122,12 @@ export default function PurchaseOrderSavedViewsControl({
       <Menu positioning="below-start">
         <MenuTrigger disableButtonEnhancement>
           {titleMode ? (
-            <Button
-              appearance="subtle"
-              className={styles.titleTrigger}
-              disabled={saving}
-              title={triggerScope ? `${triggerLabel} ${triggerScope}` : triggerLabel}
-              data-tour="po-view-title"
-            >
-              <span className={styles.titleName}>{triggerLabel}</span>
-              {triggerScope ? <span className={styles.titleScope}>{triggerScope}</span> : null}
-              {hasUnsavedChanges ? (
-                <UnsavedYellowDot className={styles.titleDot} testId="view-unsaved-dot" />
-              ) : null}
-              <ChevronDownRegular className={styles.titleChevron} />
-            </Button>
+            <PurchaseOrderSavedViewTitleTrigger
+              name={triggerLabel}
+              isDefault={Boolean(activeView?.isDefault)}
+              hasUnsavedChanges={hasUnsavedChanges}
+              saving={saving}
+            />
           ) : (
             <Button
               appearance="secondary"
@@ -198,6 +149,7 @@ export default function PurchaseOrderSavedViewsControl({
               activeViewId={activeViewId}
               onApplyView={onResetView}
               onToggleShowHistory={onToggleShowHistory}
+              onToggleShowAsTab={onToggleShowAsTab}
               canManageGlobal
             />
             <MenuDivider />
@@ -206,6 +158,7 @@ export default function PurchaseOrderSavedViewsControl({
               activeViewId={activeViewId}
               onApplyView={onApplyView}
               onToggleShowHistory={onToggleShowHistory}
+              onToggleShowAsTab={onToggleShowAsTab}
               canManageGlobal={canManageGlobal}
             />
             {!hasSavedViews ? (

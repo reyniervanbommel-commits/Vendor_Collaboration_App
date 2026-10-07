@@ -236,7 +236,7 @@ function normalizeBoardSettings(rawSettings, boardKey) {
 
 const VIEW_SCOPES = new Set(['personal', 'global', 'vendor']);
 const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
-const MAX_VIEW_NAME = 120;
+const MAX_VIEW_NAME = 25;
 const MAX_VIEW_STATE_LENGTH = 100000;
 
 function normalizeViewName(value) {
@@ -286,6 +286,7 @@ function normalizeViewState(rawState) {
 
   return {
     showHistoryIndicators: input.showHistoryIndicators !== false,
+    showAsTab: input.showAsTab === true,
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),
