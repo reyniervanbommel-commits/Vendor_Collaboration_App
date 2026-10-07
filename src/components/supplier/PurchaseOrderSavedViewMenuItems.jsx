@@ -1,7 +1,5 @@
 import React, { useCallback } from 'react';
 import {
-  MenuGroup,
-  MenuGroupHeader,
   MenuItem,
   Switch,
   makeStyles,
@@ -10,7 +8,7 @@ import {
   tokens,
 } from '@fluentui/react-components';
 import { ClockRegular } from '@fluentui/react-icons';
-import { viewVendorAccount } from '../../utils/viewTabs';
+import { viewScopeLabel, viewVendorAccount } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   viewMenuItem: {
@@ -34,34 +32,53 @@ const useStyles = makeStyles({
     },
   },
   viewMenuItemRow: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 4.75rem auto',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: tokens.spacingHorizontalS,
     width: '100%',
     minWidth: 0,
     maxWidth: '100%',
-    overflow: 'hidden',
-    ...shorthands.gap('12px'),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
   },
-  viewMenuItemLabel: {
-    display: 'block',
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: '0%',
+  viewNameCell: {
+    display: 'flex',
+    alignItems: 'baseline',
+    minWidth: 0,
+    overflow: 'hidden',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+  },
+  viewName: {
     minWidth: 0,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-  },
-  viewMenuItemLabelActive: {
     fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+  },
+  metaSuffix: {
+    flexShrink: 0,
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
   },
   vendorSuffix: {
-    marginLeft: '6px',
+    flexShrink: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
     color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
+    fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightRegular,
     textDecorationLine: 'underline',
+  },
+  scopeCell: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightRegular,
+    textAlign: 'end',
+    whiteSpace: 'nowrap',
   },
   historyControl: {
     display: 'flex',
@@ -115,7 +132,13 @@ export function SavedViewMenuItem({
   }, [onApplyView, view]);
 
   const vendorAccount = viewVendorAccount(view);
-  const labelText = `${view.name}${vendorAccount ? ` ${vendorAccount}` : ''}${view.isDefault ? ' (default)' : ''}`;
+  const scopeLabel = viewScopeLabel(view);
+  const labelText = [
+    view.name,
+    scopeLabel,
+    vendorAccount,
+    view.isDefault ? '(default)' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <MenuItem
@@ -125,14 +148,12 @@ export function SavedViewMenuItem({
       onClick={handleApply}
     >
       <span className={styles.viewMenuItemRow}>
-        <span
-          className={mergeClasses(styles.viewMenuItemLabel, isActive && styles.viewMenuItemLabelActive)}
-          title={labelText}
-        >
-          {view.name}
+        <span className={styles.viewNameCell} title={labelText}>
+          <span className={styles.viewName}>{view.name}</span>
           {vendorAccount ? <span className={styles.vendorSuffix}>{vendorAccount}</span> : null}
-          {view.isDefault ? ' (default)' : ''}
+          {view.isDefault ? <span className={styles.metaSuffix}>default</span> : null}
         </span>
+        <span className={styles.scopeCell}>{scopeLabel}</span>
         <span className={styles.historyControl} title="Show history indicators">
           <ClockRegular className={styles.historyIcon} aria-hidden />
           <Switch
@@ -150,7 +171,6 @@ export function SavedViewMenuItem({
 }
 
 export function SavedViewScopeGroup({
-  title,
   views,
   activeViewId,
   onApplyView,
@@ -158,19 +178,14 @@ export function SavedViewScopeGroup({
   canManageGlobal,
 }) {
   if (!views.length) return null;
-  return (
-    <MenuGroup>
-      <MenuGroupHeader>{title}</MenuGroupHeader>
-      {views.map((view) => (
-        <SavedViewMenuItem
-          key={view.id}
-          view={view}
-          activeViewId={activeViewId}
-          onApplyView={onApplyView}
-          onToggleShowHistory={onToggleShowHistory}
-          canManageGlobal={canManageGlobal}
-        />
-      ))}
-    </MenuGroup>
-  );
+  return views.map((view) => (
+    <SavedViewMenuItem
+      key={view.id}
+      view={view}
+      activeViewId={activeViewId}
+      onApplyView={onApplyView}
+      onToggleShowHistory={onToggleShowHistory}
+      canManageGlobal={canManageGlobal}
+    />
+  ));
 }

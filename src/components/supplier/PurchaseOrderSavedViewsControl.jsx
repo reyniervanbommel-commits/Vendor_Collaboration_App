@@ -26,6 +26,7 @@ import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
 import UnsavedYellowDot from './UnsavedYellowDot';
 import PurchaseOrderUpdateCurrentViewItem from './PurchaseOrderUpdateCurrentViewItem';
 import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
+import { viewScopeLabel } from '../../utils/viewTabs';
 
 const useStyles = makeStyles({
   trigger: {
@@ -47,8 +48,8 @@ const useStyles = makeStyles({
     ...shorthands.padding('2px', '0', '4px'),
     ...shorthands.border('none'),
     justifyContent: 'flex-start',
-    alignItems: 'center',
-    ...shorthands.gap('6px'),
+    alignItems: 'baseline',
+    ...shorthands.gap(tokens.spacingHorizontalS),
     color: tokens.colorNeutralForeground1,
     backgroundColor: 'transparent',
   },
@@ -61,13 +62,24 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
+  titleScope: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+    lineHeight: tokens.lineHeightBase300,
+  },
+  titleDot: {
+    alignSelf: 'center',
+  },
   titleChevron: {
     fontSize: '20px',
     flexShrink: 0,
+    alignSelf: 'center',
   },
   menuPopover: {
-    minWidth: '240px',
-    maxWidth: '360px',
+    minWidth: '280px',
+    maxWidth: '380px',
     overflowX: 'hidden',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
@@ -138,6 +150,7 @@ export default function PurchaseOrderSavedViewsControl({
   }, [activeView, onUpdateActive]);
 
   const triggerLabel = activeView ? activeView.name : (titleMode ? 'All orders' : NO_VIEW_LABEL);
+  const triggerScope = viewScopeLabel(activeView);
   const allOrdersView = useMemo(() => ({
     id: null,
     name: NO_VIEW_LABEL,
@@ -154,12 +167,13 @@ export default function PurchaseOrderSavedViewsControl({
               appearance="subtle"
               className={styles.titleTrigger}
               disabled={saving}
-              title={triggerLabel}
+              title={triggerScope ? `${triggerLabel} ${triggerScope}` : triggerLabel}
               data-tour="po-view-title"
             >
               <span className={styles.titleName}>{triggerLabel}</span>
+              {triggerScope ? <span className={styles.titleScope}>{triggerScope}</span> : null}
               {hasUnsavedChanges ? (
-                <UnsavedYellowDot testId="view-unsaved-dot" />
+                <UnsavedYellowDot className={styles.titleDot} testId="view-unsaved-dot" />
               ) : null}
               <ChevronDownRegular className={styles.titleChevron} />
             </Button>
@@ -188,24 +202,7 @@ export default function PurchaseOrderSavedViewsControl({
             />
             <MenuDivider />
             <SavedViewScopeGroup
-              title="Vendor"
-              views={vendorViews}
-              activeViewId={activeViewId}
-              onApplyView={onApplyView}
-              onToggleShowHistory={onToggleShowHistory}
-              canManageGlobal={canManageGlobal}
-            />
-            <SavedViewScopeGroup
-              title="Shared"
-              views={globalViews}
-              activeViewId={activeViewId}
-              onApplyView={onApplyView}
-              onToggleShowHistory={onToggleShowHistory}
-              canManageGlobal={canManageGlobal}
-            />
-            <SavedViewScopeGroup
-              title="Personal"
-              views={personalViews}
+              views={[...vendorViews, ...globalViews, ...personalViews]}
               activeViewId={activeViewId}
               onApplyView={onApplyView}
               onToggleShowHistory={onToggleShowHistory}

@@ -364,6 +364,17 @@ export function viewVendorAccount(view) {
   return normalizeVendorAccount(view.vendorAccount || view.viewState?.vendorAccount);
 }
 
+const VIEW_SCOPE_LABELS = {
+  global: 'shared',
+  personal: 'personal',
+  vendor: 'vendor',
+};
+
+export function viewScopeLabel(view) {
+  if (!view?.id) return '';
+  return VIEW_SCOPE_LABELS[view.scope] || '';
+}
+
 export function vendorCanSeeView(view, supplierAccount) {
   if (!view || view.scope !== 'vendor') return true;
   const assigned = normalizeVendorAccount(view.vendorAccount || view.viewState?.vendorAccount);

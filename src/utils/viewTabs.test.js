@@ -17,6 +17,7 @@ import {
   nonGroupExtraFilters,
   tabHasUnsharedExtraFilters,
   viewVendorAccount,
+  viewScopeLabel,
   vendorCanSeeView,
   removeTabsByScope,
   formatTabName,
@@ -200,6 +201,15 @@ describe('viewTabs', () => {
     expect(viewVendorAccount({ scope: 'vendor', viewState: { vendorAccount: 'Q000105' } })).toBe('Q000105');
     expect(viewVendorAccount({ scope: 'global', vendorAccount: 'Q000104' })).toBe('');
     expect(viewVendorAccount({ scope: 'vendor', vendorAccount: '  ' })).toBe('');
+  });
+
+  it('zet shared/personal/vendor klein achter een opgeslagen view', () => {
+    expect(viewScopeLabel({ id: '1', scope: 'global' })).toBe('shared');
+    expect(viewScopeLabel({ id: '2', scope: 'personal' })).toBe('personal');
+    expect(viewScopeLabel({ id: '3', scope: 'vendor' })).toBe('vendor');
+    expect(viewScopeLabel({ id: null, scope: 'personal' })).toBe('');
+    expect(viewScopeLabel({ scope: 'personal' })).toBe('');
+    expect(viewScopeLabel(null)).toBe('');
   });
 
   it('verwijdert één tab of alle tabs van dezelfde groep', () => {
