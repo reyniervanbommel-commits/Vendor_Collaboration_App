@@ -2,7 +2,6 @@ import React, { useCallback } from 'react';
 import { makeStyles, tokens } from '@fluentui/react-components';
 import PurchaseOrderSavedViewsControl from './PurchaseOrderSavedViewsControl';
 import PurchaseOrderPinnedViewTabs from './PurchaseOrderPinnedViewTabs';
-import PurchaseOrderViewTabMenuSection from './viewTabs/PurchaseOrderViewTabMenuSection';
 import { VIEW_TITLE_SLOT_WIDTH } from './PurchaseOrderSavedViewTitleTrigger';
 import { canToggleViewMeta } from './PurchaseOrderSavedViewMenuItems';
 import { usePinnedViewOrder } from '../../hooks/usePinnedViewOrder';
@@ -29,7 +28,6 @@ const useStyles = makeStyles({
 export default function PurchaseOrderViewTitleRow({
   savedViewsState,
   isStaff,
-  columns,
   onExportExcel,
   onSaveAsNew,
   onRequestUpdate,
@@ -49,7 +47,6 @@ export default function PurchaseOrderViewTitleRow({
     handleToggleShowHistory,
     handleToggleShowAsTab,
     allOrdersShowHistoryIndicators,
-    viewTabs,
   } = savedViewsState;
   const pinnedOrder = usePinnedViewOrder();
   const canUnpin = useCallback((view) => canToggleViewMeta(view, isStaff), [isStaff]);
@@ -79,14 +76,6 @@ export default function PurchaseOrderViewTitleRow({
           onToggleShowAsTab={handleToggleShowAsTab}
           allOrdersShowHistoryIndicators={allOrdersShowHistoryIndicators}
           onExportExcel={onExportExcel}
-          tabMenu={(
-            <PurchaseOrderViewTabMenuSection
-              enabled={Boolean(activeViewId && isStaff && viewTabs)}
-              groups={viewTabs?.groups || []}
-              columns={columns}
-              onSetGroupColor={viewTabs?.setGroupColor}
-            />
-          )}
         />
       </div>
       <PurchaseOrderPinnedViewTabs

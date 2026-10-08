@@ -4,7 +4,6 @@ import {
   makeStyles,
   mergeClasses,
   shorthands,
-  tokens,
 } from '@fluentui/react-components';
 import { History16Filled, History16Regular } from '@fluentui/react-icons';
 
@@ -14,13 +13,6 @@ const useStyles = makeStyles({
     width: '22px',
     height: '22px',
     ...shorthands.padding('0'),
-    color: tokens.colorNeutralForeground3,
-    ':hover': {
-      color: tokens.colorBrandForeground1,
-    },
-  },
-  toggleOn: {
-    color: tokens.colorBrandForeground1,
   },
 });
 
@@ -30,9 +22,10 @@ function historyTitle(checked, disabled) {
 }
 
 /**
- * Per-view history toggle: grey when off, blue when on. Click flips it.
+ * Per-view history toggle (colors come from the row): grey when off, blue when on. Click flips it.
  */
 export default function SavedViewHistoryToggle({
+  className,
   checked,
   disabled,
   onChange,
@@ -53,7 +46,7 @@ export default function SavedViewHistoryToggle({
     <Button
       appearance="transparent"
       size="small"
-      className={mergeClasses(styles.toggle, checked && styles.toggleOn)}
+      className={mergeClasses(styles.toggle, className)}
       icon={checked ? <History16Filled /> : <History16Regular />}
       aria-pressed={checked}
       data-tour="po-view-history"

@@ -172,7 +172,6 @@ export default function PurchaseOrdersPageTopBar({
           <PurchaseOrderViewTitleRow
             savedViewsState={savedViewsState}
             isStaff={isStaff}
-            columns={columns}
             onExportExcel={onExportExcel}
             onSaveAsNew={onSaveAsNew}
             onRequestUpdate={onRequestUpdate}

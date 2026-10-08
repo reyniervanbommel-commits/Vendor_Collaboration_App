@@ -54,7 +54,7 @@ const useStyles = makeStyles({
 const NO_VIEW_LABEL = 'All orders (no view)';
 
 /**
- * View picker: All orders, then saved views, then manage/create, then tabs, then export.
+ * View picker: All orders, then saved views, then manage/create, then export.
  */
 export default function PurchaseOrderSavedViewsControl({
   views,
@@ -77,7 +77,6 @@ export default function PurchaseOrderSavedViewsControl({
   onToggleShowAsTab = () => {},
   onExportExcel = null,
   allOrdersShowHistoryIndicators = true,
-  tabMenu = null,
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -204,8 +203,6 @@ export default function PurchaseOrderSavedViewsControl({
                 </MenuItem>
               </>
             ) : null}
-
-            {tabMenu}
 
             {onExportExcel ? (
               <>

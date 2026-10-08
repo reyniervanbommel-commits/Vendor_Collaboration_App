@@ -4,9 +4,8 @@ import {
   makeStyles,
   mergeClasses,
   shorthands,
-  tokens,
 } from '@fluentui/react-components';
-import { Star16Filled, Star16Regular } from '@fluentui/react-icons';
+import { Star12Filled, Star12Regular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   toggle: {
@@ -15,20 +14,13 @@ const useStyles = makeStyles({
     height: '20px',
     flexShrink: 0,
     ...shorthands.padding('0'),
-    color: tokens.colorNeutralForeground3,
-    ':hover': {
-      color: tokens.colorBrandForeground1,
-    },
-  },
-  toggleOn: {
-    color: tokens.colorBrandForeground1,
   },
 });
 
 /**
- * Star behind a view name: grey = not the default, blue = opens on start. Only one view is default.
+ * Default-view star (colors come from the row): grey = not the default, blue = opens on start. Only one view is default.
  */
-export default function SavedViewDefaultToggle({ viewName, isDefault, onToggle }) {
+export default function SavedViewDefaultToggle({ className, viewName, isDefault, onToggle }) {
   const styles = useStyles();
 
   const handleClick = useCallback((event) => {
@@ -45,8 +37,8 @@ export default function SavedViewDefaultToggle({ viewName, isDefault, onToggle }
     <Button
       appearance="transparent"
       size="small"
-      className={mergeClasses(styles.toggle, isDefault && styles.toggleOn)}
-      icon={isDefault ? <Star16Filled /> : <Star16Regular />}
+      className={mergeClasses(styles.toggle, className)}
+      icon={isDefault ? <Star12Filled /> : <Star12Regular />}
       aria-pressed={isDefault}
       data-tour="po-view-default"
       aria-label={isDefault ? `${viewName} is your default view` : `Make ${viewName} your default view`}

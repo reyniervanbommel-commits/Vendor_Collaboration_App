@@ -18,7 +18,7 @@ const PIN_CLASS = 'po-view-pin';
 
 const useStyles = makeStyles({
   viewMenuItem: {
-    // Idle pins are faint; they surface on row hover/focus so the list stays calm.
+    // Idle star/clock/pin are faint; they surface on row hover/focus so the list stays calm.
     [`&:hover .${PIN_CLASS}, &:focus-within .${PIN_CLASS}`]: {
       opacity: 1,
     },
@@ -45,7 +45,7 @@ const useStyles = makeStyles({
   },
   viewMenuItemRow: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) 22px 24px',
+    gridTemplateColumns: 'minmax(0, 1fr) 20px 22px 24px',
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalXS,
     width: '100%',
@@ -76,13 +76,16 @@ const useStyles = makeStyles({
     width: '24px',
     height: '24px',
     ...shorthands.padding('0'),
+  },
+  // Shared look for star, clock and pin: faint grey when off, brand blue when on.
+  metaToggle: {
     color: tokens.colorNeutralForeground3,
     opacity: 0.45,
     ':hover': {
       color: tokens.colorBrandForeground1,
     },
   },
-  pinOn: {
+  metaToggleOn: {
     opacity: 1,
     color: tokens.colorBrandForeground1,
   },
@@ -151,9 +154,15 @@ export function SavedViewMenuItem({
         <span className={styles.viewNameCell} title={labelText}>
           <SavedViewScopeIcon scope={view.scope} hasId={Boolean(view.id)} />
           <span className={styles.viewName}>{view.name}</span>
-          <SavedViewDefaultToggle viewName={view.name} isDefault={isDefault} onToggle={handleToggleDefault} />
         </span>
+        <SavedViewDefaultToggle
+          className={mergeClasses(PIN_CLASS, styles.metaToggle, isDefault && styles.metaToggleOn)}
+          viewName={view.name}
+          isDefault={isDefault}
+          onToggle={handleToggleDefault}
+        />
         <SavedViewHistoryToggle
+          className={mergeClasses(PIN_CLASS, styles.metaToggle, showHistory && styles.metaToggleOn)}
           checked={showHistory}
           disabled={!canToggleMeta}
           onChange={handleToggleHistory}
@@ -162,7 +171,7 @@ export function SavedViewMenuItem({
           <Button
             appearance="transparent"
             size="small"
-            className={mergeClasses(PIN_CLASS, styles.pin, showAsTab && styles.pinOn)}
+            className={mergeClasses(PIN_CLASS, styles.pin, styles.metaToggle, showAsTab && styles.metaToggleOn)}
             data-tour="po-view-pin"
             icon={showAsTab ? <Pin16Filled /> : <Pin16Regular />}
             aria-pressed={showAsTab}
