@@ -216,7 +216,7 @@ async function initSqlPool() {
   logger.info('MSSQL-pool geïnitialiseerd', { max: config.pool.max, min: config.pool.min });
 }
 
-const PORT = process.env.PORT || 3008;
+const PORT = process.env.PORT || 3010;
 let httpServer = null;
 let staleReclaimTimer = null;
 

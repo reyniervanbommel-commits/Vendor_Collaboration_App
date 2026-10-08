@@ -3,7 +3,7 @@
  */
 require('dotenv').config();
 
-const BASE = process.env.PERF_BASE_URL || 'http://localhost:3008';
+const BASE = process.env.PERF_BASE_URL || 'http://localhost:3010';
 const EMAIL = process.env.PERF_EMAIL || process.env.BOOTSTRAP_ADMIN_EMAIL || 'admin@example.com';
 const PASSWORD = process.env.PERF_PASSWORD || 'Bootstrap123!';
 const RUNS = Number(process.argv[2] || 5);

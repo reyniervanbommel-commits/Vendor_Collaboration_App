@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const devPort = Number.parseInt(env.VITE_DEV_PORT || '5178', 10);
-  const backendPort = env.PORT || '3008';
+  const backendPort = env.PORT || '3010';
   const apiProxyTarget = env.VITE_API_PROXY_TARGET || `http://localhost:${backendPort}`;
   // Perf-pipeline hulpmiddel: laat de lokale frontend tegen een HTTPS remote-backend (Azure DEV)
   // meten. Een remote-backend zet Secure-cookies die de browser niet bewaart over http://localhost.
