@@ -19,7 +19,6 @@ import {
   EditRegular,
   EyeRegular,
   SaveRegular,
-  StarRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
@@ -71,7 +70,8 @@ export default function PurchaseOrderSavedViewsControl({
   onSaveAsNew,
   onUpdateActive,
   onRenameView,
-  onSetDefault,
+  defaultViewId = null,
+  onToggleDefault = () => {},
   onDeleteView,
   onToggleShowHistory = () => {},
   onToggleShowAsTab = () => {},
@@ -141,7 +141,7 @@ export default function PurchaseOrderSavedViewsControl({
             </Button>
           )}
         </MenuTrigger>
-        <MenuPopover className={styles.menuPopover}>
+        <MenuPopover className={styles.menuPopover} data-tour="po-view-menu">
           <MenuList>
             <SavedViewMenuItem
               view={allOrdersView}
@@ -149,6 +149,8 @@ export default function PurchaseOrderSavedViewsControl({
               onApplyView={onResetView}
               onToggleShowHistory={onToggleShowHistory}
               onToggleShowAsTab={onToggleShowAsTab}
+              defaultViewId={defaultViewId}
+              onToggleDefault={onToggleDefault}
               canManageGlobal
             />
             <MenuDivider />
@@ -158,6 +160,8 @@ export default function PurchaseOrderSavedViewsControl({
               onApplyView={onApplyView}
               onToggleShowHistory={onToggleShowHistory}
               onToggleShowAsTab={onToggleShowAsTab}
+              defaultViewId={defaultViewId}
+              onToggleDefault={onToggleDefault}
               canManageGlobal={canManageGlobal}
             />
             {!hasSavedViews ? (
@@ -181,14 +185,6 @@ export default function PurchaseOrderSavedViewsControl({
                   >
                     Rename…
                   </MenuItem>
-                  {!activeView.isDefault ? (
-                    <MenuItem
-                      icon={<StarRegular />}
-                      onClick={() => onSetDefault(activeView)}
-                    >
-                      Set as default
-                    </MenuItem>
-                  ) : null}
                   <MenuItem
                     icon={<DeleteRegular className={styles.deleteAction} />}
                     className={styles.deleteAction}

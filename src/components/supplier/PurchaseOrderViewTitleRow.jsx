@@ -43,7 +43,8 @@ export default function PurchaseOrderViewTitleRow({
     applyViewState,
     handleResetView,
     handleRenameView,
-    handleSetDefault,
+    handleToggleDefault,
+    defaultViewId,
     handleDeleteView,
     handleToggleShowHistory,
     handleToggleShowAsTab,
@@ -71,7 +72,8 @@ export default function PurchaseOrderViewTitleRow({
           onSaveAsNew={onSaveAsNew}
           onUpdateActive={onRequestUpdate}
           onRenameView={handleRenameView}
-          onSetDefault={handleSetDefault}
+          defaultViewId={defaultViewId}
+          onToggleDefault={handleToggleDefault}
           onDeleteView={handleDeleteView}
           onToggleShowHistory={handleToggleShowHistory}
           onToggleShowAsTab={handleToggleShowAsTab}

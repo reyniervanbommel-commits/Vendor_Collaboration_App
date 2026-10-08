@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { FluentProvider, webLightTheme } from '@fluentui/react-components';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { FluentProvider, Menu, MenuList, MenuPopover, MenuTrigger, webLightTheme } from '@fluentui/react-components';
 import PurchaseOrderSavedViewTitleTrigger from './PurchaseOrderSavedViewTitleTrigger';
 import PurchaseOrderPinnedViewTabs from './PurchaseOrderPinnedViewTabs';
-import SavedViewHistoryMiniMenu from './SavedViewHistoryMiniMenu';
+import SavedViewHistoryToggle from './SavedViewHistoryToggle';
+import { SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 globalThis.ResizeObserver = class {
   observe() {}
@@ -64,14 +65,65 @@ describe('PurchaseOrderPinnedViewTabs', () => {
   });
 });
 
-describe('SavedViewHistoryMiniMenu', () => {
-  it('opent bij hover en schakelt history', async () => {
+describe('SavedViewHistoryToggle', () => {
+  it('zet history uit bij klikken als die aan staat', () => {
     const onChange = vi.fn();
-    wrap(<SavedViewHistoryMiniMenu checked onChange={onChange} />);
-    fireEvent.mouseEnter(screen.getByRole('button', { name: /View options/ }));
-    const toggle = await screen.findByRole('switch', { name: 'Show history' });
+    wrap(<SavedViewHistoryToggle checked onChange={onChange} />);
+    const toggle = screen.getByRole('button', { name: 'Hide history' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(toggle);
-    await waitFor(() => expect(onChange).toHaveBeenCalled());
     expect(onChange.mock.calls[0][1].checked).toBe(false);
+  });
+
+  it('zet history aan bij klikken als die uit staat', () => {
+    const onChange = vi.fn();
+    wrap(<SavedViewHistoryToggle checked={false} onChange={onChange} />);
+    const toggle = screen.getByRole('button', { name: 'Show history' });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(toggle);
+    expect(onChange.mock.calls[0][1].checked).toBe(true);
+  });
+});
+
+describe('SavedViewMenuItem default star', () => {
+  const views = [
+    { id: 1, name: 'First', scope: 'personal', viewState: {} },
+    { id: 2, name: 'Second', scope: 'personal', viewState: {} },
+  ];
+
+  function renderMenu({ defaultViewId, onToggleDefault = vi.fn(), onApplyView = vi.fn() }) {
+    wrap(
+      <Menu open>
+        <MenuTrigger disableButtonEnhancement><button type="button">open</button></MenuTrigger>
+        <MenuPopover>
+          <MenuList>
+            <SavedViewScopeGroup
+              views={views}
+              activeViewId={null}
+              onApplyView={onApplyView}
+              onToggleShowHistory={vi.fn()}
+              onToggleShowAsTab={vi.fn()}
+              defaultViewId={defaultViewId}
+              onToggleDefault={onToggleDefault}
+              canManageGlobal
+            />
+          </MenuList>
+        </MenuPopover>
+      </Menu>
+    );
+    return { onToggleDefault, onApplyView };
+  }
+
+  it('toont precies één blauwe ster voor de default view', () => {
+    renderMenu({ defaultViewId: 2 });
+    expect(screen.getByRole('button', { name: 'Second is your default view' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Make First your default view' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('maakt een view default bij klikken zonder de view te openen', () => {
+    const { onToggleDefault, onApplyView } = renderMenu({ defaultViewId: 2 });
+    fireEvent.click(screen.getByRole('button', { name: 'Make First your default view' }));
+    expect(onToggleDefault).toHaveBeenCalledWith(views[0]);
+    expect(onApplyView).not.toHaveBeenCalled();
   });
 });

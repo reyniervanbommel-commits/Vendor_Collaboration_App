@@ -7,11 +7,12 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { Pin16Filled, Pin16Regular, StarFilled } from '@fluentui/react-icons';
+import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
 import { viewScopeLabel } from '../../utils/viewTabs';
 import { viewShowsAsTab } from '../../utils/savedViewDisplay';
 import SavedViewScopeIcon from './SavedViewScopeIcon';
-import SavedViewHistoryMiniMenu from './SavedViewHistoryMiniMenu';
+import SavedViewHistoryToggle from './SavedViewHistoryToggle';
+import SavedViewDefaultToggle from './SavedViewDefaultToggle';
 
 const PIN_CLASS = 'po-view-pin';
 
@@ -70,11 +71,6 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightRegular,
     color: tokens.colorNeutralForeground1,
   },
-  star: {
-    fontSize: '12px',
-    color: tokens.colorBrandForeground1,
-    flexShrink: 0,
-  },
   pin: {
     minWidth: '24px',
     width: '24px',
@@ -109,9 +105,12 @@ export function SavedViewMenuItem({
   onApplyView,
   onToggleShowHistory,
   onToggleShowAsTab,
+  defaultViewId = null,
+  onToggleDefault = () => {},
   canManageGlobal,
 }) {
   const styles = useStyles();
+  const isDefault = (view.id ?? null) === defaultViewId;
   const isActive = view.id === activeViewId;
   const showHistory = view.viewState?.showHistoryIndicators !== false;
   const showAsTab = viewShowsAsTab(view);
@@ -133,6 +132,10 @@ export function SavedViewMenuItem({
     if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
   }, []);
 
+  const handleToggleDefault = useCallback(() => {
+    onToggleDefault(view);
+  }, [onToggleDefault, view]);
+
   const handleApply = useCallback(() => {
     onApplyView(view);
   }, [onApplyView, view]);
@@ -148,9 +151,9 @@ export function SavedViewMenuItem({
         <span className={styles.viewNameCell} title={labelText}>
           <SavedViewScopeIcon scope={view.scope} hasId={Boolean(view.id)} />
           <span className={styles.viewName}>{view.name}</span>
-          {view.isDefault ? <StarFilled className={styles.star} aria-label="Default view" /> : null}
+          <SavedViewDefaultToggle viewName={view.name} isDefault={isDefault} onToggle={handleToggleDefault} />
         </span>
-        <SavedViewHistoryMiniMenu
+        <SavedViewHistoryToggle
           checked={showHistory}
           disabled={!canToggleMeta}
           onChange={handleToggleHistory}
@@ -160,6 +163,7 @@ export function SavedViewMenuItem({
             appearance="transparent"
             size="small"
             className={mergeClasses(PIN_CLASS, styles.pin, showAsTab && styles.pinOn)}
+            data-tour="po-view-pin"
             icon={showAsTab ? <Pin16Filled /> : <Pin16Regular />}
             aria-pressed={showAsTab}
             aria-label={showAsTab ? `Unpin ${view.name}` : `Pin ${view.name} as a tab`}
@@ -182,6 +186,8 @@ export function SavedViewScopeGroup({
   onApplyView,
   onToggleShowHistory,
   onToggleShowAsTab,
+  defaultViewId,
+  onToggleDefault,
   canManageGlobal,
 }) {
   if (!views.length) return null;
@@ -193,6 +199,8 @@ export function SavedViewScopeGroup({
       onApplyView={onApplyView}
       onToggleShowHistory={onToggleShowHistory}
       onToggleShowAsTab={onToggleShowAsTab}
+      defaultViewId={defaultViewId}
+      onToggleDefault={onToggleDefault}
       canManageGlobal={canManageGlobal}
     />
   ));

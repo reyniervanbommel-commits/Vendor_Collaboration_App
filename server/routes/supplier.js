@@ -202,6 +202,14 @@ function normalizeLastVendorAccount(value) {
   return value.trim().slice(0, 64);
 }
 
+// Per-user default view: a view id, 'none' (All orders) or null (no choice → scope defaults).
+function normalizeDefaultViewId(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, 64);
+  return trimmed || null;
+}
+
 function normalizeBoardSettings(rawSettings, boardKey) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   const settings = {
@@ -209,6 +217,7 @@ function normalizeBoardSettings(rawSettings, boardKey) {
     isoWindow: normalizeIsoWindow(input.isoWindow),
     lastVendorAccount: normalizeLastVendorAccount(input.lastVendorAccount),
     allOrdersShowHistoryIndicators: input.allOrdersShowHistoryIndicators !== false,
+    defaultViewId: normalizeDefaultViewId(input.defaultViewId),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),

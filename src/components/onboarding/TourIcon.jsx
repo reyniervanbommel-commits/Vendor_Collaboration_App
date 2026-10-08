@@ -5,8 +5,11 @@ import {
   CursorClick24Regular,
   DataBarVertical24Regular,
   DataTrending24Regular,
+  Eye24Regular,
+  History24Regular,
   MathFormula24Regular,
   PaintBrush24Regular,
+  Pin24Regular,
   Settings24Regular,
   Table24Regular,
   TableAdd24Regular,
@@ -25,6 +28,9 @@ const ICONS = {
   remarks: Chat24Regular,
   paint: PaintBrush24Regular,
   kpi: DataBarVertical24Regular,
+  view: Eye24Regular,
+  pin: Pin24Regular,
+  history: History24Regular,
 };
 
 export default function TourIcon({ name, ...props }) {
