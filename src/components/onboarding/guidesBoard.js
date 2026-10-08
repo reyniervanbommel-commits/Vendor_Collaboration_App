@@ -128,6 +128,7 @@ export const BOARD_GUIDES = [
           ['(columnKey)', 'value of a column'],
           ['IF(test; then; else)', 'condition'],
           ['a AND b · a OR b', 'combine conditions'],
+          ['ISBLANK(value)', 'nothing filled in'],
           ['ROUND(n; decimals)', 'round a number'],
           ['ABS(n)', 'absolute value'],
           ['MIN(a; b) · MAX(a; b)', 'smallest · largest'],
