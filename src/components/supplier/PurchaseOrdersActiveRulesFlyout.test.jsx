@@ -134,4 +134,25 @@ describe('PurchaseOrdersActiveRulesFlyout', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(onClearFormatRules).toHaveBeenCalledWith(lineRule);
   });
+
+  it('toont filters als kaarten in een lijst met operator en waarde op een eigen regel', () => {
+    const filterItem = {
+      id: 'header:artikel',
+      columnKey: 'artikel',
+      columnLabel: 'Artikel Values',
+      scope: 'header',
+      column: { key: 'artikel', label: 'Artikel Values' },
+      summary: 'contains M-10300-02',
+      summaryParts: [{ type: 'operator', text: 'contains' }, { type: 'value', text: 'M-10300-02' }],
+      filter: { operator: 'contains', value: 'M-10300-02' },
+    };
+    renderFlyout({ filters: { header: [filterItem], line: [] } });
+    expect(document.querySelector('table')).toBeNull();
+    const list = screen.getByRole('list', { name: 'Header columns' });
+    const card = list.querySelector('li');
+    expect(card.textContent).toContain('Artikel Values');
+    const summary = card.querySelector('[data-rule-summary]');
+    expect(summary.textContent).toBe('contains M-10300-02');
+    expect(summary.contains(screen.getByRole('button', { name: 'Clear' }))).toBe(false);
+  });
 });

@@ -144,4 +144,142 @@ describe('RemarksPanel', () => {
       expect(screen.queryByRole('radiogroup')).toBeNull();
     });
   });
+
+  describe('replies', () => {
+    const SC = { id: 4, role: 'supply_chain', displayName: 'Sam Chain' };
+    const thread = {
+      id: 1, parentId: null, body: 'Root remark', visibility: 'internal', author: { id: 7, displayName: 'Ann' },
+      reactions: [], createdAt: '2026-10-07T09:00:00Z', lastActivityAt: '2026-10-07T09:00:00Z',
+      replies: [{ id: 5, parentId: 1, body: 'First reply', visibility: 'internal', author: { id: 8, displayName: 'Bob' }, reactions: [], createdAt: '2026-10-07T09:30:00Z' }],
+      replyCount: 1,
+    };
+
+    beforeEach(() => {
+      apiRequest.mockImplementation(async (path, init) => {
+        if (init?.method === 'POST') return { remark: { id: 6, parentId: 1, body: 'New reply', author: { id: 4, displayName: 'Sam Chain' }, reactions: [], createdAt: '2026-10-07T10:00:00Z' } };
+        if (path.includes('/remarks?')) return { items: [thread], total: 2, nextCursor: null };
+        return responseFor(path);
+      });
+    });
+
+    it('toont het gesprek en plaatst een reply in stand All', async () => {
+      renderPanel({ currentUser: SC });
+      expect(await screen.findByText('First reply')).toBeTruthy();
+      expect(screen.getByRole('radio', { name: 'All' }).checked).toBe(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Ann' }));
+      expect(screen.getByText('Replying to Ann')).toBeTruthy();
+      fireEvent.change(screen.getByRole('textbox', { name: 'Reply to Ann' }), { target: { value: 'New reply' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+      expect(await screen.findByText('New reply')).toBeTruthy();
+      const post = apiRequest.mock.calls.find(([, init]) => init?.method === 'POST');
+      expect(post[1].body).toMatchObject({ parentId: 1 });
+      expect(post[1].body).not.toHaveProperty('visibility');
+    });
+
+    it('sluit het reply-venster bij wisselen van tab of filter', async () => {
+      renderPanel({ currentUser: SC });
+      await screen.findByText('First reply');
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Ann' }));
+      expect(screen.getByText('Replying to Ann')).toBeTruthy();
+      fireEvent.click(screen.getByRole('radio', { name: 'Internal' }));
+      expect(screen.queryByText('Replying to Ann')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Ann' }));
+      fireEvent.click(screen.getByRole('tab', { name: /History/ }));
+      fireEvent.click(screen.getByRole('tab', { name: /Remarks/ }));
+      await screen.findByText('First reply');
+      expect(screen.queryByText('Replying to Ann')).toBeNull();
+    });
+
+    it('opent maar één reply-venster tegelijk', async () => {
+      apiRequest.mockImplementation(async (path) => (
+        path.includes('/remarks?')
+          ? { items: [thread, { ...thread, id: 2, body: 'Other', author: { id: 9, displayName: 'Cas' }, replies: [] }], total: 3, nextCursor: null }
+          : responseFor(path)
+      ));
+      renderPanel({ currentUser: SC });
+      await screen.findByText('Other');
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Ann' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Cas' }));
+      expect(screen.queryByText('Replying to Ann')).toBeNull();
+      expect(screen.getByText('Replying to Cas')).toBeTruthy();
+    });
+  });
+
+  describe('@mention-groepen en board-tellers', () => {
+    const SC = { id: 4, role: 'supply_chain', displayName: 'Sam Chain' };
+    const group = {
+      id: 9, parentId: null, body: 'Late @A-1', visibility: 'internal', broadcastId: 'b1', broadcastCount: 3,
+      mentions: [{ value: 'A-1', columnLabel: 'Artikel' }], author: { id: 4, displayName: 'Sam Chain' },
+      reactions: [], replies: [], canDelete: true, createdAt: '2026-10-08T09:00:00Z', lastActivityAt: '2026-10-08T09:00:00Z',
+    };
+    const summaryState = () => ({ summaryByRow: new Map(), refresh: vi.fn(), updateRow: vi.fn() });
+
+    it('ververst de board-tellers na plaatsen van een groepsopmerking', async () => {
+      apiRequest.mockImplementation(async (path, init) => {
+        if (init?.method === 'POST' && path.endsWith('/remarks')) return { remark: group };
+        if (path.includes('/remarks?')) return { items: [], total: 0, nextCursor: null };
+        return responseFor(path);
+      });
+      const summary = summaryState();
+      renderPanel({ currentUser: SC, summaryState: summary });
+      await screen.findByRole('tab', { name: /Remarks/ });
+      fireEvent.click(screen.getByRole('radio', { name: 'Internal' }));
+      fireEvent.change(screen.getByLabelText(/Add a remark/), { target: { value: 'Late' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Post internal note' }));
+      await waitFor(() => expect(summary.refresh).toHaveBeenCalled());
+    });
+
+    it('ververst de board-tellers na verwijderen van een groepsopmerking', async () => {
+      apiRequest.mockImplementation(async (path, init) => {
+        if (init?.method === 'DELETE') return { remark: { ...group, isDeleted: true, body: null } };
+        if (path.includes('/remarks?')) return { items: [group], total: 1, nextCursor: null };
+        return responseFor(path);
+      });
+      const summary = summaryState();
+      renderPanel({ currentUser: SC, summaryState: summary });
+      await screen.findByText('@A-1');
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+      await waitFor(() => expect(summary.refresh).toHaveBeenCalled());
+    });
+  });
+
+  describe('verwijderde opmerkingen', () => {
+    const base = {
+      parentId: null, author: { id: 7, displayName: 'Ann' }, reactions: [], replies: [],
+      createdAt: '2026-10-08T09:00:00Z', lastActivityAt: '2026-10-08T09:00:00Z',
+    };
+
+    it('verbergt een verwijderde opmerking zonder replies, toont er één met replies als korte regel', async () => {
+      apiRequest.mockImplementation(async (path) => (path.includes('/remarks?')
+        ? {
+          items: [
+            { ...base, id: 1, body: null, isDeleted: true },
+            { ...base, id: 2, body: null, isDeleted: true, replies: [{ ...base, id: 5, parentId: 2, body: 'Still here', author: { id: 8, displayName: 'Bob' } }] },
+            { ...base, id: 3, body: 'Alive' },
+          ],
+          total: 2,
+          nextCursor: null,
+        }
+        : responseFor(path)));
+      renderPanel();
+      expect(await screen.findByText('Alive')).toBeTruthy();
+      expect(screen.getByText('Still here')).toBeTruthy();
+      expect(screen.getAllByText('This remark was deleted.')).toHaveLength(1);
+    });
+
+    it('haalt een opmerking direct weg na verwijderen', async () => {
+      apiRequest.mockImplementation(async (path, init) => {
+        if (init?.method === 'DELETE') return { remark: { ...base, id: 3, body: null, isDeleted: true } };
+        if (path.includes('/remarks?')) return { items: [{ ...base, id: 3, body: 'Bye', canDelete: true }], total: 1, nextCursor: null };
+        return responseFor(path);
+      });
+      renderPanel();
+      await screen.findByText('Bye');
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+      await waitFor(() => expect(screen.queryByText('This remark was deleted.')).toBeNull());
+      expect(screen.queryByText('Bye')).toBeNull();
+    });
+  });
 });

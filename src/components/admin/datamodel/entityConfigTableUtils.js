@@ -31,6 +31,12 @@ export const BULK_TOGGLE_CONFIG = [
     isEligible: (column) => column.vendorEditableAllowed,
     isEnabled: (column) => column.vendorEditable,
   },
+  {
+    key: 'mentionable',
+    label: 'Mentionable',
+    isEligible: (column) => column.mentionableAllowed,
+    isEnabled: (column) => column.mentionable,
+  },
 ];
 
 export function display(value) {

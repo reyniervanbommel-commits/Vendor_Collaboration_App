@@ -27,6 +27,12 @@ function mapRemarkRows(rows, actor) {
         } : null,
         createdAt: iso(row.created_at),
         deletedAt: iso(row.deleted_at),
+        parentId: row.parent_id ? Number(row.parent_id) : null,
+        lastActivityAt: iso(row.last_activity_at || row.created_at),
+        broadcastId: row.broadcast_id || null,
+        mentions: !isDeleted && row.mentions_json ? JSON.parse(row.mentions_json) : [],
+        // Vendors zien niet op hoeveel PO's (van andere vendors) een @mention-opmerking staat.
+        ...(row.broadcast_id && !actor?.isSupplier ? { broadcastCount: Number(row.broadcast_count) || 0 } : {}),
         reactions: [],
         // Alleen admin/supply_chain zien voor wie een remark is (badges in de UI).
         ...(actor?.seesVisibility ? {

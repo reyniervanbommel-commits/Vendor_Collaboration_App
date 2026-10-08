@@ -57,12 +57,15 @@ function mapAdminColumn(col) {
     d365Field: col.sourceField ?? col.d365Field ?? null,
     writableToD365: Boolean(col.writable ?? col.writableToD365),
     vendorEditable: Boolean(col.vendorEditable),
+    mentionable: Boolean(col.mentionable),
   };
   return {
     ...mappedColumn,
     writeBackAllowed: resolveWriteBackAllowed(mappedColumn),
     hideAllowed: resolveHideAllowed(mappedColumn),
     vendorEditableAllowed: resolveVendorEditableAllowed(mappedColumn),
+    // @mentions zoeken in tb_cache.data_json: alleen D365-tekstkolommen.
+    mentionableAllowed: mappedColumn.source === 'd365' && mappedColumn.dataType === 'text',
   };
 }
 
@@ -88,7 +91,7 @@ function mapDataModelPayload(payload) {
  *
  * Output: { entities, relation, connection, columns, cache, loading, error,
  *           togglingKey, reload, toggleVisibility, toggleWriteback,
- *           toggleVendorEditable, setColumnToggleState, deleteColumn }
+ *           toggleVendorEditable, toggleMentionable, setColumnToggleState, deleteColumn }
  */
 export function useDataModelAdmin(tableKey = 'purchase-orders') {
   const [data, setData] = useState(null);
@@ -221,6 +224,22 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     }
   }, [adminBasePath, applyColumnUpdate]);
 
+  const toggleMentionable = useCallback(async (column) => {
+    setTogglingKey(`mn-${column.id}`);
+    setError('');
+    try {
+      const result = await apiRequest(`${adminBasePath}/columns/${column.id}/mentionable`, {
+        method: 'PATCH',
+        body: { mentionable: !column.mentionable },
+      });
+      applyColumnUpdate(mapAdminColumn(result.column));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTogglingKey(null);
+    }
+  }, [adminBasePath, applyColumnUpdate]);
+
   const setColumnToggleState = useCallback(async ({ columns: scopedColumns = [], toggleType, enabled }) => {
     if (!Array.isArray(scopedColumns) || !toggleType) return;
     const shouldEnable = Boolean(enabled);
@@ -230,6 +249,7 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
       if (toggleType === 'visibleAtDelete') return column.visibleAtDelete !== shouldEnable;
       if (toggleType === 'writeback') return column.writeBackAllowed && column.writableToD365 !== shouldEnable;
       if (toggleType === 'vendorEditable') return column.vendorEditableAllowed && column.vendorEditable !== shouldEnable;
+      if (toggleType === 'mentionable') return column.mentionableAllowed && column.mentionable !== shouldEnable;
       return false;
     });
 
@@ -250,6 +270,13 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
           const result = await apiRequest(`${adminBasePath}/columns/${column.id}/visible-at-delete`, {
             method: 'PATCH',
             body: { visible: shouldEnable },
+          });
+          return mapAdminColumn(result.column);
+        }
+        if (toggleType === 'mentionable') {
+          const result = await apiRequest(`${adminBasePath}/columns/${column.id}/mentionable`, {
+            method: 'PATCH',
+            body: { mentionable: shouldEnable },
           });
           return mapAdminColumn(result.column);
         }
@@ -389,7 +416,8 @@ export function useDataModelAdmin(tableKey = 'purchase-orders') {
     toggleVisibleAtDelete,
     toggleWriteback,
     toggleVendorEditable,
+    toggleMentionable,
     setColumnToggleState,
     deleteColumn,
-  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleVendorEditable, setColumnToggleState, deleteColumn]);
+  }), [data, loading, error, togglingKey, reload, syncNow, reimportBaseline, discoverFields, toggleVisibility, toggleVisibleAtDelete, toggleWriteback, toggleVendorEditable, toggleMentionable, setColumnToggleState, deleteColumn]);
 }

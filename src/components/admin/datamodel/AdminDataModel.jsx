@@ -125,6 +125,7 @@ export default function AdminDataModel() {
             onToggleVisibleAtDelete={selectedModel.toggleVisibleAtDelete}
             onToggleWriteback={selectedModel.toggleWriteback}
             onToggleVendorEditable={selectedModel.toggleVendorEditable}
+            onToggleMentionable={selectedModel.toggleMentionable}
             onSetColumnToggleState={selectedModel.setColumnToggleState}
             onDeleteColumn={selectedModel.deleteColumn}
             onDiscoverFields={selectedModel.discoverFields}

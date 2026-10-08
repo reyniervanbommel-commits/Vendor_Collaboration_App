@@ -7,7 +7,7 @@ import DataPreviewColumnConfigRow from './DataPreviewColumnConfigRow';
 
 const NOOP = vi.fn();
 
-function renderRow(column) {
+function renderRow(column, extra = {}) {
   return renderWithFluent(
     <Table>
       <TableBody>
@@ -21,6 +21,7 @@ function renderRow(column) {
           onToggleVisibleAtDelete={NOOP}
           onToggleWriteback={NOOP}
           onDeleteColumn={NOOP}
+          {...extra}
         />
       </TableBody>
     </Table>
@@ -60,5 +61,24 @@ describe('DataPreviewColumnConfigRow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(screen.getByText(/Push values to header column/)).toBeTruthy();
+  });
+
+  it('toont een Mentionable-schakelaar voor tekstbronkolommen', () => {
+    const onToggleMentionable = vi.fn();
+    const column = {
+      id: 9, key: 'itemNumber', label: 'Artikel', source: 'd365', dataType: 'text', isActive: true,
+      hideAllowed: true, visibleAtDelete: false, writeBackAllowed: false, mentionableAllowed: true, mentionable: false,
+    };
+    renderRow(column, { onToggleMentionable });
+    fireEvent.click(screen.getByRole('switch', { name: 'Mentionable for Artikel' }));
+    expect(onToggleMentionable).toHaveBeenCalledWith(column);
+  });
+
+  it('toont Not available voor niet-mentionable kolommen', () => {
+    renderRow({
+      id: 10, key: 'qty', label: 'Qty', source: 'd365', dataType: 'number', isActive: true,
+      hideAllowed: true, visibleAtDelete: false, writeBackAllowed: false, mentionableAllowed: false,
+    });
+    expect(screen.queryByRole('switch', { name: 'Mentionable for Qty' })).toBeNull();
   });
 });

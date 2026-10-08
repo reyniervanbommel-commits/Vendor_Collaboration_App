@@ -22,6 +22,8 @@ const ONBOARDING_TOUR_IDS = Object.freeze([
   'guideCellActions',
   'guideRemarks',
   'guideRemarksColumn',
+  'guideRemarksStaff',
+  'guideRemarksVendor',
   'guideConditionalFormatting',
   'guideBoardInsights',
 ]);

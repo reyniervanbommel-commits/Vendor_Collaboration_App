@@ -126,6 +126,11 @@ function mapActivityRow(row) {
       : null,
     visibility: row.visibility || null,
     authorRole: row.author_role || null,
+    parentId: row.parent_id ? Number(row.parent_id) : null,
+    replyToName: row.reply_to_name || null,
+    broadcastId: row.broadcast_id || null,
+    broadcastCount: row.broadcast_count === null || row.broadcast_count === undefined ? null : Number(row.broadcast_count),
+    mentionsJson: row.mentions_json || null,
   };
 }
 
@@ -137,8 +142,11 @@ function compareActivity(a, b) {
 }
 
 function enrichRemarkActivity(item, reactions, currentUser) {
-  const { visibility, authorRole, ...rest } = item;
-  if (item.type !== 'remark') return rest;
+  const { visibility, authorRole, replyToName, broadcastId, broadcastCount, mentionsJson, ...rest } = item;
+  if (item.type !== 'remark') {
+    const { parentId, ...history } = rest;
+    return history;
+  }
   const author = item.actor
     ? { id: item.actor.id, displayName: item.actor.name || item.actor.email || null }
     : null;
@@ -147,6 +155,11 @@ function enrichRemarkActivity(item, reactions, currentUser) {
     author,
     column: item.columnId ? { id: item.columnId, label: item.columnLabel } : null,
     reactions: reactions || [],
+    replyTo: item.parentId ? { id: item.parentId, authorName: replyToName } : null,
+    // @mention-groep: zelfde velden als RowRemarksMapper (aantal niet voor vendors, niets bij tombstone).
+    broadcastId,
+    mentions: !item.isDeleted && mentionsJson ? JSON.parse(mentionsJson) : [],
+    ...(broadcastId && currentUser?.role !== ROLES.SUPPLIER ? { broadcastCount: broadcastCount || 0 } : {}),
     canDelete: !item.isDeleted && currentUser?.role !== ROLES.SUPPLIER && Boolean(
       currentUser?.role === ROLES.ADMIN
       || (author?.id && String(author.id) === String(currentUser?.id))
@@ -179,7 +192,10 @@ function buildQuery(visibilityFilter = null) {
         CAST(NULL AS DECIMAL(38,10)) new_value_number, CAST(NULL AS DATETIME2) new_value_date,
         CAST(NULL AS BIT) new_value_bool, CAST(NULL AS NVARCHAR(16)) status,
         CAST(NULL AS NVARCHAR(MAX)) error, CAST(NULL AS NVARCHAR(2000)) body,
-        CAST(0 AS BIT) is_deleted, u.id user_id, COALESCE(u.display_name, u.email) user_name, u.email user_email, CAST(NULL AS NVARCHAR(16)) visibility, CAST(NULL AS NVARCHAR(50)) author_role
+        CAST(0 AS BIT) is_deleted, u.id user_id, COALESCE(u.display_name, u.email) user_name, u.email user_email, CAST(NULL AS NVARCHAR(16)) visibility, CAST(NULL AS NVARCHAR(50)) author_role,
+        CAST(NULL AS BIGINT) parent_id, CAST(NULL AS NVARCHAR(256)) reply_to_name,
+        CAST(NULL AS UNIQUEIDENTIFIER) broadcast_id, CAST(NULL AS BIGINT) broadcast_count,
+        CAST(NULL AS NVARCHAR(MAX)) mentions_json
       FROM dbo.tb_change_ledger l
       OUTER APPLY (
         SELECT TOP (1) matched.id, matched.label
@@ -198,7 +214,7 @@ function buildQuery(visibilityFilter = null) {
         h.old_value_text, h.old_value_number, h.old_value_date, h.old_value_bool,
         h.new_value_text, h.new_value_number, h.new_value_date, h.new_value_bool,
         NULL, NULL, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email,
-        NULL, NULL
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL
       FROM dbo.tb_cell_history h
       INNER JOIN dbo.tb_columns c ON c.id=h.column_id
       LEFT JOIN dbo.users u ON u.id=h.changed_by
@@ -209,7 +225,7 @@ function buildQuery(visibilityFilter = null) {
       SELECT f.id, 'writeback', 1, f.created_at, 'correct', c.[key], c.id, c.label,
         f.old_value, NULL, NULL, NULL, f.new_value, NULL, NULL, NULL,
         f.status, f.error, NULL, CAST(0 AS BIT), u.id, COALESCE(u.display_name, u.email), u.email,
-        NULL, NULL
+        NULL, NULL, NULL, NULL, NULL, NULL, NULL
       FROM dbo.tb_field_corrections f
       INNER JOIN dbo.tb_columns c ON c.id=f.column_id
       LEFT JOIN dbo.users u ON u.id=f.created_by
@@ -220,10 +236,27 @@ function buildQuery(visibilityFilter = null) {
       SELECT r.id, 'remark', 5, r.created_at, 'remark', NULL, r.column_id, c.label,
         NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
         CASE WHEN r.is_deleted=1 THEN NULL ELSE r.body END, r.is_deleted,
-        u.id, COALESCE(u.display_name, u.email), u.email, r.visibility, u.role
+        u.id, COALESCE(u.display_name, u.email), u.email, r.visibility, u.role,
+        r.parent_id, COALESCE(pu.display_name, pu.email),
+        r.broadcast_id, bc.broadcast_count, mj.mentions_json
       FROM dbo.tb_row_remarks r
       LEFT JOIN dbo.tb_columns c ON c.id=r.column_id
       LEFT JOIN dbo.users u ON u.id=r.created_by
+      LEFT JOIN dbo.tb_row_remarks pr ON pr.id=r.parent_id
+      LEFT JOIN dbo.users pu ON pu.id=pr.created_by
+      OUTER APPLY (
+        SELECT COUNT_BIG(*) broadcast_count FROM dbo.tb_row_remarks b
+        WHERE r.broadcast_id IS NOT NULL AND b.broadcast_id=r.broadcast_id AND b.is_deleted=0
+      ) bc
+      OUTER APPLY (
+        SELECT (
+          SELECT m.value, c2.label AS columnLabel
+          FROM dbo.tb_row_remark_mentions m
+          INNER JOIN dbo.tb_columns c2 ON c2.id=m.column_id
+          WHERE r.broadcast_id IS NOT NULL AND m.broadcast_id=r.broadcast_id
+          FOR JSON PATH
+        ) mentions_json
+      ) mj
       WHERE @includeRemarks=1 AND r.table_id=@tableId AND r.partition_key=@partitionKey
         AND r.record_key=@recordKey AND r.detail_key=-1
         AND (@columnId IS NULL OR r.column_id=@columnId)

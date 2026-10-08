@@ -23,6 +23,8 @@ function FilterSummaryPart({ part, styles }) {
   return <span className={className}>{part.text}</span>;
 }
 
+// Elke regel is een kaart met twee regels: kolomnaam + Clear bovenaan, operator en waarde(n)
+// eronder over de volle breedte. Zo passen lange waarden (bv. artikelnummers) zonder af te breken.
 const useStyles = makeStyles({
   section: {
     display: 'flex',
@@ -34,62 +36,51 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     ...shorthands.gap(tokens.spacingVerticalXS),
   },
-  table: {
-    width: '100%',
-    borderCollapse: 'separate',
-    borderSpacing: `0 ${tokens.spacingVerticalXS}`,
+  list: {
+    display: 'flex',
+    flexDirection: 'column',
+    ...shorthands.gap(tokens.spacingVerticalXS),
+    ...shorthands.margin(0),
+    ...shorthands.padding(0),
+    listStyleType: 'none',
   },
-  cell: {
-    verticalAlign: 'middle',
+  card: {
     backgroundColor: tokens.colorNeutralBackground1,
-    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderBottom('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalXS),
+    ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
+    ...shorthands.borderRadius(tokens.borderRadiusMedium),
+    ...shorthands.padding(tokens.spacingVerticalXS, tokens.spacingHorizontalS),
   },
-  cellFirst: {
-    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
-    borderTopLeftRadius: tokens.borderRadiusMedium,
-    borderBottomLeftRadius: tokens.borderRadiusMedium,
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS),
-    width: '1%',
+  cardExpanded: {
+    ...shorthands.borderColor(tokens.colorNeutralStroke1),
   },
-  cellLast: {
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    borderTopRightRadius: tokens.borderRadiusMedium,
-    borderBottomRightRadius: tokens.borderRadiusMedium,
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS),
-    width: '1%',
-    textAlign: 'right',
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
+    minWidth: 0,
   },
-  cellName: {
-    width: '42%',
-  },
-  cellOperator: {
-    width: '8.75rem',
+  name: {
+    flexGrow: 1,
+    minWidth: 0,
+    ...shorthands.overflow('hidden'),
+    textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalM),
   },
-  cellValue: {
-    width: 'auto',
-    ...shorthands.padding(tokens.spacingVerticalS, tokens.spacingHorizontalS),
-  },
-  cellEditor: {
-    ...shorthands.borderLeft('1px', 'solid', tokens.colorNeutralStroke2),
-    ...shorthands.borderRight('1px', 'solid', tokens.colorNeutralStroke2),
-    borderBottomLeftRadius: tokens.borderRadiusMedium,
-    borderBottomRightRadius: tokens.borderRadiusMedium,
-  },
-  summaryOperators: {
+  summary: {
     display: 'flex',
     flexWrap: 'wrap',
     alignItems: 'baseline',
-    ...shorthands.gap('4px'),
+    columnGap: tokens.spacingHorizontalXS,
+    rowGap: '2px',
+    // Uitlijnen onder de kolomnaam (breedte van de uitklapknop).
+    paddingLeft: '28px',
+    paddingBottom: tokens.spacingVerticalXS,
+    minWidth: 0,
   },
-  summaryValues: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    alignItems: 'baseline',
-    ...shorthands.gap('4px'),
+  editor: {
+    ...shorthands.borderTop('1px', 'solid', tokens.colorNeutralStroke2),
+    marginTop: tokens.spacingVerticalXS,
+    paddingTop: tokens.spacingVerticalS,
   },
   summaryOperator: {
     color: tokens.colorNeutralForeground3,
@@ -99,6 +90,11 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightBold,
     fontSize: tokens.fontSizeBase400,
     lineHeight: tokens.lineHeightBase400,
+    // Een waarde blijft heel; alleen tussen waarden mag de regel breken.
+    whiteSpace: 'nowrap',
+    maxWidth: '100%',
+    ...shorthands.overflow('hidden'),
+    textOverflow: 'ellipsis',
   },
   summaryAnd: {
     color: tokens.colorNeutralForeground3,
@@ -121,55 +117,34 @@ const ActiveRuleRow = memo(function ActiveRuleRow({
     onClear(item);
   }, [item, onClear]);
   const expandLabel = expanded ? `Collapse ${item.columnLabel}` : `Expand ${item.columnLabel}`;
-  const operatorParts = Array.isArray(item.summaryParts)
-    ? item.summaryParts.filter((part) => part.type !== 'value')
-    : [];
-  const valueParts = Array.isArray(item.summaryParts)
-    ? item.summaryParts.filter((part) => part.type === 'value')
-    : [];
+  const parts = Array.isArray(item.summaryParts) ? item.summaryParts : [];
 
   return (
-    <>
-      <tr>
-        <td className={mergeClasses(styles.cell, styles.cellFirst)}>
-          <Button
-            appearance="subtle"
-            icon={expanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
-            aria-label={expandLabel}
-            onClick={handleToggle}
-          />
-        </td>
-        <td className={mergeClasses(styles.cell, styles.cellName)}>
-          <Text weight="semibold">{item.columnLabel}</Text>
-        </td>
-        <td className={mergeClasses(styles.cell, styles.cellOperator)}>
-          <span className={styles.summaryOperators}>
-            {operatorParts.length
-              ? operatorParts.map((part, index) => (
-                <FilterSummaryPart key={`${item.id}-op-${index}`} part={part} styles={styles} />
-              ))
-              : null}
-          </span>
-        </td>
-        <td className={mergeClasses(styles.cell, styles.cellValue)}>
-          <span className={styles.summaryValues}>
-            {valueParts.length
-              ? valueParts.map((part, index) => (
-                <FilterSummaryPart key={`${item.id}-val-${index}`} part={part} styles={styles} />
-              ))
-              : <Text size={200}>{item.summary}</Text>}
-          </span>
-        </td>
-        <td className={mergeClasses(styles.cell, styles.cellLast)}>
-          <Button appearance="subtle" onClick={handleClear}>Clear</Button>
-        </td>
-      </tr>
-      {expanded ? (
-        <tr>
-          <td className={mergeClasses(styles.cell, styles.cellEditor)} colSpan={5}>{children}</td>
-        </tr>
-      ) : null}
-    </>
+    <li className={mergeClasses(styles.card, expanded && styles.cardExpanded)}>
+      <div className={styles.header}>
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={expanded ? <ChevronDown20Regular /> : <ChevronRight20Regular />}
+          aria-label={expandLabel}
+          aria-expanded={expanded}
+          onClick={handleToggle}
+        />
+        <Text weight="semibold" className={styles.name} title={item.columnLabel}>{item.columnLabel}</Text>
+        <Button appearance="subtle" size="small" onClick={handleClear}>Clear</Button>
+      </div>
+      <div className={styles.summary} data-rule-summary>
+        {parts.length
+          ? parts.map((part, index) => (
+            <React.Fragment key={`${item.id}-part-${index}`}>
+              {index > 0 ? ' ' : null}
+              <FilterSummaryPart part={part} styles={styles} />
+            </React.Fragment>
+          ))
+          : <Text size={200}>{item.summary}</Text>}
+      </div>
+      {expanded ? <div className={styles.editor}>{children}</div> : null}
+    </li>
   );
 });
 
@@ -210,18 +185,18 @@ function PurchaseOrdersActiveRulesSection({
       {hasItems ? null : <Text>{emptyText}</Text>}
       {headerItems.length > 0 ? (
         <div className={styles.group}>
-          <Text size={200} weight="semibold">Header columns</Text>
-          <table className={styles.table}>
-            <tbody>{headerItems.map(renderItem)}</tbody>
-          </table>
+          <Text size={200} weight="semibold" id={`${keyPrefix}header-label`}>Header columns</Text>
+          <ul className={styles.list} aria-labelledby={`${keyPrefix}header-label`}>
+            {headerItems.map(renderItem)}
+          </ul>
         </div>
       ) : null}
       {lineItems.length > 0 ? (
         <div className={styles.group}>
-          <Text size={200} weight="semibold">Line columns</Text>
-          <table className={styles.table}>
-            <tbody>{lineItems.map(renderItem)}</tbody>
-          </table>
+          <Text size={200} weight="semibold" id={`${keyPrefix}line-label`}>Line columns</Text>
+          <ul className={styles.list} aria-labelledby={`${keyPrefix}line-label`}>
+            {lineItems.map(renderItem)}
+          </ul>
         </div>
       ) : null}
     </section>

@@ -51,6 +51,8 @@ function mapColumnRow(row) {
     // Admin-instelling (Data model): mag een vendor deze kolom bewerken? Los van `writable`
     // (D365-write-back) — dat blijft de app-brede write-back-mechaniek richting D365.
     vendorEditable: Boolean(row.vendor_editable),
+    // Admin-instelling: mogen waarden uit deze kolom met @ in remarks worden genoemd?
+    mentionable: Boolean(row.mentionable),
     sortOrder: Number(row.sort_order),
     formulaExpr: row.formula_expr || null,
   };
@@ -59,7 +61,7 @@ function mapColumnRow(row) {
 const COLUMN_SELECT = `
   SELECT id, table_id, scope, [key], label, original_label, source, source_field, data_type, options_json,
          writable, write_mechanism, is_default_visible, filterable, sortable, is_active, sort_order,
-         visible_at_delete, vendor_editable, formula_expr
+         visible_at_delete, vendor_editable, mentionable, formula_expr
   FROM dbo.tb_columns
 `;
 

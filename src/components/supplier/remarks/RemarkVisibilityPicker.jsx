@@ -18,6 +18,7 @@ function RemarkVisibilityPicker({ value, onChange, disabled = false }) {
   return (
     <RadioGroup
       className="remark-visibility-picker"
+      data-tour="remark-visibility-toggle"
       layout="horizontal"
       aria-label="Show remarks"
       value={value}

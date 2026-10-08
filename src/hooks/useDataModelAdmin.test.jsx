@@ -88,6 +88,31 @@ describe('useDataModelAdmin — losse kolom-toggles', () => {
     expect(result.current.togglingKey).toBeNull();
   });
 
+  it('toggleMentionable PATCHt naar het mentionable-endpoint en markeert alleen tekstbronkolommen', async () => {
+    const payload = datamodelPayload({
+      columns: {
+        header: [],
+        line: [
+          columnFixture({ id: 9, key: 'itemNumber', level: 'line', dataType: 'text', mentionable: false }),
+          columnFixture({ id: 10, key: 'qty', level: 'line', dataType: 'number' }),
+        ],
+      },
+    });
+    const { result } = await renderReady(payload);
+    const [item, qty] = result.current.columns.line;
+    expect(item.mentionableAllowed).toBe(true);
+    expect(qty.mentionableAllowed).toBe(false);
+    apiRequest.mockResolvedValue({ column: { ...item, mentionable: true } });
+
+    await act(async () => { await result.current.toggleMentionable(item); });
+
+    expect(apiRequest).toHaveBeenCalledWith('/data/purchase-orders/columns/9/mentionable', {
+      method: 'PATCH',
+      body: { mentionable: true },
+    });
+    expect(result.current.columns.line[0].mentionable).toBe(true);
+  });
+
   it('toggleWriteback PATCHt naar het writeback-endpoint met het omgekeerde writable-gedrag', async () => {
     const { result } = await renderReady();
     apiRequest.mockResolvedValue({ column: columnFixture({ writable: true }) });

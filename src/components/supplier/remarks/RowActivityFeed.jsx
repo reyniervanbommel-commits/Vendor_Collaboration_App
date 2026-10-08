@@ -1,14 +1,23 @@
 import React, { memo, useCallback, useMemo } from 'react';
 import { Button, Spinner } from '@fluentui/react-components';
 import RemarkMessageCard from './RemarkMessageCard';
+import RemarkThread from './RemarkThread';
 import RowHistoryEntry from './RowHistoryEntry';
-import { formatDayLabel, getActivityTimestamp, isRemarkActivity, toRemark } from './remarksFormatters';
+import {
+  formatDayLabel,
+  getActivityTimestamp,
+  isRemarkActivity,
+  normalizeRemarkId,
+  toRemark,
+} from './remarksFormatters';
 
-function buildFeedRows(items) {
+function buildFeedRows(items, threaded) {
   const rows = [];
   let previousDay = null;
   items.forEach((item) => {
-    const day = formatDayLabel(getActivityTimestamp(toRemark(item)));
+    // Gesprekken staan op laatste activiteit; de dagkop volgt die datum.
+    const timestamp = threaded ? (item.lastActivityAt || item.createdAt) : getActivityTimestamp(toRemark(item));
+    const day = formatDayLabel(timestamp);
     if (day !== previousDay) {
       rows.push({ rowType: 'day', id: `day-${day}-${rows.length}`, label: day });
       previousDay = day;
@@ -33,8 +42,10 @@ function RowActivityFeed({
   onRetry,
   remarkActions,
   olderLabel = 'Show older activity',
+  threaded = false,
+  threadProps = null,
 }) {
-  const feedRows = useMemo(() => buildFeedRows(items || []), [items]);
+  const feedRows = useMemo(() => buildFeedRows(items || [], threaded), [items, threaded]);
 
   const renderRow = useCallback(
     (row) => {
@@ -43,6 +54,24 @@ function RowActivityFeed({
           <div className="day-separator" key={row.id}>
             {row.label}
           </div>
+        );
+      }
+      if (row.rowType === 'remark' && threaded) {
+        // Gesprekken zijn al remark-DTO's (met replies); toRemark zou die velden laten vallen.
+        const remark = { ...row.item, id: normalizeRemarkId(row.item.id) };
+        return (
+          <RemarkThread
+            key={row.id}
+            remark={remark}
+            currentUser={currentUser}
+            remarkActions={remarkActions}
+            canReply={threadProps.canReply}
+            replyOpen={String(threadProps.replyOpenId) === String(remark.id)}
+            onOpenReply={threadProps.onOpenReply}
+            onCloseReply={threadProps.onCloseReply}
+            onSubmitReply={threadProps.onSubmitReply}
+            showVisibility={threadProps.showVisibility}
+          />
         );
       }
       if (row.rowType === 'remark') {
@@ -58,7 +87,7 @@ function RowActivityFeed({
       }
       return <RowHistoryEntry key={row.id} entry={row.item} />;
     },
-    [currentUser, remarkActions]
+    [currentUser, remarkActions, threaded, threadProps]
   );
 
   if (loading) {

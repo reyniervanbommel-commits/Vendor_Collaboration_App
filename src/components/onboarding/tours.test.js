@@ -4,6 +4,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { TOURS } from './tours';
+import { filterToursForRole } from '../../utils/tourSteps';
 
 const require = createRequire(import.meta.url);
 const { ONBOARDING_TOUR_IDS } = require('../../../server/utils/onboardingSettings');
@@ -73,5 +74,27 @@ describe('tour definitions', () => {
         if (step.action) expect(step.advanceOn, `${tour.id}.${step.id}`).toBeTruthy();
       });
     });
+  });
+});
+
+describe('conversation guides per role', () => {
+  const ids = (role) => filterToursForRole(TOURS, role).map((tour) => tour.id);
+  const stepIds = (role, id) => filterToursForRole(TOURS, role).find((tour) => tour.id === id)?.steps.map((step) => step.id);
+
+  it('staff krijgt instructie A, vendor instructie B', () => {
+    ['admin', 'supply_chain', 'employee'].forEach((role) => {
+      expect(ids(role)).toContain('guideRemarksStaff');
+      expect(ids(role)).not.toContain('guideRemarksVendor');
+    });
+    expect(ids('supplier')).toContain('guideRemarksVendor');
+    expect(ids('supplier')).not.toContain('guideRemarksStaff');
+  });
+
+  it('de Vendor/Internal-keuze zien alleen admin en Supply Chain; employee krijgt de interne-uitleg', () => {
+    expect(stepIds('admin', 'guideRemarksStaff')).toContain('visibility');
+    expect(stepIds('supply_chain', 'guideRemarksStaff')).toContain('visibility');
+    expect(stepIds('employee', 'guideRemarksStaff')).not.toContain('visibility');
+    expect(stepIds('employee', 'guideRemarksStaff')).toContain('internal-only');
+    expect(stepIds('admin', 'guideRemarksStaff')).not.toContain('internal-only');
   });
 });

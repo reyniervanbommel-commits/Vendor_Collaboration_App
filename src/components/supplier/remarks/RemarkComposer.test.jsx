@@ -37,7 +37,7 @@ describe('RemarkComposer zichtbaarheid', () => {
     renderComposer({ currentUser: SUPPLY_CHAIN, visibility: 'internal', onSubmit });
     type('Hello');
     fireEvent.click(screen.getByRole('button', { name: 'Post internal note' }));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('Hello', null, 'internal'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('Hello', null, 'internal', []));
     expect(screen.getByRole('button', { name: 'Post internal note' })).toBeTruthy();
   });
 
@@ -52,7 +52,7 @@ describe('RemarkComposer zichtbaarheid', () => {
     expect(screen.getByText('Internal — not visible to vendors')).toBeTruthy();
     type('Note');
     fireEvent.click(screen.getByRole('button', { name: 'Post internal note' }));
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('Note', null, null));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('Note', null, null, []));
   });
 
   it('vendor: ongewijzigd', () => {

@@ -8,6 +8,7 @@ import {
   mergeSampleByField,
   sortFlaggedFirst,
 } from './entityConfigTableUtils';
+import { BULK_TOGGLE_CONFIG as BULK_CONFIG } from './entityConfigTableUtils';
 
 describe('entityConfigTableUtils samples', () => {
   it('vindt een sample case-insensitive op D365-veld of kolomkey', () => {
@@ -74,5 +75,14 @@ describe('sortFlaggedFirst', () => {
       { name: 'D', on: true },
     ];
     expect(sortFlaggedFirst(rows, (row) => row.on).map((row) => row.name)).toEqual(['B', 'D', 'A', 'C']);
+  });
+});
+
+describe('mentionable bulk toggle', () => {
+  it('is opgenomen met eligibility op mentionableAllowed', () => {
+    const config = BULK_CONFIG.find((entry) => entry.key === 'mentionable');
+    expect(config.label).toBe('Mentionable');
+    expect(config.isEligible({ mentionableAllowed: true })).toBe(true);
+    expect(config.isEnabled({ mentionable: true })).toBe(true);
   });
 });

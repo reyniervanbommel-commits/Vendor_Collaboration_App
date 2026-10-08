@@ -2,6 +2,7 @@
 
 const {
   DATA_TYPES,
+  assertMentionableColumn,
   ensureRemarksColumn,
   resolveRccpQuantityEligibility,
   resolveWriteback,
@@ -281,5 +282,19 @@ describe('TableColumnsService Remarks-contract', () => {
       sortable: false,
       isActive: true,
     });
+  });
+});
+
+describe('TableColumnsService.assertMentionableColumn', () => {
+  it('staat een D365-tekstkolom toe', () => {
+    expect(() => assertMentionableColumn({ source: 'source', dataType: 'text' })).not.toThrow();
+  });
+
+  it.each([
+    ['custom tekstkolom', { source: 'custom', dataType: 'text' }],
+    ['D365-getalkolom', { source: 'source', dataType: 'number' }],
+    ['remarks-kolom', { source: 'custom', dataType: 'remarks' }],
+  ])('weigert een %s met 400', (_label, column) => {
+    expect(() => assertMentionableColumn(column)).toThrow(expect.objectContaining({ status: 400 }));
   });
 });

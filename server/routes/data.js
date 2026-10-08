@@ -10,6 +10,7 @@ const columnsService = require('../services/TableColumnsService');
 const remarksService = require('../services/RowRemarksService');
 const { getRowActivity } = require('../services/RowActivityService');
 const registry = require('../services/TableRegistryService');
+const mentionsService = require('../services/RemarkMentionsService');
 const {
   normalizeActive,
   normalizeBody,
@@ -88,6 +89,34 @@ router.get('/:tableKey/remarks/has-comment', requireCommentPermission('comments.
   }
 });
 
+// GET /api/data/:tableKey/remarks/mentions?q= — suggesties voor @mentions (mentionable kolommen).
+router.get('/:tableKey/remarks/mentions', requireCommentPermission('comments.write'), async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey(normalizeTableKey(req.params.tableKey));
+    const suggestions = await mentionsService.suggestMentions({
+      table, q: String(req.query.q || ''), actor: remarksActor(req),
+    });
+    return res.json({ suggestions });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// POST /api/data/:tableKey/remarks/mentions/preview — op hoeveel PO's/vendors komt de opmerking?
+router.post('/:tableKey/remarks/mentions/preview', requireCommentPermission('comments.write'), async (req, res, next) => {
+  try {
+    const table = await registry.getTableByKey(normalizeTableKey(req.params.tableKey));
+    const row = normalizeRowIdentity(req.body?.partitionKey, req.body?.recordKey);
+    await assertSupplierPurchaseOrderRow(remarksActor(req), { tableKey: table.key, ...row });
+    const { orderCount, vendorCount } = await mentionsService.resolveMentionTargets({
+      table, mentions: req.body?.mentions, actor: remarksActor(req), currentRow: row,
+    });
+    return res.json({ orderCount, vendorCount });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 // GET /api/data/:tableKey/remarks — stabiel cursor-gepagineerde remarks, inclusief tombstones.
 router.get('/:tableKey/remarks', requireCommentPermission('comments.view'), async (req, res, next) => {
   try {
@@ -115,8 +144,16 @@ router.post('/:tableKey/remarks', requireCommentPermission('comments.write'), as
     const columnId = normalizeOptionalColumnId(req.body?.columnId);
     // De service bepaalt de uiteindelijke zichtbaarheid; alleen admin/supply_chain kiezen echt.
     const visibility = typeof req.body?.visibility === 'string' ? req.body.visibility : undefined;
+    // Reply op een bestaande remark; de service valideert rij, zichtbaarheid en status.
+    const parentId = req.body?.parentId === undefined || req.body?.parentId === null
+      ? null
+      : normalizePositiveId(req.body.parentId, 'parentId');
+    if (req.body?.mentions !== undefined && !Array.isArray(req.body.mentions)) {
+      return res.status(400).json({ error: 'Mentions must be a list' });
+    }
+    const mentions = Array.isArray(req.body?.mentions) ? req.body.mentions : undefined;
     const remark = await remarksService.addRemark(
-      { tableKey, ...row, body, columnId, visibility },
+      { tableKey, ...row, body, columnId, visibility, parentId, mentions },
       remarksActor(req),
     );
     return res.status(201).json({ remark });
@@ -459,6 +496,18 @@ router.patch('/:tableKey/columns/:id/vendor-editable', requireRole(ROLES.ADMIN),
     const columnId = toColumnId(req.params.id);
     if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
     const column = await columnsService.setVendorEditable(columnId, Boolean(req.body?.editable), req.user.id);
+    return res.json({ column });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+// PATCH /api/data/:tableKey/columns/:id/mentionable — mogen waarden met @ in remarks? (admin-only)
+router.patch('/:tableKey/columns/:id/mentionable', requireRole(ROLES.ADMIN), async (req, res, next) => {
+  try {
+    const columnId = toColumnId(req.params.id);
+    if (!columnId) return res.status(400).json({ error: 'Invalid column id' });
+    const column = await columnsService.setMentionable(columnId, Boolean(req.body?.mentionable), req.user.id);
     return res.json({ column });
   } catch (err) {
     return next(err);

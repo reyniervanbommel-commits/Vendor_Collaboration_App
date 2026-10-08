@@ -54,6 +54,7 @@ export default function DataPreviewColumnConfigRow({
   onToggleVisibleAtDelete,
   onToggleWriteback,
   onToggleVendorEditable,
+  onToggleMentionable = null,
   onDeleteColumn,
   relationBadgeLabel = 'Header-Line link key',
 }) {
@@ -63,6 +64,7 @@ export default function DataPreviewColumnConfigRow({
   const handleVisibleAtDelete = useCallback(() => onToggleVisibleAtDelete(column), [onToggleVisibleAtDelete, column]);
   const handleWriteback = useCallback(() => onToggleWriteback(column), [onToggleWriteback, column]);
   const handleVendorEditable = useCallback(() => onToggleVendorEditable(column), [onToggleVendorEditable, column]);
+  const handleMentionable = useCallback(() => onToggleMentionable?.(column), [onToggleMentionable, column]);
   const handleDelete = useCallback(() => {
     if (column.source !== 'custom') return;
     setDeleteConfirmOpen(true);
@@ -78,6 +80,7 @@ export default function DataPreviewColumnConfigRow({
   const visibleAtDeleteBusy = togglingKey === `vad-${column.id}`;
   const writebackBusy = togglingKey === `wb-${column.id}`;
   const vendorEditableBusy = togglingKey === `ve-${column.id}`;
+  const mentionableBusy = togglingKey === `mn-${column.id}`;
   const deletingBusy = togglingKey === `del-${column.id}`;
   const bulkBusy = typeof togglingKey === 'string' && togglingKey.startsWith('bulk-');
   const rowClassName = mergeClasses(
@@ -187,6 +190,27 @@ export default function DataPreviewColumnConfigRow({
             </span>
           ) : (
             <span title="Key or system field: not editable by vendors">
+              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
+            </span>
+          )}
+        </TableCell>
+        <TableCell className={styles.valueCell}>
+          {column.mentionableAllowed ? (
+            <span className={styles.cellCenter}>
+              <Switch
+                checked={Boolean(column.mentionable)}
+                disabled={mentionableBusy || bulkBusy}
+                onChange={handleMentionable}
+                aria-label={`Mentionable for ${column.label}`}
+              />
+              {column.mentionable ? (
+                <Badge appearance="tint" color="success" size="small">Enabled</Badge>
+              ) : (
+                <Badge appearance="tint" color="informative" size="small">Available</Badge>
+              )}
+            </span>
+          ) : (
+            <span title="Only text columns from D365 can be mentioned">
               <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
             </span>
           )}

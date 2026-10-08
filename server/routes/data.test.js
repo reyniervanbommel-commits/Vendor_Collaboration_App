@@ -9,6 +9,9 @@ const dataService = require('../services/TableDataService');
 const settingsService = require('../services/SettingsService');
 const remarksService = require('../services/RowRemarksService');
 const pagePermissions = require('../utils/pagePermissions');
+const columnsService = require('../services/TableColumnsService');
+const mentionsService = require('../services/RemarkMentionsService');
+const registry = require('../services/TableRegistryService');
 
 const errorHandler = require('../middleware/errorHandler');
 
@@ -247,11 +250,141 @@ describe('POST /:tableKey/remarks — zichtbaarheid', () => {
     });
   });
 
+  it('geeft parentId door', async () => {
+    remarksService.addRemark = vi.fn().mockResolvedValue({ id: 1 });
+    await withServer({ id: 4, role: 'employee' }, async (baseUrl) => {
+      expect((await post(baseUrl, { parentId: 41 })).status).toBe(201);
+    });
+    expect(remarksService.addRemark.mock.calls[0][0].parentId).toBe(41);
+  });
+
+  it('weigert een ongeldige parentId met 400', async () => {
+    remarksService.addRemark = vi.fn();
+    await withServer({ id: 4, role: 'employee' }, async (baseUrl) => {
+      expect((await post(baseUrl, { parentId: 'abc' })).status).toBe(400);
+    });
+    expect(remarksService.addRemark).not.toHaveBeenCalled();
+  });
+
   it('negeert een niet-string visibility', async () => {
     remarksService.addRemark = vi.fn().mockResolvedValue({ id: 1 });
     await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
       await post(baseUrl, { visibility: ['internal'] });
     });
     expect(remarksService.addRemark.mock.calls[0][0].visibility).toBeUndefined();
+  });
+});
+
+describe('PATCH /:tableKey/columns/:id/mentionable', () => {
+  const original = columnsService.setMentionable;
+  afterEach(() => { columnsService.setMentionable = original; });
+
+  const patch = (baseUrl, body) => fetch(`${baseUrl}/api/data/purchase-orders/columns/7/mentionable`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  it('is admin-only', async () => {
+    columnsService.setMentionable = vi.fn();
+    await withServer({ id: 2, role: 'employee' }, async (baseUrl) => {
+      expect((await patch(baseUrl, { mentionable: true })).status).toBe(403);
+    });
+    expect(columnsService.setMentionable).not.toHaveBeenCalled();
+  });
+
+  it('zet de vlag als admin', async () => {
+    columnsService.setMentionable = vi.fn().mockResolvedValue({ id: 7, mentionable: true });
+    await withServer({ id: 1, role: 'admin' }, async (baseUrl) => {
+      const res = await patch(baseUrl, { mentionable: true });
+      expect(res.status).toBe(200);
+      expect((await res.json()).column).toEqual({ id: 7, mentionable: true });
+    });
+    expect(columnsService.setMentionable).toHaveBeenCalledWith(7, true, 1);
+  });
+});
+
+describe('@mentions routes', () => {
+  const originals = {
+    suggest: mentionsService.suggestMentions,
+    resolve: mentionsService.resolveMentionTargets,
+    getTable: registry.getTableByKey,
+    add: remarksService.addRemark,
+  };
+  beforeEach(() => {
+    registry.getTableByKey = vi.fn().mockResolvedValue({ id: 7, key: 'purchase-orders' });
+  });
+  afterEach(() => {
+    mentionsService.suggestMentions = originals.suggest;
+    mentionsService.resolveMentionTargets = originals.resolve;
+    registry.getTableByKey = originals.getTable;
+    remarksService.addRemark = originals.add;
+  });
+
+  it('GET mentions geeft suggesties met de actor', async () => {
+    mentionsService.suggestMentions = vi.fn().mockResolvedValue([{ value: 'A-1' }]);
+    await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/remarks/mentions?q=A-`);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ suggestions: [{ value: 'A-1' }] });
+    });
+    expect(mentionsService.suggestMentions).toHaveBeenCalledWith(expect.objectContaining({
+      q: 'A-', actor: expect.objectContaining({ id: 4, role: 'supply_chain' }), table: { id: 7, key: 'purchase-orders' },
+    }));
+  });
+
+  it('POST preview geeft aantallen terug', async () => {
+    mentionsService.resolveMentionTargets = vi.fn().mockResolvedValue({ rows: [], orderCount: 14, vendorCount: 3 });
+    await withServer({ id: 4, role: 'supply_chain' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/remarks/mentions/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitionKey: 'whsl', recordKey: 'PO-1', mentions: [{ columnId: 11, value: 'A-1' }] }),
+      });
+      expect(await res.json()).toEqual({ orderCount: 14, vendorCount: 3 });
+    });
+    expect(mentionsService.resolveMentionTargets).toHaveBeenCalledWith(expect.objectContaining({
+      currentRow: { partitionKey: 'whsl', recordKey: 'PO-1' }, mentions: [{ columnId: 11, value: 'A-1' }],
+    }));
+  });
+
+  it('POST remarks: mentions moet een lijst zijn', async () => {
+    remarksService.addRemark = vi.fn();
+    await withServer({ id: 4, role: 'employee' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/remarks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitionKey: 'whsl', recordKey: 'PO-1', body: 'x', mentions: 'A-1' }),
+      });
+      expect(res.status).toBe(400);
+    });
+    expect(remarksService.addRemark).not.toHaveBeenCalled();
+  });
+
+  it('POST remarks: geeft mentions door', async () => {
+    remarksService.addRemark = vi.fn().mockResolvedValue({ id: 1 });
+    await withServer({ id: 4, role: 'employee' }, async (baseUrl) => {
+      await fetch(`${baseUrl}/api/data/purchase-orders/remarks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitionKey: 'whsl', recordKey: 'PO-1', body: 'x', mentions: [{ columnId: 11, value: 'A-1' }] }),
+      });
+    });
+    expect(remarksService.addRemark.mock.calls[0][0].mentions).toEqual([{ columnId: 11, value: 'A-1' }]);
+  });
+
+  it('POST preview controleert de rij-scope van een supplier', async () => {
+    mentionsService.resolveMentionTargets = vi.fn();
+    dataService.read = vi.fn(async () => ({ rows: [] }));
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    await withServer({ id: 5, role: 'supplier', vendor_account: 'V1' }, async (baseUrl) => {
+      const res = await fetch(`${baseUrl}/api/data/purchase-orders/remarks/mentions/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partitionKey: 'whsl', recordKey: 'PO-OTHER', mentions: [{ columnId: 11, value: 'A' }] }),
+      });
+      expect(res.status).toBe(403);
+    });
+    expect(mentionsService.resolveMentionTargets).not.toHaveBeenCalled();
   });
 });

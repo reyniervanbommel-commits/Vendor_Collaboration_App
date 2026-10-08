@@ -184,6 +184,42 @@ describe('remarks components', () => {
       expect(screen.queryByText('Vendor')).toBeNull();
     });
 
+    it('toont Reply-knop alleen met onReply en niet op tombstone', () => {
+      const onReply = vi.fn();
+      const { unmount } = renderWithFluent(<RemarkMessageCard remark={{ ...base }} currentUser={{ id: 9 }} onDelete={vi.fn()} onReaction={vi.fn()} onReply={onReply} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Reply to Ann' }));
+      expect(onReply).toHaveBeenCalled();
+      unmount();
+      renderWithFluent(<RemarkMessageCard remark={{ ...base, isDeleted: true }} currentUser={{ id: 9 }} onDelete={vi.fn()} onReaction={vi.fn()} onReply={onReply} />);
+      expect(screen.queryByRole('button', { name: 'Reply to Ann' })).toBeNull();
+    });
+
+    it('toont Reply to-regel bij replyTo', () => {
+      renderWithFluent(<RemarkMessageCard remark={{ ...base, replyTo: { id: 1, authorName: 'Bob' } }} currentUser={{ id: 9 }} onDelete={vi.fn()} onReaction={vi.fn()} />);
+      expect(screen.getByText('↳ Reply to Bob')).toBeTruthy();
+    });
+
+    it('toont @mentions als chip', () => {
+      renderCard({ ...base, body: 'Late @A-1 again', mentions: [{ value: 'A-1', columnLabel: 'Artikel' }] });
+      const chip = screen.getByText('@A-1');
+      expect(chip.className).toContain('remark-mention-chip');
+      expect(chip.getAttribute('title')).toBe('Artikel');
+    });
+
+    it("toont op hoeveel PO's een groep staat (alleen met broadcastCount)", () => {
+      const { unmount } = renderCard({ ...base, broadcastId: 'b1', broadcastCount: 14 });
+      expect(screen.getByText('Posted on 14 purchase orders')).toBeTruthy();
+      unmount();
+      renderCard({ ...base, broadcastId: 'b1' });
+      expect(screen.queryByText(/Posted on/)).toBeNull();
+    });
+
+    it("verwijderbevestiging noemt alle PO's van de groep", () => {
+      renderCard({ ...base, canDelete: true, broadcastId: 'b1', broadcastCount: 14 });
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+      expect(screen.getByText('Delete this remark on all 14 purchase orders?')).toBeTruthy();
+    });
+
     it('markeert de kaart met een accent per zichtbaarheid', () => {
       renderCard({ ...base, visibility: 'internal' });
       expect(screen.getByRole('article').classList.contains('remark-card--internal')).toBe(true);
@@ -212,5 +248,20 @@ describe('remarks components', () => {
       );
       expect(screen.queryByRole('img', { name: 'Internal remark' })).toBeNull();
     });
+  });
+
+  it('zet de zichtbaarheidsbadge rechtsboven bij de acties', () => {
+    renderWithFluent(
+      <RemarkMessageCard
+        remark={{ id: 1, body: 'x', author: { id: 2, displayName: 'Ann' }, reactions: [], visibility: 'vendor', canDelete: true }}
+        currentUser={{ id: 9 }}
+        onDelete={vi.fn()}
+        onReaction={vi.fn()}
+      />
+    );
+    const actions = document.querySelector('.remark-card-actions');
+    expect(actions.textContent).toContain('Vendor');
+    expect(actions.textContent).toContain('Delete');
+    expect(document.querySelector('.remark-author').textContent).not.toContain('Vendor');
   });
 });

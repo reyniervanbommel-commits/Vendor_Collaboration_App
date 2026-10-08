@@ -46,4 +46,14 @@ describe('remarksFormatters', () => {
     expect(mapped).not.toHaveProperty('visibility');
     expect(mapped).not.toHaveProperty('fromVendor');
   });
+
+  it('neemt parentId en replyTo mee uit een activity-remark', () => {
+    const mapped = toRemark({ type: 'remark', sourceId: '52', body: 'x', parentId: 41, replyTo: { id: 41, authorName: 'Ann' } });
+    expect(mapped).toMatchObject({ id: 52, parentId: 41, replyTo: { id: 41, authorName: 'Ann' } });
+  });
+
+  it('neemt groepsvelden mee uit een activity-remark', () => {
+    const mapped = toRemark({ type: 'remark', sourceId: '60', body: 'x', broadcastId: 'b1', broadcastCount: 14, mentions: [{ value: 'A-1' }] });
+    expect(mapped).toMatchObject({ broadcastId: 'b1', broadcastCount: 14, mentions: [{ value: 'A-1' }] });
+  });
 });
