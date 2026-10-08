@@ -2,6 +2,7 @@ import React, { memo, useCallback, useRef, useState } from 'react';
 import { Button } from '@fluentui/react-components';
 import RemarkMessageCard from './RemarkMessageCard';
 import RemarkReplyComposer from './RemarkReplyComposer';
+import { remarkAccent } from './remarkAccent';
 
 const VISIBLE_REPLIES = 2;
 
@@ -29,7 +30,8 @@ function RemarkThread({
     close();
   }, [close, onSubmitReply, remark.id]);
 
-  const visibilityClass = showVisibility && remark.visibility ? ` remark-thread--${remark.visibility}` : '';
+  const accent = showVisibility ? remark.visibility : remarkAccent(null, currentUser?.role);
+  const visibilityClass = accent ? ` remark-thread--${accent}` : '';
 
   return (
     <div className={`remark-thread${visibilityClass}`}>

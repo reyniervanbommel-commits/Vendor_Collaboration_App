@@ -5,6 +5,7 @@ import RemarkReactionBar from './RemarkReactionBar';
 import RemarkVisibilityBadge from './RemarkVisibilityBadge';
 import { splitMentions } from './mentionText';
 import { formatDateTime } from './remarksFormatters';
+import { remarkAccent } from './remarkAccent';
 
 function RemarkMessageCard({
   remark,
@@ -20,6 +21,8 @@ function RemarkMessageCard({
   const [deleteError, setDeleteError] = useState('');
   const authorName = remark?.author?.displayName || remark?.author?.email || 'Unknown user';
   const ownRemark = String(remark?.author?.id) === String(currentUser?.id);
+  // Replies (compact) take their accent from the thread line instead.
+  const accent = compact ? remark?.visibility : remarkAccent(remark?.visibility, currentUser?.role);
 
   const showDeleteConfirmation = useCallback(() => {
     setDeleteError('');
@@ -47,7 +50,7 @@ function RemarkMessageCard({
     <article
       className={[
         'remark-card',
-        remark?.visibility ? `remark-card--${remark.visibility}` : '',
+        accent ? `remark-card--${accent}` : '',
         compact ? 'remark-card--compact' : '',
       ].filter(Boolean).join(' ')}
       aria-label={`Remark by ${authorName}`}

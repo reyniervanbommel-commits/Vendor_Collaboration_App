@@ -169,6 +169,7 @@ function RemarkComposer({
           ref={textareaRef}
           className={[
             canChoose && visibility ? `remarks-composer-input--${visibility}` : '',
+            isEmployee ? 'remarks-composer-input--internal' : '',
             mentions.length ? 'remarks-composer-input--highlighted' : '',
           ].filter(Boolean).join(' ') || undefined}
           value={draft}
