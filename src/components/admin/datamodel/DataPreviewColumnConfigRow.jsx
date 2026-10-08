@@ -11,7 +11,7 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ArrowUploadRegular, LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
+import { LinkRegular, LockClosedRegular } from '@fluentui/react-icons';
 import ConfirmDialog from '../../shared/ConfirmDialog';
 import {
   customColumnDeleteMessage,
@@ -33,7 +33,10 @@ const useStyles = makeStyles({
   hiddenRow: { opacity: 0.55 },
   relationRow: { backgroundColor: 'rgba(255, 179, 0, 0.09)' },
   fieldCell: { whiteSpace: 'normal' },
-  cellCenter: { display: 'flex', alignItems: 'center', ...shorthands.gap('6px') },
+  cellCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', ...shorthands.gap('6px') },
+  // Schakelaar-kolommen: smal en gecentreerd, gelijk aan EntityConfigBulkToggleHeader.
+  toggleCell: { textAlign: 'center', width: '104px' },
+  unavailable: { color: tokens.colorNeutralForeground4, cursor: 'help' },
   fieldBadges: {
     display: 'inline-flex',
     alignItems: 'center',
@@ -121,7 +124,7 @@ export default function DataPreviewColumnConfigRow({
         </TableCell>
         <TableCell className={styles.valueCell}>{typeLabel}</TableCell>
         <TableCell className={styles.valueCell} title={sampleValue}>{sampleValue}</TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.toggleCell)}>
           {column.hideAllowed ? (
             <Switch
               checked={column.isActive}
@@ -130,13 +133,12 @@ export default function DataPreviewColumnConfigRow({
               aria-label={`Show or hide column ${column.label}`}
             />
           ) : (
-            <span className={styles.cellCenter} title="Key column: cannot be hidden">
-              <LockClosedRegular fontSize={14} />
-              <Text size={200}>Always visible</Text>
+            <span className={styles.unavailable} title="Key column: always visible">
+              <LockClosedRegular fontSize={16} aria-label="Always visible" />
             </span>
           )}
         </TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.toggleCell)}>
           <Switch
             checked={column.visibleAtDelete}
             disabled={visibleAtDeleteBusy || bulkBusy}
@@ -144,7 +146,7 @@ export default function DataPreviewColumnConfigRow({
             aria-label={`Show column ${column.label} in the delete popup`}
           />
         </TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.toggleCell)}>
           {column.writeBackAllowed ? (
             <span className={styles.cellCenter}>
               <Switch
@@ -153,27 +155,21 @@ export default function DataPreviewColumnConfigRow({
                 onChange={handleWriteback}
                 aria-label={`Write-back to D365 for ${column.label}`}
               />
-              {column.writableToD365 ? (
-                <Badge appearance="tint" color="success" size="small" icon={<ArrowUploadRegular />}>
-                  Enabled
-                </Badge>
-              ) : (
-                <Badge appearance="tint" color="informative" size="small">Available</Badge>
-              )}
             </span>
           ) : (
             <span
+              className={styles.unavailable}
               title={
                 column.source === 'custom'
                   ? 'Custom columns only exist in this app and are never written to D365'
                   : 'Key or system field: write-back is not allowed'
               }
             >
-              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
+              —
             </span>
           )}
         </TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.toggleCell)}>
           {column.vendorEditableAllowed ? (
             <span className={styles.cellCenter}>
               <Switch
@@ -182,19 +178,12 @@ export default function DataPreviewColumnConfigRow({
                 onChange={handleVendorEditable}
                 aria-label={`Editable by vendor for ${column.label}`}
               />
-              {column.vendorEditable ? (
-                <Badge appearance="tint" color="success" size="small">Enabled</Badge>
-              ) : (
-                <Badge appearance="tint" color="informative" size="small">Available</Badge>
-              )}
             </span>
           ) : (
-            <span title="Key or system field: not editable by vendors">
-              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-            </span>
+            <span className={styles.unavailable} title="Key or system field: not editable by vendors">—</span>
           )}
         </TableCell>
-        <TableCell className={styles.valueCell}>
+        <TableCell className={mergeClasses(styles.valueCell, styles.toggleCell)}>
           {column.mentionableAllowed ? (
             <span className={styles.cellCenter}>
               <Switch
@@ -203,16 +192,9 @@ export default function DataPreviewColumnConfigRow({
                 onChange={handleMentionable}
                 aria-label={`Mentionable for ${column.label}`}
               />
-              {column.mentionable ? (
-                <Badge appearance="tint" color="success" size="small">Enabled</Badge>
-              ) : (
-                <Badge appearance="tint" color="informative" size="small">Available</Badge>
-              )}
             </span>
           ) : (
-            <span title="Only text columns from D365 can be mentioned">
-              <Badge appearance="outline" color="subtle" size="small">Not available</Badge>
-            </span>
+            <span className={styles.unavailable} title="Only text columns from D365 can be mentioned">—</span>
           )}
         </TableCell>
         <TableCell className={styles.valueCell}>

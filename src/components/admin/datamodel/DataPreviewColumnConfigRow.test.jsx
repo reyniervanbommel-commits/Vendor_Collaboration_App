@@ -81,4 +81,16 @@ describe('DataPreviewColumnConfigRow', () => {
     });
     expect(screen.queryByRole('switch', { name: 'Mentionable for Qty' })).toBeNull();
   });
+
+  it('toont geen Available/Enabled-badges naast schakelaars en een streepje met uitleg als iets niet kan', () => {
+    renderRow({
+      id: 11, key: 'qty', label: 'Qty', source: 'd365', dataType: 'number', isActive: true,
+      hideAllowed: true, visibleAtDelete: false, writeBackAllowed: true, writableToD365: true,
+      vendorEditableAllowed: true, vendorEditable: false, mentionableAllowed: false,
+    }, { onToggleVendorEditable: vi.fn() });
+    expect(screen.queryByText('Available')).toBeNull();
+    expect(screen.queryByText('Enabled')).toBeNull();
+    expect(screen.queryByText('Not available')).toBeNull();
+    expect(screen.getByTitle('Only text columns from D365 can be mentioned').textContent).toBe('—');
+  });
 });

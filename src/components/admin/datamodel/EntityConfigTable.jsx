@@ -38,7 +38,7 @@ const useStyles = makeStyles({
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
     ...shorthands.borderRadius('6px'),
   },
-  table: { minWidth: '1220px' },
+  table: { minWidth: '1100px' },
   headerCell: {
     position: 'sticky',
     top: 0,
@@ -177,36 +177,41 @@ export default function EntityConfigTable({
               <TableHeaderCell className={styles.headerCell}>Type</TableHeaderCell>
               <TableHeaderCell className={styles.headerCell}>Sample value</TableHeaderCell>
               <EntityConfigBulkToggleHeader
-                label="Visible in table"
+                label="In table"
+                fullLabel="Visible in table"
                 info={DATA_MODEL_INFO.visibleInTable}
                 action={bulkActionByKey.visibility}
                 className={styles.headerCell}
               />
               <EntityConfigBulkToggleHeader
-                label="Visible at delete"
+                label="At delete"
+                fullLabel="Visible at delete"
                 info={DATA_MODEL_INFO.visibleAtDelete}
                 action={bulkActionByKey.visibleAtDelete}
                 className={styles.headerCell}
               />
               <EntityConfigBulkToggleHeader
-                label="Write-back to D365"
+                label="Write-back"
+                fullLabel="Write-back to D365"
                 info={DATA_MODEL_INFO.writeBack}
                 action={bulkActionByKey.writeback}
                 className={styles.headerCell}
               />
               <EntityConfigBulkToggleHeader
-                label="Editable by vendor"
+                label="Vendor edit"
+                fullLabel="Editable by vendor"
                 info={DATA_MODEL_INFO.vendorEditable}
                 action={bulkActionByKey.vendorEditable}
                 className={styles.headerCell}
               />
               <EntityConfigBulkToggleHeader
-                label="Mentionable"
+                label="@Mention"
+                fullLabel="Mentionable"
                 info={DATA_MODEL_INFO.mentionable}
                 action={bulkActionByKey.mentionable}
                 className={styles.headerCell}
               />
-              <TableHeaderCell className={styles.headerCell}>Delete custom column</TableHeaderCell>
+              <TableHeaderCell className={styles.headerCell} title="Delete custom column">Delete</TableHeaderCell>
             </TableRow>
           </TableHeader>
           <TableBody>
