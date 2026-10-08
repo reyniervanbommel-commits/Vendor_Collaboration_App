@@ -1481,10 +1481,10 @@ async function isCacheEmpty(pool, tableId) {
 
 // Retentie voor tb_change_ledger. read() leest alleen sinds de laatste sync en RowActivity toont
 // recente rij-historie, dus ouder dan dit venster hoeft niet bewaard te blijven. Zonder opschoning
-// groeit de tabel onbegrensd (32 MB in 12 dagen op DEV). Instelbaar via env; standaard 90 dagen.
+// groeit de tabel onbegrensd (32 MB in 12 dagen op DEV). Instelbaar via env; standaard 14 dagen.
 const LEDGER_RETENTION_DAYS = (() => {
   const raw = Number.parseInt(String(process.env.TB_LEDGER_RETENTION_DAYS ?? ''), 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : 90;
+  return Number.isFinite(raw) && raw > 0 ? raw : 14;
 })();
 
 // Delete in behapbare brokken zodat een grote opschoning het log niet lang op slot zet.
