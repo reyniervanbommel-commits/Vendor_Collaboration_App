@@ -22,6 +22,7 @@ export const VIEW_GUIDES = [
   {
     id: 'guideViewMenu',
     kind: 'guide',
+    group: 'views',
     version: 1,
     route: '/',
     icon: 'view',
@@ -49,7 +50,7 @@ export const VIEW_GUIDES = [
         anchor: t('po-view-default'),
         placement: 'right',
         title: 'Your default view',
-        body: 'The star behind a name marks the view that opens when you start. Click a grey star to make that view your default — it turns blue. Only one view can be the default; click the blue star to go back to All orders.',
+        body: 'The star at the end of each row marks the view that opens when you start. Click a grey star to make that view your default — it turns blue. Only one view can be the default; click the blue star to go back to All orders.',
         resumeTo: 'open-view-menu',
         missingText: VIEW_MENU_MISSING,
       },
@@ -82,7 +83,6 @@ export const VIEW_GUIDES = [
           { term: 'Update current view', text: 'saves your changes — shown when the yellow dot is on' },
           { term: 'Rename…, Delete view', text: 'for the view you are looking at' },
           { term: 'Save as new view…', text: 'keeps the current filters and columns as a new view' },
-          { term: 'Tab, Tabs from column…', text: 'add tabs inside a view — see the Create tabs guide' },
         ],
         body: 'Manage view only appears when a saved view is open that you are allowed to change.',
         resumeTo: 'open-view-menu',
@@ -102,6 +102,7 @@ export const VIEW_GUIDES = [
   {
     id: 'guidePinView',
     kind: 'guide',
+    group: 'views',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -155,6 +156,7 @@ export const VIEW_GUIDES = [
   {
     id: 'guideViewHistory',
     kind: 'guide',
+    group: 'views',
     version: 1,
     route: '/',
     icon: 'history',

@@ -1,5 +1,9 @@
 import React, { useCallback } from 'react';
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Badge,
   Button,
   Drawer,
@@ -16,6 +20,7 @@ import { ROLES } from '../../constants/roles';
 import { motion } from '../../styles/motionTokens';
 import { describeTourProgress } from '../../utils/tourSteps';
 import TourIcon from './TourIcon';
+import { GUIDE_GROUPS } from './tours';
 import { enterAnimation, keyframes, reducedMotion } from './onboardingMotion';
 
 const SECONDS_PER_STEP = 10;
@@ -24,6 +29,10 @@ const useStyles = makeStyles({
   body: { display: 'flex', flexDirection: 'column', ...shorthands.gap('20px'), paddingBottom: '24px' },
   intro: { color: tokens.colorNeutralForeground3 },
   section: { display: 'flex', flexDirection: 'column', ...shorthands.gap('8px') },
+  groups: { display: 'flex', flexDirection: 'column', ...shorthands.gap('4px') },
+  groupHeader: { marginLeft: '-12px' },
+  groupCount: { marginLeft: '6px', color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
+  groupPanel: { display: 'flex', flexDirection: 'column', ...shorthands.gap('8px'), ...shorthands.margin('4px', '0', '12px') },
   sectionTitle: {
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
@@ -139,16 +148,18 @@ export default function GuidesDrawer({ open, tours, onboardingState, onStart, on
   const styles = useStyles();
   const pageTours = tours.filter((tour) => tour.kind === 'tour');
   const guides = tours.filter((tour) => tour.kind === 'guide');
+  const guideSections = GUIDE_GROUPS
+    .map((group) => ({ ...group, guides: guides.filter((tour) => tour.group === group.key) }))
+    .filter((group) => group.guides.length > 0);
   const handleOpenChange = useCallback((_, data) => {
     if (!data.open) onClose();
   }, [onClose]);
 
-  let cardIndex = 0;
-  const renderCard = (tour) => (
+  const renderCard = (tour, index) => (
     <GuideCard
       key={tour.id}
       tour={tour}
-      index={cardIndex++}
+      index={index}
       progress={describeTourProgress(onboardingState.tours[tour.id], tour)}
       onStart={onStart}
     />
@@ -171,10 +182,22 @@ export default function GuidesDrawer({ open, tours, onboardingState, onStart, on
           <Text as="h3" className={styles.sectionTitle}>Get to know the app</Text>
           {pageTours.map(renderCard)}
         </section>
-        {guides.length > 0 ? (
-          <section className={styles.section} aria-label="How-to guides">
-            <Text as="h3" className={styles.sectionTitle}>How-to guides</Text>
-            {guides.map(renderCard)}
+        {guideSections.length > 0 ? (
+          <section className={styles.groups} aria-label="How-to guides">
+            {/* Groups start collapsed so the list stays short; open as many as you like. */}
+            <Accordion multiple collapsible>
+              {guideSections.map((group) => (
+                <AccordionItem key={group.key} value={group.key}>
+                  <AccordionHeader className={styles.groupHeader} expandIconPosition="start">
+                    <Text as="h3" className={styles.sectionTitle}>{group.title}</Text>
+                    <span className={styles.groupCount}>{group.guides.length}</span>
+                  </AccordionHeader>
+                  <AccordionPanel className={styles.groupPanel}>
+                    {group.guides.map(renderCard)}
+                  </AccordionPanel>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </section>
         ) : null}
       </DrawerBody>

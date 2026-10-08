@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { TOURS } from './tours';
+import { GUIDE_GROUPS, TOURS } from './tours';
 import { filterToursForRole } from '../../utils/tourSteps';
 
 const require = createRequire(import.meta.url);
@@ -28,6 +28,11 @@ function readAppSource(dir) {
 describe('tour definitions', () => {
   it('only uses tour ids the server accepts', () => {
     TOURS.forEach((tour) => expect(ONBOARDING_TOUR_IDS).toContain(tour.id));
+  });
+
+  it('puts every how-to guide in a known group', () => {
+    const keys = GUIDE_GROUPS.map((group) => group.key);
+    TOURS.filter((tour) => tour.kind === 'guide').forEach((tour) => expect(keys, tour.id).toContain(tour.group));
   });
 
   it('has unique tour ids and unique step ids per tour', () => {

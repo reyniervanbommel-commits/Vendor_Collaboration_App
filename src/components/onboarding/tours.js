@@ -1,7 +1,7 @@
 /**
  * Declarative product tours ("kind: tour", one per page) and interactive how-to guides ("kind: guide").
  * Bump `version` when a tour changes meaningfully — users then get offered it again.
- * Ids must be whitelisted in server/utils/onboardingSettings.js.
+ * Ids must be whitelisted in server/utils/onboardingSettings.js. Guides also need a `group` (see GUIDE_GROUPS).
  *
  * Step fields:
  *   anchor       CSS selector of the element to spotlight (usually [data-tour="…"]); omit for a centered card
@@ -24,6 +24,14 @@ import { REMARKS_GUIDES } from './guidesRemarks';
 import { TAB_GUIDES } from './guidesTabs';
 import { VIEW_GUIDES } from './guidesViews';
 import { PAGE_TOURS } from './pageTours';
+
+/** Sections of the How-to guides list, in display order; each guide sets `group` to one of these keys. */
+export const GUIDE_GROUPS = [
+  { key: 'views', title: 'Views & tabs' },
+  { key: 'remarks', title: 'Remarks' },
+  { key: 'columns', title: 'Columns & formatting' },
+  { key: 'table', title: 'Working with the table' },
+];
 
 export const TOURS = [
   ...PAGE_TOURS,

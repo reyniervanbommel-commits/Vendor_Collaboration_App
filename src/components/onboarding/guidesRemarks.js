@@ -1,12 +1,11 @@
-import { COLUMN_MENU_SURFACE, t } from './tourSelectors';
-
-const REMARKS_COLUMN_TRIGGER = '[data-tour="po-column-menu-trigger"][data-column-type="remarks"]';
+import { t } from './tourSelectors';
 
 /** How-to guides for cell actions and remarks on the Master plan board (all roles). */
 export const REMARKS_GUIDES = [
   {
     id: 'guideCellActions',
     kind: 'guide',
+    group: 'table',
     version: 1,
     route: '/',
     icon: 'cursor',
@@ -53,6 +52,7 @@ export const REMARKS_GUIDES = [
   {
     id: 'guideRemarks',
     kind: 'guide',
+    group: 'remarks',
     version: 1,
     route: '/',
     icon: 'remarks',
@@ -93,59 +93,6 @@ export const REMARKS_GUIDES = [
         title: 'The conversation',
         body: 'Remarks appear below the editor with name and time, and you can react to them. The order number at the top takes you back to the order in the table. Close the panel with the X.',
         resumeTo: 'open-remarks',
-      },
-    ],
-  },
-  {
-    id: 'guideRemarksColumn',
-    kind: 'guide',
-    version: 1,
-    route: '/',
-    icon: 'remarks',
-    title: 'The Remarks column',
-    description: 'See the latest remark per order and filter on remarks.',
-    steps: [
-      {
-        id: 'column',
-        anchor: t('remarks-latest-cell'),
-        placement: 'bottom',
-        title: 'Latest remark at a glance',
-        body: 'The Remarks column shows the most recent remark of each order; hover it to see who wrote it and when. “No remarks” means the conversation is still empty. Click a cell to open all remarks.',
-        missingText: 'This view has no Remarks column yet. Staff can add one: open a column menu (…) › Add column to the right › Remarks.',
-      },
-      {
-        id: 'open-filter',
-        anchor: REMARKS_COLUMN_TRIGGER,
-        reveal: true,
-        placement: 'bottom',
-        title: 'Filter on remarks',
-        body: 'Open the menu of the Remarks column to filter orders by their remarks.',
-        action: true,
-        hint: 'Click the highlighted … button',
-        advanceOn: { appears: COLUMN_MENU_SURFACE },
-        optional: true,
-      },
-      {
-        id: 'filter-options',
-        anchor: COLUMN_MENU_SURFACE,
-        placement: 'right',
-        title: 'Two ways to filter',
-        bullets: [
-          { term: 'contains', text: 'orders whose remarks include a word (2–200 characters)' },
-          { term: 'has a comment', text: 'only orders with at least one remark' },
-        ],
-        body: 'Choose an operator, fill in a value if needed and click Apply.',
-        action: true,
-        hint: 'Click Apply, or press Esc to close the menu',
-        advanceOn: { disappears: true },
-        optional: true,
-      },
-      {
-        id: 'clear',
-        anchor: t('po-active-filters'),
-        placement: 'right',
-        title: 'Clear it again',
-        body: 'Active remark filters are listed here together with all other filters, so you can clear them in one place.',
       },
     ],
   },

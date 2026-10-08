@@ -34,6 +34,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideAddColumn',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -82,6 +83,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideFormula',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -169,6 +171,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideDatePeriod',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,

@@ -20,6 +20,7 @@ export const CONVERSATION_GUIDES = [
   {
     id: 'guideRemarksStaff',
     kind: 'guide',
+    group: 'remarks',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -91,6 +92,7 @@ export const CONVERSATION_GUIDES = [
   {
     id: 'guideRemarksVendor',
     kind: 'guide',
+    group: 'remarks',
     version: 1,
     route: '/',
     roles: [ROLES.SUPPLIER],
