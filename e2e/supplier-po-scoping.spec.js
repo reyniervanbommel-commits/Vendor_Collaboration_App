@@ -22,7 +22,7 @@ test.describe('Supplier data-scoping', () => {
   async function loginAsSupplier(page) {
     await page.goto('/login');
     await page.getByLabel('Email address').fill(SUPPLIER_EMAIL);
-    await page.getByLabel('Password').fill(SUPPLIER_PASSWORD);
+    await page.getByLabel(/^Password/).fill(SUPPLIER_PASSWORD);
   }
 
   // Modale welkomstdialoog van de rondleiding maakt de rest van de pagina aria-hidden.

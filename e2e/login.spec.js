@@ -24,7 +24,7 @@ test.describe('Login', () => {
     await page.goto('/login');
 
     await page.getByLabel('Email address').fill(TEST_EMAIL);
-    await page.getByLabel('Password').fill(TEST_PASSWORD);
+    await page.getByLabel(/^Password/).fill(TEST_PASSWORD);
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect(page.getByRole('button', { name: 'User menu' })).toBeVisible();
@@ -35,7 +35,7 @@ test.describe('Login', () => {
     await page.goto('/login');
 
     await page.getByLabel('Email address').fill('nonexistent-e2e-test@example.invalid');
-    await page.getByLabel('Password').fill('irrelevant-password-123');
+    await page.getByLabel(/^Password/).fill('irrelevant-password-123');
     await page.getByRole('button', { name: 'Sign in' }).click();
 
     await expect(page.getByText(/incorrect/i)).toBeVisible();
