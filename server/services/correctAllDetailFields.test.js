@@ -134,3 +134,19 @@ describe('correctAllDetailFields fan-out', () => {
     expect(result.failures[0].message).toBe('Write-back to D365 failed');
   });
 });
+
+describe('correctAllDetailFields failure-redenen', () => {
+  it('geeft per mislukte regel een opgeschoonde reden en de ruwe melding', async () => {
+    const raw = "D365 OData request failed (400): /data/PurchaseOrderLinesV2(dataAreaId='nl01',PurchaseOrderNumber='PO-1',LineNumber=2): Write failed for table row of type 'PurchPurchaseOrderLineV2Entity'. Infolog: Warning: Item 'L-1' is blocked for 'Purchase order'.; Warning: validateWrite failed on data source 'PurchLine (PurchLine)'.";
+    const deps = baseDeps({
+      correctOne: vi.fn()
+        .mockResolvedValueOnce({ success: true })
+        .mockRejectedValueOnce(Object.assign(new Error(raw), { status: 400 })),
+    });
+    const result = await correctAllDetailFields(params, STAFF, deps);
+    expect(result).toMatchObject({ attempted: 2, updated: 1, failed: 1, updatedDetailKeys: [1] });
+    expect(result.failures).toEqual([
+      { detailKey: 2, message: "Item 'L-1' is blocked for 'Purchase order'.", rawMessage: raw },
+    ]);
+  });
+});
