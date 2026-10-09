@@ -56,4 +56,16 @@ describe('PurchaseOrderWriteBackCell', () => {
     expect(onCorrect).toHaveBeenCalled();
     expect(screen.queryByText(/failed/i)).toBeNull();
   });
+  it('voorkomt de default Enter-actie zodat een bevestigingsdialoog niet direct sluit', async () => {
+    const onCorrect = vi.fn().mockResolvedValue({});
+    renderCell({ onCorrect });
+    const input = screen.getByLabelText('Color (write back to D365)');
+    fireEvent.change(input, { target: { value: 'Green' } });
+    input.focus();
+    const notPrevented = fireEvent.keyDown(input, { key: 'Enter' });
+    expect(notPrevented).toBe(false);
+    await waitFor(() => {
+      expect(onCorrect).toHaveBeenCalled();
+    });
+  });
 });
