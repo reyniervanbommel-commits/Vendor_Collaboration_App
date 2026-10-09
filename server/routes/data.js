@@ -660,6 +660,8 @@ router.post('/:tableKey/correct-all-details', async (req, res, next) => {
     );
     return res.json(result);
   } catch (err) {
+    // Zelfde passthrough als /correct: productie-errorHandler mag validatie-/D365-detail niet maskeren.
+    if (err.status) return res.status(err.status).json({ error: err.message });
     return next(err);
   }
 });

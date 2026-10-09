@@ -37,6 +37,7 @@ export async function runCorrectRows({
 }) {
   let updated = 0;
   let skipped = 0;
+  let partial = 0;
   const failedRows = [];
   for (const candidate of candidates) {
     const key = rowSelectionKey(candidate.dataAreaId, candidate.orderNumber);
@@ -52,6 +53,8 @@ export async function runCorrectRows({
       onSettled?.({ key, outcome: 'updated' });
       continue;
     } catch (err) {
+      const isPartial = Boolean(err?.partial);
+      if (isPartial) partial += 1;
       failedRows.push({
         key,
         dataAreaId: candidate.dataAreaId,
@@ -64,10 +67,15 @@ export async function runCorrectRows({
         mode,
         value: payload.value,
         basedOnValue: candidate.currentValue,
+        partial: isPartial,
         errorMessage: err.message || 'Write-back failed',
       });
-      onSettled?.({ key, outcome: 'failed', failedRow: failedRows[failedRows.length - 1] });
+      onSettled?.({
+        key,
+        outcome: isPartial ? 'partial' : 'failed',
+        failedRow: failedRows[failedRows.length - 1],
+      });
     }
   }
-  return { updated, skipped, failedRows };
+  return { updated, skipped, partial, failedRows };
 }

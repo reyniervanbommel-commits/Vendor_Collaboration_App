@@ -38,7 +38,12 @@ export function usePurchaseOrderBulkEditRetry({ failedRows, onFailedRowsChange, 
       const retriedKeys = new Set(entries.map((e) => e.key));
       onFailedRowsChange((prevFailedRows) => prevFailedRows
         .filter((r) => !retriedKeys.has(r.key) || stillFailedKeys.has(r.key))
-        .map((r) => stillFailed.find((sf) => sf.key === r.key) || r));
+        .map((r) => {
+          const sf = stillFailed.find((x) => x.key === r.key);
+          // A retry skips lines already at the target value, so it reports partial=false;
+          // the order stays partially updated in D365, so keep the earlier Partial status.
+          return sf ? { ...sf, partial: Boolean(r.partial || sf.partial) } : r;
+        }));
     } finally {
       setRetryingBulk(false);
     }

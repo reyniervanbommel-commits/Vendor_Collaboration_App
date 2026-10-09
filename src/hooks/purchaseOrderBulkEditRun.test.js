@@ -102,4 +102,30 @@ describe('runCorrectRows', () => {
       value: 'Green',
     }));
   });
+
+  it('markeert een gedeeltelijk geslaagde order als partial', async () => {
+    const onSettled = vi.fn();
+    const partialErr = Object.assign(new Error('1 of 2 lines updated. Line 20: Blocked.'), { partial: true });
+    const runSingleUpdate = vi.fn()
+      .mockRejectedValueOnce(partialErr)
+      .mockRejectedValueOnce(Object.assign(new Error('Line 10: Blocked.'), { partial: false }));
+    const result = await runCorrectRows({
+      candidates: [
+        { dataAreaId: 'whsl', orderNumber: 'PO1', currentValue: undefined },
+        { dataAreaId: 'whsl', orderNumber: 'PO2', currentValue: undefined },
+      ],
+      payload: { headerColumnKey: 'extValues', lineColumnId: 44, value: 'test' },
+      runSingleUpdate,
+      onSettled,
+      mode: 'correctAll',
+    });
+    expect(result.updated).toBe(0);
+    expect(result.partial).toBe(1);
+    expect(result.failedRows).toEqual([
+      expect.objectContaining({ key: 'whsl|PO1', partial: true, errorMessage: '1 of 2 lines updated. Line 20: Blocked.' }),
+      expect.objectContaining({ key: 'whsl|PO2', partial: false }),
+    ]);
+    expect(onSettled).toHaveBeenNthCalledWith(1, expect.objectContaining({ outcome: 'partial' }));
+    expect(onSettled).toHaveBeenNthCalledWith(2, expect.objectContaining({ outcome: 'failed' }));
+  });
 });

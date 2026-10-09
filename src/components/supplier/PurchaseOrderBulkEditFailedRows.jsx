@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import {
+  Badge,
   Button,
   Spinner,
   Table,
@@ -49,12 +50,17 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
   },
   errorCell: {
-    whiteSpace: 'nowrap',
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
     fontSize: tokens.fontSizeBase200,
-    maxWidth: '280px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    color: tokens.colorNeutralForeground3,
+    minWidth: '220px',
+    maxWidth: '360px',
+    color: tokens.colorNeutralForeground2,
+  },
+  orderLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
   },
   actionCell: {
     whiteSpace: 'nowrap',
@@ -79,7 +85,7 @@ function PurchaseOrderBulkEditFailedRows({ rows, retrying, onRetryRow, onRetryAl
     <div className={styles.root}>
       <div className={styles.header}>
         <span className={styles.headerText}>
-          {count} {count === 1 ? 'row failed' : 'rows failed'}
+          {count} {count === 1 ? 'row needs attention' : 'rows need attention'}
         </span>
         <Button
           appearance="primary"
@@ -105,7 +111,14 @@ function PurchaseOrderBulkEditFailedRows({ rows, retrying, onRetryRow, onRetryAl
               const errorMessage = String(row.errorMessage || '');
               return (
                 <TableRow key={row.key}>
-                  <TableCell className={styles.orderCell}>{orderLabel(row)}</TableCell>
+                  <TableCell className={styles.orderCell}>
+                    <span className={styles.orderLabel}>
+                      {orderLabel(row)}
+                      {row.partial ? (
+                        <Badge appearance="tint" color="warning" size="small">Partial</Badge>
+                      ) : null}
+                    </span>
+                  </TableCell>
                   <TableCell className={styles.errorCell} title={errorMessage}>
                     {errorMessage}
                   </TableCell>
