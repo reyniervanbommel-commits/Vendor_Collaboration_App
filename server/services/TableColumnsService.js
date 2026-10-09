@@ -742,6 +742,32 @@ async function setVendorEditable(columnId, flag, userId) {
   return updated;
 }
 
+// @mentions werken op waarden in tb_cache.data_json: alleen D365-tekstkolommen komen in aanmerking.
+function assertMentionableColumn(column) {
+  if (column?.source !== 'source' || column?.dataType !== 'text') {
+    throw Object.assign(new Error('Only text columns from the source can be mentioned'), { status: 400 });
+  }
+}
+
+async function setMentionable(columnId, flag, userId) {
+  const existing = await getColumnById(columnId);
+  if (!existing) throw Object.assign(new Error('Column not found'), { status: 404 });
+  if (flag) assertMentionableColumn(existing);
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.BigInt, columnId)
+    .input('flag', sql.Bit, flag ? 1 : 0)
+    .input('userId', sql.Int, userId || null)
+    .query(`
+      UPDATE dbo.tb_columns
+      SET mentionable = @flag, updated_by = @userId, updated_at = SYSUTCDATETIME()
+      WHERE id = @id
+    `);
+  const updated = await getColumnById(columnId);
+  if (!updated) throw Object.assign(new Error('Column not found'), { status: 404 });
+  return updated;
+}
+
 /**
  * Kan RCCP deze kolom technisch uitlezen?
  *
@@ -799,6 +825,8 @@ async function setWriteBackConfig(columnId, config, userId, tableKey = null) {
 }
 
 module.exports = {
+  assertMentionableColumn,
+  setMentionable,
   SCOPES,
   DATA_TYPES,
   slugify,

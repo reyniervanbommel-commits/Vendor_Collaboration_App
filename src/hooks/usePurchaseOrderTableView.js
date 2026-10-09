@@ -1,23 +1,22 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
-import { columnUsesNumberSemantics } from '../utils/datePeriodColumnUtils';
 import { readLastPoTableSession } from '../utils/poTableSessionState';
-import { itemColumnMatchesFilter } from '../utils/itemColumnFilterMatch';
+import {
+  appendColumnFilterRule,
+  extractColorFilter,
+  listRawValueRules,
+  packColumnFilter,
+  writeColumnFilter,
+} from '../utils/columnFilterState';
+import { processPurchaseOrderTableItems } from '../utils/processPurchaseOrderTableItems';
 import {
   buildFilterFromCellValue,
   hasActiveFilter,
-  isDateColumn,
   resolveFilterModel,
-  COLOR_FILTER_OPERATOR,
   DATE_FILTER_OPERATORS as DATE_OPS,
   NUMBER_FILTER_OPERATORS as NUMBER_OPS,
   TEXT_FILTER_OPERATORS as TEXT_OPS,
 } from '../utils/tableViewFilterUtils';
-import {
-  NO_COLOR_FILTER_VALUE,
-  normalizeFilterColors,
-  resolveColumnFilterCellColor,
-  resolveRowFilterColor,
-} from '../components/supplier/columnFilterColorUtils';
+import { normalizeFilterColors } from '../components/supplier/columnFilterColorUtils';
 
 // Re-export zodat bestaande imports vanaf deze hook blijven werken.
 export const TEXT_FILTER_OPERATORS = TEXT_OPS;
@@ -29,43 +28,6 @@ const SORT_DIRECTIONS = {
   asc: 'asc',
   desc: 'desc',
 };
-
-function normalizeText(value) {
-  if (value === null || value === undefined) return '';
-  return String(value).trim().toLowerCase();
-}
-
-function parseDateValue(value) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
-}
-
-function compareValues(a, b, column, datePeriodDisplayModes = {}) {
-  if (isDateColumn(column)) {
-    const left = parseDateValue(a);
-    const right = parseDateValue(b);
-    if (left === null && right === null) return 0;
-    if (left === null) return 1;
-    if (right === null) return -1;
-    return left - right;
-  }
-
-  if (columnUsesNumberSemantics(column, datePeriodDisplayModes)) {
-    const left = Number(a);
-    const right = Number(b);
-    const leftIsNumber = Number.isFinite(left);
-    const rightIsNumber = Number.isFinite(right);
-    if (!leftIsNumber && !rightIsNumber) return 0;
-    if (!leftIsNumber) return 1;
-    if (!rightIsNumber) return -1;
-    return left - right;
-  }
-
-  const left = normalizeText(a);
-  const right = normalizeText(b);
-  return left.localeCompare(right, 'nl-NL', { sensitivity: 'base' });
-}
 
 export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayModes = {}, columnFormatRules = {} }) {
   const [sortState, setSortState] = useState(() => {
@@ -84,62 +46,43 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     [columns]
   );
 
-  const setFilterOperator = useCallback((columnKey, operator) => {
+  const patchFirstRule = useCallback((columnKey, patch) => {
     setFilterByColumn((prev) => {
       const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
-      return {
-        ...prev,
-        [columnKey]: {
-          ...current,
-          operator,
-        },
-      };
+      const current = prev[columnKey];
+      const colors = extractColorFilter(current);
+      const rules = listRawValueRules(current);
+      const first = resolveFilterModel(column, rules[0] || current, datePeriodDisplayModes);
+      return writeColumnFilter(prev, columnKey, packColumnFilter([{ ...first, ...patch }, ...rules.slice(1)], colors));
     });
   }, [columnByKey, datePeriodDisplayModes]);
+
+  const setFilterOperator = useCallback((columnKey, operator) => {
+    patchFirstRule(columnKey, { operator });
+  }, [patchFirstRule]);
 
   const setFilterValue = useCallback((columnKey, value) => {
-    setFilterByColumn((prev) => {
-      const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
-      return {
-        ...prev,
-        [columnKey]: {
-          ...current,
-          value,
-        },
-      };
-    });
-  }, [columnByKey, datePeriodDisplayModes]);
+    patchFirstRule(columnKey, { value });
+  }, [patchFirstRule]);
 
   const setFilterSecondaryValue = useCallback((columnKey, secondaryValue) => {
-    setFilterByColumn((prev) => {
-      const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
-      return {
-        ...prev,
-        [columnKey]: {
-          ...current,
-          secondaryValue,
-        },
-      };
-    });
-  }, [columnByKey, datePeriodDisplayModes]);
+    patchFirstRule(columnKey, { secondaryValue });
+  }, [patchFirstRule]);
 
-  // Single setState for Apply — avoids three sequential filterByColumn updates.
   const applyColumnFilter = useCallback((columnKey, next) => {
     setFilterByColumn((prev) => {
       const column = columnByKey.get(columnKey);
-      const current = resolveFilterModel(column, prev[columnKey], datePeriodDisplayModes);
-      return {
-        ...prev,
-        [columnKey]: {
-          ...current,
-          operator: next?.operator ?? current.operator,
-          value: next?.value ?? '',
-          secondaryValue: next?.operator === 'between' ? (next?.secondaryValue ?? '') : '',
-        },
+      const colors = extractColorFilter(prev[columnKey]);
+      if (Array.isArray(next?.rules)) {
+        return writeColumnFilter(prev, columnKey, packColumnFilter(next.rules, colors));
+      }
+      const current = resolveFilterModel(column, listRawValueRules(prev[columnKey])[0] || prev[columnKey], datePeriodDisplayModes);
+      const rule = {
+        operator: next?.operator ?? current.operator,
+        value: next?.value ?? '',
+        secondaryValue: next?.operator === 'between' ? (next?.secondaryValue ?? '') : '',
       };
+      return writeColumnFilter(prev, columnKey, packColumnFilter([rule], colors));
     });
   }, [columnByKey, datePeriodDisplayModes]);
 
@@ -155,22 +98,8 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
   // Zet (of wist) een kleurfilter voor één kolom. Een lege lijst verwijdert het filter.
   const setColumnColorFilter = useCallback((columnKey, colors) => {
     setFilterByColumn((prev) => {
-      const normalized = normalizeFilterColors(colors);
-      if (!normalized.length) {
-        if (!prev[columnKey]) return prev;
-        const next = { ...prev };
-        delete next[columnKey];
-        return next;
-      }
-      return {
-        ...prev,
-        [columnKey]: {
-          operator: COLOR_FILTER_OPERATOR,
-          colors: normalized,
-          value: '',
-          secondaryValue: '',
-        },
-      };
+      const rules = listRawValueRules(prev[columnKey]);
+      return writeColumnFilter(prev, columnKey, packColumnFilter(rules, normalizeFilterColors(colors)));
     });
   }, []);
 
@@ -178,10 +107,11 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     const column = columnByKey.get(columnKey);
     if (!column) return;
     const filter = buildFilterFromCellValue(column, rawValue);
-    setFilterByColumn((prev) => ({
-      ...prev,
-      [columnKey]: filter,
-    }));
+    setFilterByColumn((prev) => writeColumnFilter(
+      prev,
+      columnKey,
+      appendColumnFilterRule(column, prev[columnKey], filter)
+    ));
   }, [columnByKey]);
 
   const clearAllFilters = useCallback(() => {
@@ -234,7 +164,9 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     Object.entries(rawFilters).forEach(([key, filter]) => {
       const column = columnByKey.get(key);
       if (!column || !filter) return;
-      nextFilters[key] = resolveFilterModel(column, filter, datePeriodDisplayModes);
+      const rules = listRawValueRules(filter).map((rule) => resolveFilterModel(column, rule, datePeriodDisplayModes));
+      const packed = packColumnFilter(rules, extractColorFilter(filter));
+      if (packed) nextFilters[key] = packed;
     });
     setFilterByColumn(nextFilters);
 
@@ -248,60 +180,21 @@ export function usePurchaseOrderTableView({ items, columns, datePeriodDisplayMod
     }
   }, [columnByKey, datePeriodDisplayModes]);
 
-  const processedItems = useMemo(() => {
-    const activeFilters = columns
-      .map((column) => [column, resolveFilterModel(column, deferredFilterByColumn[column.key], datePeriodDisplayModes)])
-      .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
-
-    // Kleurfilters worden apart afgehandeld: ze hebben de volledige rij + de
-    // format-regelset nodig i.p.v. alleen de ruwe celwaarde.
-    const valueFilters = activeFilters.filter(([, filter]) => filter.operator !== COLOR_FILTER_OPERATOR);
-    const colorFilters = activeFilters.filter(([, filter]) => filter.operator === COLOR_FILTER_OPERATOR);
-
-    const filtered = (valueFilters.length || colorFilters.length)
-      ? items.filter((order) => {
-        const valueMatch = valueFilters.every(([column, filter]) => (
-          itemColumnMatchesFilter(order, column, filter, datePeriodDisplayModes)
-        ));
-        if (!valueMatch) return false;
-        if (!colorFilters.length) return true;
-        // Rij-brede kleur (row-target regels) één keer per order bepalen zodat een
-        // kleurfilter op élke kolom ook op een rijkleur matcht.
-        const rowColor = resolveRowFilterColor(order, columns, columnFormatRules);
-        return colorFilters.every(([column, filter]) => {
-          const cellColor = resolveColumnFilterCellColor(column, order, columnFormatRules[column.key]);
-          const hasColor = Boolean(cellColor) || Boolean(rowColor);
-          if (!hasColor) return filter.colors.includes(NO_COLOR_FILTER_VALUE);
-          if (cellColor && filter.colors.includes(cellColor)) return true;
-          return Boolean(rowColor) && filter.colors.includes(rowColor);
-        });
-      })
-      : items;
-
-    if (!sortState.columnKey || sortState.direction === SORT_DIRECTIONS.none) {
-      return filtered;
-    }
-
-    const sortColumn = columnByKey.get(sortState.columnKey);
-    if (!sortColumn) {
-      return filtered;
-    }
-
-    const sorted = [...filtered].sort((leftOrder, rightOrder) => {
-      const leftValue = leftOrder?.values?.[sortColumn.key];
-      const rightValue = rightOrder?.values?.[sortColumn.key];
-      const base = compareValues(leftValue, rightValue, sortColumn, datePeriodDisplayModes);
-      if (sortState.direction === SORT_DIRECTIONS.desc) return -base;
-      return base;
-    });
-    return sorted;
-  }, [columns, deferredFilterByColumn, items, sortState, columnByKey, datePeriodDisplayModes, columnFormatRules]);
+  const processedItems = useMemo(() => processPurchaseOrderTableItems({
+    items,
+    columns,
+    filterByColumn: deferredFilterByColumn,
+    datePeriodDisplayModes,
+    columnFormatRules,
+    sortState,
+    columnByKey,
+  }), [columns, deferredFilterByColumn, items, sortState, columnByKey, datePeriodDisplayModes, columnFormatRules]);
 
   const activeFilterCount = useMemo(
     () => columns.reduce(
       (count, column) => count + (hasActiveFilter(
         column,
-        resolveFilterModel(column, filterByColumn[column.key], datePeriodDisplayModes),
+        filterByColumn[column.key],
         datePeriodDisplayModes
       ) ? 1 : 0),
       0

@@ -15,6 +15,7 @@ import {
   makeStyles,
   shorthands,
 } from '@fluentui/react-components';
+import { VIEW_NAME_MAX_LENGTH } from '../../utils/savedViewDisplay';
 
 const useStyles = makeStyles({
   form: {
@@ -82,10 +83,11 @@ export default function PurchaseOrderSavedViewDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogContent>
             <div className={styles.form}>
-              <Field label="Name" required>
+              <Field label="Name" required hint={`Max. ${VIEW_NAME_MAX_LENGTH} characters`}>
                 <Input
                   value={name}
-                  onChange={(_, data) => setName(data.value)}
+                  maxLength={VIEW_NAME_MAX_LENGTH}
+                  onChange={(_, data) => setName(data.value.slice(0, VIEW_NAME_MAX_LENGTH))}
                   placeholder="e.g. Open this week"
                 />
               </Field>

@@ -35,9 +35,14 @@ export function resolveRccpVendorFromFilter(filterByColumn, vendorColumnKey = 'v
 
   for (const key of keys) {
     const filter = filterByColumn[key];
-    if (filter?.operator !== 'equals') continue;
-    const value = String(filter.value ?? '').trim();
-    if (value) return value;
+    const rules = Array.isArray(filter?.rules)
+      ? filter.rules
+      : (filter ? [filter] : []);
+    for (const rule of rules) {
+      if (rule?.operator !== 'equals') continue;
+      const value = String(rule.value ?? '').trim();
+      if (value) return value;
+    }
   }
 
   return undefined;

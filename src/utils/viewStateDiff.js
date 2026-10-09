@@ -68,10 +68,20 @@ function operatorPhrase(column, operator) {
 function describeFilter(columnKey, filter, columns) {
   const column = (columns || []).find((entry) => entry.key === columnKey);
   const name = column?.label || columnKey;
-  if (!filter?.operator) return name;
-  const phrase = operatorPhrase(column, filter.operator);
-  const value = formatFilterValue(filter);
-  return value ? `${name} ${phrase} ${value}` : `${name} ${phrase}`;
+  const rules = Array.isArray(filter?.rules) ? filter.rules : [];
+  const valueRules = rules.length
+    ? rules
+    : (filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR ? [filter] : []);
+  const parts = valueRules.map((rule) => {
+    const phrase = operatorPhrase(column, rule.operator);
+    const value = formatFilterValue(rule);
+    return value ? `${phrase} ${value}` : phrase;
+  });
+  if (Array.isArray(filter?.colors) && filter.colors.length) {
+    parts.push(`color is ${filter.colors.join(', ')}`);
+  }
+  if (!parts.length) return filter?.operator ? `${name} ${operatorPhrase(column, filter.operator)}` : name;
+  return `${name} ${parts.join(' and ')}`;
 }
 
 function push(rows, kind, label, detail) {

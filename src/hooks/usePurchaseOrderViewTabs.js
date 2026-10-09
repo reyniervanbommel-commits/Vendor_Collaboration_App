@@ -17,6 +17,7 @@ import {
   upsertGroup,
   removeTabsByScope,
 } from '../utils/viewTabs';
+import { orderItemsByIds } from '../utils/tabOrder';
 import { useViewTabExtraFilterPrompt } from './useViewTabExtraFilterPrompt';
 
 const BOARD_KEY = 'purchase-orders';
@@ -182,6 +183,14 @@ export function usePurchaseOrderViewTabs({
     return created.length;
   }, [allItems, columns, datePeriodDisplayModes, groups, skipFilterPrompt, snapshotCurrentTab]);
 
+  // Draft change like add/remove: marks the view unsaved; Save persists the order.
+  const reorderTabs = useCallback((orderedIds) => {
+    const snap = snapshotCurrentTab();
+    const next = orderItemsByIds(snap.extraTabs, orderedIds, (tab) => tab.id);
+    setExtraTabs(next);
+    extraTabsRef.current = next;
+  }, [snapshotCurrentTab]);
+
   const setGroupColor = useCallback((columnKey, color) => {
     setGroups((prev) => upsertGroup(prev, columnKey, color));
   }, []);
@@ -246,6 +255,7 @@ export function usePurchaseOrderViewTabs({
     selectTab,
     addBlankTab,
     removeTab,
+    reorderTabs,
     addTabsFromColumn,
     setGroupColor,
     loadFromViewState,
@@ -266,6 +276,7 @@ export function usePurchaseOrderViewTabs({
     selectTab,
     addBlankTab,
     removeTab,
+    reorderTabs,
     addTabsFromColumn,
     setGroupColor,
     loadFromViewState,

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
-import { ROLES } from '../constants/roles';
+import { hasEmployeeAccess } from '../constants/roles';
 
 /**
  * useUsersManagement — state en handlers voor admin gebruikersbeheer.
@@ -35,7 +35,7 @@ export function useUsersManagement() {
       // alles en een vendor bereikt geen instellingentab. Dat scheelt een call per gebruiker.
       const permissionsMap = {};
       await Promise.all(list
-        .filter((user) => user.role === ROLES.EMPLOYEE)
+        .filter((user) => hasEmployeeAccess(user.role))
         .map(async (user) => {
           try {
             const perms = await apiRequest(`/admin/users/${user.id}/permissions`);

@@ -15,6 +15,9 @@ const ONBOARDING_BOARD_KEY = 'onboarding';
 const ONBOARDING_TOUR_IDS = Object.freeze([
   'poBoard',
   'rccp',
+  'guideViewMenu',
+  'guidePinView',
+  'guideViewHistory',
   'guideViewTabs',
   'guideAddColumn',
   'guideFormula',
@@ -22,6 +25,8 @@ const ONBOARDING_TOUR_IDS = Object.freeze([
   'guideCellActions',
   'guideRemarks',
   'guideRemarksColumn',
+  'guideRemarksStaff',
+  'guideRemarksVendor',
   'guideConditionalFormatting',
   'guideBoardInsights',
 ]);

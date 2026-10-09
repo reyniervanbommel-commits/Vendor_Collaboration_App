@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiRequest } from '../../../utils/api';
 import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
 import { noteCommentPermissionDenied } from '../../../utils/commentPermissionNotice';
-import { isRemarkActivity, mergeNewest, mergeOlder, toRemark } from './remarksFormatters';
+import { isRemarkActivity, mergeOlder, toRemark } from './remarksFormatters';
+import { mergeThreadItems, updateRemarkInThreads } from './remarkThreads';
 
 const INITIAL_DELAY = 5000;
 const MAX_DELAY = 60000;
@@ -46,6 +47,11 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   const timerRef = useRef(null);
   const backoffRef = useRef(INITIAL_DELAY);
   const loadingRef = useRef(false);
+  const itemsRef = useRef([]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const request = useCallback(async (path, options = {}) => {
     if (requestInFlightRef.current) {
@@ -105,7 +111,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
   }, [nextCursor, request, row, tableKey]);
 
   const createRemark = useCallback(
-    async (body, columnId = null) => {
+    async (body, columnId = null, visibility = null, parentId = null, mentions = null) => {
       const normalizedBody = String(body ?? '')
         .normalize('NFC')
         .trim();
@@ -119,13 +125,17 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
           recordKey: row.recordKey,
           body: normalizedBody,
           ...(columnId ? { columnId } : {}),
+          ...(visibility ? { visibility } : {}),
+          ...(parentId ? { parentId } : {}),
+          ...(Array.isArray(mentions) && mentions.length ? { mentions } : {}),
         },
       });
       const remark = data?.remark;
       if (remark) {
-        setItems((current) => mergeNewest(current, [remark]));
+        setItems((current) => mergeThreadItems(current, [remark]).items);
         setTotal((current) => current + 1);
-        onSummaryChange?.({ countDelta: 1, latest: remark });
+        // Een @mention-groep staat ook op andere PO's: dan alle tellers verversen.
+        onSummaryChange?.({ countDelta: 1, latest: remark, refreshAll: Boolean(remark.broadcastId) });
       }
       return remark;
     },
@@ -139,7 +149,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
         body: { partitionKey: row.partitionKey, recordKey: row.recordKey },
       });
       if (data?.remark) {
-        setItems((current) => current.map((item) => (String(item.id) === String(remarkId) ? data.remark : item)));
+        setItems((current) => updateRemarkInThreads(current, remarkId, () => data.remark));
         setTotal((current) => Math.max(0, current - 1));
         onSummaryChange?.({ countDelta: -1, latest: null });
       }
@@ -155,9 +165,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
         body: { partitionKey: row.partitionKey, recordKey: row.recordKey, emoji, active },
       });
       setItems((current) =>
-        current.map((item) =>
-          String(item.id) === String(remarkId) ? { ...item, reactions: data?.reactions || [] } : item
-        )
+        updateRemarkInThreads(current, remarkId, (item) => ({ ...item, reactions: data?.reactions || [] }))
       );
       return data?.reactions || [];
     },
@@ -204,7 +212,10 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       try {
         const data = await request(activityPath(tableKey, row, newestCursorRef.current));
         const newRemarks = (Array.isArray(data?.items) ? data.items : []).filter(isRemarkActivity).map(toRemark);
-        setItems((current) => mergeNewest(current, newRemarks));
+        // Replies komen in hun gesprek; een gesprek dat nog niet geladen is → eerste pagina herladen.
+        const merged = mergeThreadItems(itemsRef.current, newRemarks);
+        itemsRef.current = merged.items;
+        setItems(merged.items);
         setTotal(Number(data?.totals?.remarks) || 0);
         newestCursorRef.current = data?.newestCursor || newestCursorRef.current;
         backoffRef.current = INITIAL_DELAY;
@@ -212,6 +223,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
         if (newRemarks.length > 0) {
           onSummaryChange?.({ count: data?.totals?.remarks, latest: newRemarks[0] });
         }
+        if (merged.missingRoot) loadInitial();
       } catch (requestError) {
         if (requestError?.name !== 'AbortError') {
           setError(requestError?.message || 'Failed to refresh remarks');
@@ -235,7 +247,7 @@ export function useRowRemarks({ enabled, tableKey, row, onSummaryChange }) {
       controllersRef.current.clear();
       requestInFlightRef.current = false;
     };
-  }, [active, onSummaryChange, request, row, tableKey]);
+  }, [active, loadInitial, onSummaryChange, request, row, tableKey]);
 
   return useMemo(
     () => ({

@@ -174,7 +174,7 @@ describe('RowActivityService query', () => {
     ];
     const { getRowActivity } = createHarness({ rows, totals: { remarks: 1, history: 5 } });
 
-    const result = await getRowActivity({ ...BASE_OPTIONS, kind: 'all' });
+    const result = await getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 7, role: 'admin' } });
 
     expect(result.items.map((item) => item.id)).toEqual([
       'd365:4', 'remark:2', 'row:5', 'custom:9', 'custom:8',
@@ -190,7 +190,9 @@ describe('RowActivityService query', () => {
     ];
     const harness = createHarness({ rows, totals: { remarks: 4, history: 12 } });
 
-    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', limit: 2 });
+    const result = await harness.getRowActivity({
+      ...BASE_OPTIONS, kind: 'all', limit: 2, currentUser: { id: 7, role: 'admin' },
+    });
 
     expect(result.items).toHaveLength(2);
     expect(result.totals).toEqual({ remarks: 4, history: 12, historyUpdated: 0 });
@@ -254,5 +256,121 @@ describe('RowActivityService query', () => {
     expect(harness.calls.inputs.actionFilter).toBe('updated');
     expect(harness.calls.query).toContain("UPPER(ISNULL(h.action, '')) = 'UPDATE'");
     expect(result.totals.historyUpdated).toBe(1);
+  });
+});
+
+describe('RowActivityService zichtbaarheid', () => {
+  const remarkRow = (overrides = {}) => activityRow({
+    source_id: 2, activity_type: 'remark', type_rank: 5, field_key: null, body: 'hi',
+    visibility: 'internal', author_role: 'supplier', ...overrides,
+  });
+
+  it('filtert remarks in de All-feed voor employee op internal', async () => {
+    const harness = createHarness({ rows: [remarkRow()], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 1, role: 'employee' } });
+    expect(harness.calls.inputs.visibility).toBe('internal');
+    expect(harness.calls.query).toMatch(/r\.visibility = @visibility/);
+    expect(result.items[0]).not.toHaveProperty('visibility');
+    expect(result.items[0]).not.toHaveProperty('fromVendor');
+  });
+
+  it('filtert remarks voor supplier op vendor', async () => {
+    const dataService = require('./TableDataService');
+    const settingsService = require('./SettingsService');
+    const { clearSupplierVisibleRowKeyCache } = require('../utils/supplierRowAccess');
+    const originalRead = dataService.read;
+    const originalGetAsync = settingsService.getAsync;
+    clearSupplierVisibleRowKeyCache();
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    dataService.read = vi.fn(async () => ({ rows: [{ partitionKey: 'whsl', recordKey: 'PO-1' }] }));
+    try {
+      const harness = createHarness({ rows: [], totals: { remarks: 0, history: 0 } });
+      await harness.getRowActivity({
+        ...BASE_OPTIONS, kind: 'all', currentUser: { id: 3, role: 'supplier', vendor_account: 'V1' },
+      });
+      expect(harness.calls.inputs.visibility).toBe('vendor');
+      expect(harness.calls.query).toMatch(/r\.visibility = @visibility/);
+    } finally {
+      dataService.read = originalRead;
+      settingsService.getAsync = originalGetAsync;
+    }
+  });
+
+  it('geen filter voor admin; remark-item krijgt visibility en fromVendor', async () => {
+    const harness = createHarness({ rows: [remarkRow()], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 9, role: 'admin' } });
+    expect(harness.calls.query).not.toContain('@visibility');
+    expect(harness.calls.inputs).not.toHaveProperty('visibility');
+    expect(result.items[0]).toMatchObject({ visibility: 'internal', fromVendor: true });
+  });
+
+  it('All-feed zonder bekende rol → 403', async () => {
+    const harness = createHarness({ rows: [] });
+    await expect(harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all' })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('history-feed heeft geen rolfilter nodig', async () => {
+    const harness = createHarness({ rows: [] });
+    await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'history' });
+    expect(harness.calls.inputs).not.toHaveProperty('visibility');
+  });
+
+  it('non-remark items dragen geen visibility-velden', () => {
+    const mapped = enrichRemarkActivity(mapActivityRow(activityRow()), [], { id: 1, role: 'admin' });
+    expect(mapped).not.toHaveProperty('visibility');
+    expect(mapped).not.toHaveProperty('authorRole');
+  });
+});
+
+describe('RowActivityService replies', () => {
+  it('geeft remark-items parentId en replyTo', async () => {
+    const harness = createHarness({ rows: [activityRow({
+      source_id: 52, activity_type: 'remark', type_rank: 5, field_key: null, body: 'Re',
+      visibility: 'vendor', author_role: 'admin', parent_id: 41, reply_to_name: 'Ann',
+    })], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 9, role: 'admin' } });
+    expect(harness.calls.query).toContain('reply_to_name');
+    expect(result.items[0]).toMatchObject({ parentId: 41, replyTo: { id: 41, authorName: 'Ann' } });
+  });
+
+  it('root-remark heeft replyTo null; history-items dragen geen reply-velden', () => {
+    const root = enrichRemarkActivity(mapActivityRow(activityRow({ activity_type: 'remark', type_rank: 5 })), [], { id: 1, role: 'admin' });
+    expect(root).toMatchObject({ parentId: null, replyTo: null });
+    const history = enrichRemarkActivity(mapActivityRow(activityRow()), [], { id: 1, role: 'admin' });
+    expect(history).not.toHaveProperty('replyTo');
+    expect(history).not.toHaveProperty('replyToName');
+    expect(history).not.toHaveProperty('parentId');
+  });
+});
+
+describe('RowActivityService @mention-groepen', () => {
+  const groupRow = (overrides = {}) => activityRow({
+    source_id: 60, activity_type: 'remark', type_rank: 5, field_key: null, body: 'Late @A-1',
+    visibility: 'vendor', author_role: 'admin', parent_id: null, reply_to_name: null,
+    broadcast_id: 'b1', broadcast_count: 14, mentions_json: '[{"value":"A-1","columnLabel":"Artikel"}]',
+    ...overrides,
+  });
+
+  it('geeft broadcastId, broadcastCount en mentions aan staff', async () => {
+    const harness = createHarness({ rows: [groupRow()], totals: { remarks: 1, history: 0 } });
+    const result = await harness.getRowActivity({ ...BASE_OPTIONS, kind: 'all', currentUser: { id: 9, role: 'admin' } });
+    expect(harness.calls.query).toContain('mentions_json');
+    expect(result.items[0]).toMatchObject({
+      broadcastId: 'b1', broadcastCount: 14, mentions: [{ value: 'A-1', columnLabel: 'Artikel' }],
+    });
+  });
+
+  it('supplier krijgt geen broadcastCount; tombstone geen mentions', () => {
+    const forSupplier = enrichRemarkActivity(mapActivityRow(groupRow()), [], { id: 3, role: 'supplier' });
+    expect(forSupplier).not.toHaveProperty('broadcastCount');
+    expect(forSupplier.mentions).toHaveLength(1);
+    const tomb = enrichRemarkActivity(mapActivityRow(groupRow({ is_deleted: true })), [], { id: 9, role: 'admin' });
+    expect(tomb.mentions).toEqual([]);
+  });
+
+  it('history-items dragen geen groepsvelden', () => {
+    const history = enrichRemarkActivity(mapActivityRow(activityRow()), [], { id: 1, role: 'admin' });
+    expect(history).not.toHaveProperty('broadcastId');
+    expect(history).not.toHaveProperty('mentions');
   });
 });

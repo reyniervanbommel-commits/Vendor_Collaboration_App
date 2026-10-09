@@ -1,7 +1,12 @@
 'use strict';
 
 const pagePermissions = require('./pagePermissions');
-const { classifyPermissionPatch, hasCommentPermission } = require('./commentPermissions');
+const {
+  applyRoleChangePermissions,
+  classifyPermissionPatch,
+  grantsCommentPermissionsByDefault,
+  hasCommentPermission,
+} = require('./commentPermissions');
 
 describe('classifyPermissionPatch', () => {
   it('weigert een instellingen-id op een vendor', () => {
@@ -48,5 +53,28 @@ describe('hasCommentPermission', () => {
     expect(await hasCommentPermission(req, 'comments.column')).toBe(false);
     expect(spy).toHaveBeenCalledTimes(1);
     spy.mockRestore();
+  });
+});
+
+describe('supply_chain', () => {
+  it('krijgt standaard comment-rechten en mag instellingen + comments krijgen', () => {
+    expect(grantsCommentPermissionsByDefault('supply_chain')).toBe(true);
+    expect(classifyPermissionPatch('supply_chain', ['odata', 'comments.view'])).toEqual({
+      ok: true,
+      pageNames: ['odata', 'comments.view'],
+    });
+  });
+
+  it('rolwissel naar supply_chain vult comment-rechten aan zonder iets te wissen', async () => {
+    const queries = [];
+    const pool = {
+      request: () => ({
+        input() { return this; },
+        async query(text) { queries.push(text); return {}; },
+      }),
+    };
+    await applyRoleChangePermissions(pool, 3, 'supply_chain');
+    expect(queries).toHaveLength(1);
+    expect(queries[0]).toContain('INSERT INTO dbo.user_permissions');
   });
 });

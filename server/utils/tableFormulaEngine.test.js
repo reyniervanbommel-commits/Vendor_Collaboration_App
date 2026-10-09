@@ -391,3 +391,41 @@ describe('tableFormulaEngine — PurchStatus Backorder als Open order', () => {
     expect(res).toEqual({ value: 'Backorder', error: null });
   });
 });
+
+describe('tableFormulaEngine — ISBLANK/ISLEEG (niets ingevuld)', () => {
+  const evalBool = (expression, values) =>
+    evaluateCompiledFormula(compileFormula(expression), values, { resultType: 'boolean' });
+
+  it('is waar voor NULL, undefined, lege tekst en alleen spaties', () => {
+    expect(evalBool('ISBLANK((a))', { a: null }).value).toBe(true);
+    expect(evalBool('ISBLANK((a))', { a: undefined }).value).toBe(true);
+    expect(evalBool('ISBLANK((a))', { a: '' }).value).toBe(true);
+    expect(evalBool('ISBLANK((a))', { a: '   ' }).value).toBe(true);
+  });
+
+  it('is onwaar voor 0, FALSE en gevulde waarden — anders dan (a)=\'\'', () => {
+    expect(evalBool('ISBLANK((a))', { a: 0 }).value).toBe(false);
+    expect(evalBool('ISBLANK((a))', { a: false }).value).toBe(false);
+    expect(evalBool('ISBLANK((a))', { a: 'abc' }).value).toBe(false);
+    expect(evalBool('ISBLANK((a))', { a: '2026-10-01T00:00:00.000Z' }).value).toBe(false);
+  });
+
+  it('werkt als voorwaarde in IF', () => {
+    const compiled = compileFormula("IF(ISBLANK((a));'leeg';'gevuld')");
+    expect(evaluateCompiledFormula(compiled, { a: null }, { resultType: 'text' }))
+      .toEqual({ value: 'leeg', error: null });
+    expect(evaluateCompiledFormula(compiled, { a: 0 }, { resultType: 'text' }))
+      .toEqual({ value: 'gevuld', error: null });
+  });
+
+  it('ISLEEG is een gelijkwaardige Nederlandse alias', () => {
+    expect(evalBool('ISLEEG((a))', { a: null }).value).toBe(true);
+    expect(evalBool('isleeg((a))', { a: 'x' }).value).toBe(false);
+  });
+
+  it('verwacht precies één argument', () => {
+    const res = evalBool('ISBLANK((a);(b))', { a: null, b: null });
+    expect(res.value).toBeNull();
+    expect(res.error).toContain('ISBLANK expects 1 argument');
+  });
+});

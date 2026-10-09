@@ -65,6 +65,12 @@ export function toRemark(item) {
       column: item.column ?? (item.columnId ? { id: item.columnId, label: item.columnLabel } : null),
       reactions: item.reactions ?? [],
       canDelete: item.canDelete,
+      ...(item.visibility ? { visibility: item.visibility } : {}),
+      parentId: item.parentId ?? null,
+      ...(item.replyTo ? { replyTo: item.replyTo } : {}),
+      ...(item.broadcastId ? { broadcastId: item.broadcastId } : {}),
+      ...(item.broadcastCount ? { broadcastCount: item.broadcastCount } : {}),
+      ...(Array.isArray(item.mentions) ? { mentions: item.mentions } : {}),
     };
   }
   return { ...item, id: normalizeRemarkId(item.id) };

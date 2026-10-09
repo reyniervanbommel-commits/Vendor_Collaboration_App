@@ -1,27 +1,37 @@
 import React, { useCallback } from 'react';
 import {
-  MenuGroup,
-  MenuGroupHeader,
+  Button,
   MenuItem,
-  Switch,
   makeStyles,
   mergeClasses,
   shorthands,
   tokens,
 } from '@fluentui/react-components';
-import { ClockRegular } from '@fluentui/react-icons';
-import { viewVendorAccount } from '../../utils/viewTabs';
+import { Pin16Filled, Pin16Regular } from '@fluentui/react-icons';
+import { viewScopeLabel } from '../../utils/viewTabs';
+import { viewShowsAsTab } from '../../utils/savedViewDisplay';
+import SavedViewScopeIcon from './SavedViewScopeIcon';
+import SavedViewHistoryToggle from './SavedViewHistoryToggle';
+import SavedViewDefaultToggle from './SavedViewDefaultToggle';
+
+const PIN_CLASS = 'po-view-pin';
 
 const useStyles = makeStyles({
   viewMenuItem: {
+    // Idle star/clock/pin are faint; they surface on row hover/focus so the list stays calm.
+    [`&:hover .${PIN_CLASS}, &:focus-within .${PIN_CLASS}`]: {
+      opacity: 1,
+    },
     ...shorthands.padding('0'),
     maxWidth: '100%',
     minWidth: 0,
+    minHeight: '24px',
     overflow: 'hidden',
   },
   viewMenuItemContent: {
     minWidth: 0,
     maxWidth: '100%',
+    minHeight: '24px',
     overflow: 'hidden',
     flexGrow: 1,
     flexShrink: 1,
@@ -34,59 +44,62 @@ const useStyles = makeStyles({
     },
   },
   viewMenuItemRow: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 1fr) 20px 22px 24px',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    columnGap: tokens.spacingHorizontalXS,
     width: '100%',
     minWidth: 0,
     maxWidth: '100%',
-    overflow: 'hidden',
-    ...shorthands.gap('12px'),
+    minHeight: '24px',
+    ...shorthands.padding('0', tokens.spacingHorizontalS),
   },
-  viewMenuItemLabel: {
-    display: 'block',
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: '0%',
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  viewMenuItemLabelActive: {
-    fontWeight: tokens.fontWeightSemibold,
-  },
-  vendorSuffix: {
-    marginLeft: '6px',
-    color: tokens.colorNeutralForeground3,
-    fontSize: tokens.fontSizeBase100,
-    fontWeight: tokens.fontWeightRegular,
-    textDecorationLine: 'underline',
-  },
-  historyControl: {
+  viewNameCell: {
     display: 'flex',
     alignItems: 'center',
-    flexShrink: 0,
-    ...shorthands.gap('0'),
+    minWidth: 0,
+    overflow: 'hidden',
+    ...shorthands.gap(tokens.spacingHorizontalXS),
   },
-  historyIcon: {
-    fontSize: '14px',
+  // Full name, wrapping onto a second line when the menu is too narrow.
+  viewName: {
+    minWidth: 0,
+    whiteSpace: 'normal',
+    overflowWrap: 'anywhere',
+    lineHeight: tokens.lineHeightBase300,
+    ...shorthands.padding('2px', '0'),
+    fontWeight: tokens.fontWeightRegular,
+    color: tokens.colorNeutralForeground1,
+  },
+  pin: {
+    minWidth: '24px',
+    width: '24px',
+    height: '24px',
+    ...shorthands.padding('0'),
+  },
+  // Shared look for star, clock and pin: faint grey when off, brand blue when on.
+  metaToggle: {
     color: tokens.colorNeutralForeground3,
-    flexShrink: 0,
-    marginLeft: '4px',
-    marginRight: '-2px',
+    opacity: 0.45,
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+    },
   },
-  historySwitch: {
-    flexShrink: 0,
-    transform: 'scale(0.72)',
-    transformOrigin: 'center center',
-    marginLeft: '-6px',
+  metaToggleOn: {
+    opacity: 1,
+    color: tokens.colorBrandForeground1,
   },
 });
 
-function canToggleViewHistory(view, canManageGlobal) {
+export function canToggleViewMeta(view, canManageGlobal) {
+  if (!view.id) return true;
   if (view.scope === 'personal') return true;
   return canManageGlobal;
+}
+
+function pinTitle(pinned, canToggle) {
+  if (!canToggle) return pinned ? 'Pinned (only staff can change shared views)' : 'Only staff can pin shared views';
+  return pinned ? 'Unpin from the tab bar' : 'Pin to the tab bar';
 }
 
 export function SavedViewMenuItem({
@@ -94,28 +107,41 @@ export function SavedViewMenuItem({
   activeViewId,
   onApplyView,
   onToggleShowHistory,
+  onToggleShowAsTab,
+  defaultViewId = null,
+  onToggleDefault = () => {},
   canManageGlobal,
 }) {
   const styles = useStyles();
+  const isDefault = (view.id ?? null) === defaultViewId;
   const isActive = view.id === activeViewId;
   const showHistory = view.viewState?.showHistoryIndicators !== false;
-  const canToggleHistory = canToggleViewHistory(view, canManageGlobal);
+  const showAsTab = viewShowsAsTab(view);
+  const canToggleMeta = canToggleViewMeta(view, canManageGlobal);
+  const labelText = [view.name, viewScopeLabel(view)].filter(Boolean).join(' ');
 
   const handleToggleHistory = useCallback((event, data) => {
     event.stopPropagation();
     onToggleShowHistory(view, data.checked);
   }, [onToggleShowHistory, view]);
 
-  const handleSwitchClick = useCallback((event) => {
+  const handleTogglePin = useCallback((event) => {
     event.stopPropagation();
+    onToggleShowAsTab(view, !showAsTab);
+  }, [onToggleShowAsTab, showAsTab, view]);
+
+  // Enter/Space on the pin must not also apply the view via the parent MenuItem.
+  const handlePinKeyDown = useCallback((event) => {
+    if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
   }, []);
+
+  const handleToggleDefault = useCallback(() => {
+    onToggleDefault(view);
+  }, [onToggleDefault, view]);
 
   const handleApply = useCallback(() => {
     onApplyView(view);
   }, [onApplyView, view]);
-
-  const vendorAccount = viewVendorAccount(view);
-  const labelText = `${view.name}${vendorAccount ? ` ${vendorAccount}` : ''}${view.isDefault ? ' (default)' : ''}`;
 
   return (
     <MenuItem
@@ -125,52 +151,66 @@ export function SavedViewMenuItem({
       onClick={handleApply}
     >
       <span className={styles.viewMenuItemRow}>
-        <span
-          className={mergeClasses(styles.viewMenuItemLabel, isActive && styles.viewMenuItemLabelActive)}
-          title={labelText}
-        >
-          {view.name}
-          {vendorAccount ? <span className={styles.vendorSuffix}>{vendorAccount}</span> : null}
-          {view.isDefault ? ' (default)' : ''}
+        <span className={styles.viewNameCell} title={labelText}>
+          <SavedViewScopeIcon scope={view.scope} hasId={Boolean(view.id)} />
+          <span className={styles.viewName}>{view.name}</span>
         </span>
-        <span className={styles.historyControl} title="Show history indicators">
-          <ClockRegular className={styles.historyIcon} aria-hidden />
-          <Switch
-            className={styles.historySwitch}
-            checked={showHistory}
-            disabled={!canToggleHistory}
-            aria-label="Show history indicators"
-            onClick={handleSwitchClick}
-            onChange={handleToggleHistory}
+        <SavedViewDefaultToggle
+          className={mergeClasses(PIN_CLASS, styles.metaToggle, isDefault && styles.metaToggleOn)}
+          viewName={view.name}
+          isDefault={isDefault}
+          onToggle={handleToggleDefault}
+        />
+        <SavedViewHistoryToggle
+          className={mergeClasses(PIN_CLASS, styles.metaToggle, showHistory && styles.metaToggleOn)}
+          checked={showHistory}
+          disabled={!canToggleMeta}
+          onChange={handleToggleHistory}
+        />
+        {view.id ? (
+          <Button
+            appearance="transparent"
+            size="small"
+            className={mergeClasses(PIN_CLASS, styles.pin, styles.metaToggle, showAsTab && styles.metaToggleOn)}
+            data-tour="po-view-pin"
+            icon={showAsTab ? <Pin16Filled /> : <Pin16Regular />}
+            aria-pressed={showAsTab}
+            aria-label={showAsTab ? `Unpin ${view.name}` : `Pin ${view.name} as a tab`}
+            title={pinTitle(showAsTab, canToggleMeta)}
+            disabledFocusable={!canToggleMeta}
+            onClick={handleTogglePin}
+            onKeyDown={handlePinKeyDown}
           />
-        </span>
+        ) : (
+          <span />
+        )}
       </span>
     </MenuItem>
   );
 }
 
 export function SavedViewScopeGroup({
-  title,
   views,
   activeViewId,
   onApplyView,
   onToggleShowHistory,
+  onToggleShowAsTab,
+  defaultViewId,
+  onToggleDefault,
   canManageGlobal,
 }) {
   if (!views.length) return null;
-  return (
-    <MenuGroup>
-      <MenuGroupHeader>{title}</MenuGroupHeader>
-      {views.map((view) => (
-        <SavedViewMenuItem
-          key={view.id}
-          view={view}
-          activeViewId={activeViewId}
-          onApplyView={onApplyView}
-          onToggleShowHistory={onToggleShowHistory}
-          canManageGlobal={canManageGlobal}
-        />
-      ))}
-    </MenuGroup>
-  );
+  return views.map((view) => (
+    <SavedViewMenuItem
+      key={view.id}
+      view={view}
+      activeViewId={activeViewId}
+      onApplyView={onApplyView}
+      onToggleShowHistory={onToggleShowHistory}
+      onToggleShowAsTab={onToggleShowAsTab}
+      defaultViewId={defaultViewId}
+      onToggleDefault={onToggleDefault}
+      canManageGlobal={canManageGlobal}
+    />
+  ));
 }

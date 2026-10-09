@@ -93,6 +93,7 @@ export default function CreateUserDialog({ open, onOpenChange, onUserCreated, al
               >
                 <option value={ROLES.SUPPLIER}>Supplier</option>
                 {allowStaffRoles && <option value={ROLES.EMPLOYEE}>Employee</option>}
+                {allowStaffRoles && <option value={ROLES.SUPPLY_CHAIN}>Supply Chain</option>}
                 {allowStaffRoles && <option value={ROLES.ADMIN}>Admin</option>}
               </Select>
             </Field>

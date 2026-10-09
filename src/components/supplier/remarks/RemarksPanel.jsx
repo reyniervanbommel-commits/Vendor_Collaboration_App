@@ -1,12 +1,14 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Tab, TabList } from '@fluentui/react-components';
 import { Dismiss24Regular } from '@fluentui/react-icons';
 import RemarkComposer from './RemarkComposer';
+import RemarkVisibilityPicker from './RemarkVisibilityPicker';
 import RowActivityFeed from './RowActivityFeed';
 import RowHistoryFeed from './RowHistoryFeed';
 import { partitionActivityItems } from './historyTableModel';
 import { usePurchaseOrderRemarksController } from './usePurchaseOrderRemarksController';
 import { useCommentPermissions } from '../../../hooks/useCommentPermissions';
+import { canChooseRemarkVisibility } from '../../../constants/roles';
 import { layout } from '../../../styles/brandTokens';
 import './remarks.css';
 
@@ -24,6 +26,12 @@ function RemarksPanel({
   canCompose = true,
 }) {
   const { canView, canWrite } = useCommentPermissions();
+  // Admin/supply_chain: All toont alles (geen post), Vendor/Internal filtert en bepaalt de post.
+  const canChooseVisibility = canChooseRemarkVisibility(currentUser?.role);
+  const [visibilityView, setVisibilityView] = useState('all');
+  const visibilityFilter = canChooseVisibility && visibilityView !== 'all' ? visibilityView : null;
+  // Max. één reply-venster tegelijk; sluit bij wissel van rij.
+  const [replyOpenId, setReplyOpenId] = useState(null);
   const controller = usePurchaseOrderRemarksController({
     open,
     onClose,
@@ -33,9 +41,17 @@ function RemarksPanel({
     tableKey,
     summaryState,
   });
+  // Ook bij tab- of filterwissel sluiten: anders heropent het venster leeg en pakt het focus.
+  useEffect(() => {
+    setReplyOpenId(null);
+  }, [row?.partitionKey, row?.recordKey, controller.selectedTab, visibilityView]);
   const remarkItems = useMemo(
-    () => controller.remarks.items.map((item) => ({ ...item, kind: 'remark' })),
-    [controller.remarks.items]
+    () => controller.remarks.items
+      // Verwijderd = weg; alleen een verwijderde opmerking met nog actieve replies blijft als korte regel.
+      .filter((item) => !item.isDeleted || (item.replies || []).some((reply) => !reply.isDeleted))
+      .filter((item) => !visibilityFilter || item.visibility === visibilityFilter)
+      .map((item) => ({ ...item, kind: 'remark' })),
+    [controller.remarks.items, visibilityFilter]
   );
   const remarkActions = useMemo(
     () => ({
@@ -54,20 +70,40 @@ function RemarksPanel({
     [activeFeed.items, selectedTab]
   );
   const allRemarkItems = useMemo(
-    () => partitionedAll.remarks.map((item) => ({ ...item, kind: 'remark' })),
-    [partitionedAll.remarks]
+    () => partitionedAll.remarks
+      .filter((item) => !item.isDeleted)
+      .filter((item) => !visibilityFilter || item.visibility === visibilityFilter)
+      .map((item) => ({ ...item, kind: 'remark' })),
+    [partitionedAll.remarks, visibilityFilter]
   );
   const orderNumber = row?.recordKey || row?.orderNumber || '';
   const handleLocateRow = useCallback(() => {
     onLocateRow?.();
   }, [onLocateRow]);
   const handleSubmitRemark = useCallback(
-    async (body, columnId) => {
-      const remark = await controller.remarks.createRemark(body, columnId);
+    async (body, columnId, visibility, mentions) => {
+      const remark = await controller.remarks.createRemark(body, columnId, visibility, null, mentions);
       if (selectedTab === 'all') await controller.all.refresh();
       return remark;
     },
     [controller.all, controller.remarks, selectedTab]
+  );
+
+  const handleSubmitReply = useCallback(
+    (rootId, body) => controller.remarks.createRemark(body, null, null, rootId),
+    [controller.remarks]
+  );
+  const closeReply = useCallback(() => setReplyOpenId(null), []);
+  const threadProps = useMemo(
+    () => ({
+      canReply: canCompose && canWrite,
+      replyOpenId,
+      onOpenReply: setReplyOpenId,
+      onCloseReply: closeReply,
+      onSubmitReply: handleSubmitReply,
+      showVisibility: canChooseVisibility,
+    }),
+    [canChooseVisibility, canCompose, canWrite, closeReply, handleSubmitReply, replyOpenId]
   );
 
   const panelStyle = useMemo(
@@ -125,12 +161,19 @@ function RemarksPanel({
             {canView ? <Tab value="all">All</Tab> : null}
           </TabList>
 
+          {canChooseVisibility && canView && selectedTab !== 'history' ? (
+            <RemarkVisibilityPicker value={visibilityView} onChange={setVisibilityView} />
+          ) : null}
+
           {showComposer ? (
             <RemarkComposer
               currentUser={currentUser}
               column={initialColumn}
               onSubmit={handleSubmitRemark}
               textareaRef={controller.composerRef}
+              visibility={visibilityFilter}
+              tableKey={tableKey}
+              row={row}
             />
           ) : null}
 
@@ -140,12 +183,16 @@ function RemarksPanel({
               loading={controller.remarks.loading}
               error={controller.remarks.error}
               hasMore={controller.remarks.hasMore}
-              emptyMessage="No remarks have been added yet."
+              emptyMessage={visibilityFilter
+                ? `No ${visibilityFilter} remarks have been added yet.`
+                : 'No remarks have been added yet.'}
               currentUser={currentUser}
               onLoadOlder={controller.remarks.loadOlder}
               onRetry={controller.remarks.retry}
               remarkActions={remarkActions}
               olderLabel="Show older remarks"
+              threaded
+              threadProps={threadProps}
             />
           ) : null}
 

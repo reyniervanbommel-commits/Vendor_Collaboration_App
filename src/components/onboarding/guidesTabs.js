@@ -5,6 +5,7 @@ export const TAB_GUIDES = [
   {
     id: 'guideViewTabs',
     kind: 'guide',
+    group: 'views',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -82,13 +83,6 @@ export const TAB_GUIDES = [
           { term: 'Group color', text: 'changes the color of that group instead' },
         ],
         body: 'Right-click any tab except All. Deleting a tab doesn’t delete any orders — save the view to keep the change.',
-      },
-      {
-        id: 'blank-tab',
-        anchor: t('po-view-title'),
-        placement: 'bottom',
-        title: 'Prefer an empty tab?',
-        body: 'Open the view name menu and choose Tab to add a blank tab that you filter yourself.',
       },
       {
         id: 'save',

@@ -45,7 +45,7 @@ export function TourProvider({ enabled, children }) {
 
   const { canView } = useCommentPermissions();
   const tours = useMemo(
-    () => filterToursForRole(TOURS, user?.role).filter((tour) => canView || (tour.id !== 'guideRemarks' && tour.id !== 'guideRemarksColumn')),
+    () => filterToursForRole(TOURS, user?.role).filter((tour) => canView || tour.id !== 'guideRemarks'),
     [canView, user?.role],
   );
   const pageTour = useMemo(() => pageTourForPath(tours, location.pathname), [tours, location.pathname]);

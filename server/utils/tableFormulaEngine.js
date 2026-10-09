@@ -507,6 +507,17 @@ const OR_FUNCTION = {
   },
 };
 
+// "Niets ingevuld": NULL of (witruimte-)lege tekst. Bewust níet via
+// compareValues, want `(a)=''` rekent een lege waarde als 0 en kan dus een
+// ingevulde 0 niet van een lege cel onderscheiden.
+const ISBLANK_FUNCTION = {
+  minArgs: 1,
+  maxArgs: 1,
+  apply: ([value]) => value === null
+    || value === undefined
+    || (typeof value === 'string' && value.trim() === ''),
+};
+
 // Functie-dispatchtabel voor formule-calls. Elke functie krijgt standaard de
 // reeds geëvalueerde argumentwaarden (geen AST-nodes) en het evaluatiecontext
 // (o.a. `today`); met `lazy: true` juist de nodes plus een evaluate-callback.
@@ -519,6 +530,8 @@ const FORMULA_FUNCTIONS = {
   EN: AND_FUNCTION,
   OR: OR_FUNCTION,
   OF: OR_FUNCTION,
+  ISBLANK: ISBLANK_FUNCTION,
+  ISLEEG: ISBLANK_FUNCTION,
   WAAR: {
     minArgs: 0,
     maxArgs: 0,

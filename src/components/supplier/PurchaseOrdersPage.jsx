@@ -14,6 +14,7 @@ import { usePurchaseOrderDatePeriodDialogState } from '../../hooks/usePurchaseOr
 import { useAuth } from '../../context/AuthContext';
 import { formatSyncedAt } from '../../utils/purchaseOrderFormat';
 import { exportPurchaseOrdersToExcel, buildExportFileName } from '../../utils/purchaseOrderBoardExport';
+import { isStaffRole } from '../../constants/roles';
 
 export default function PurchaseOrdersPage() {
   const { user } = useAuth();
@@ -59,7 +60,7 @@ export default function PurchaseOrdersPage() {
   const isAdmin = user?.role === 'admin';
   const onAttachedRunFinishedRef = useRef(null);
   const { running: progressRunning, startProgress, finishProgress, waitForCompletion } = usePurchaseOrderRefreshProgress({ enabled: isAdmin, onAttachedRunFinishedRef });
-  const isStaff = user?.role === 'admin' || user?.role === 'employee';
+  const isStaff = isStaffRole(user?.role);
   const isSupplier = user?.role === 'supplier';
   const boardView = usePurchaseOrderBoardView({
     items: orders,
@@ -83,7 +84,7 @@ export default function PurchaseOrdersPage() {
     reloadAfterRefresh();
     hiddenRows.reload();
   };
-  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleSetDefault, handleDeleteView, handleToggleShowHistory, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs, clearActiveViewFilterSession } = usePurchaseOrderSavedViewState({
+  const { savedViews, activeViewId, hasUnsavedChanges, getUnsavedViewDiff, applyViewState, handleResetView, handleSaveAsNew, handleUpdateActive, handleRenameView, handleToggleDefault, defaultViewId, handleDeleteView, handleToggleShowHistory, handleToggleShowAsTab, showHistoryIndicators, allOrdersShowHistoryIndicators, stickyColumnKeys, setStickyColumnKeys, viewTabs, clearActiveViewFilterSession } = usePurchaseOrderSavedViewState({
     orders,
     loading,
     exportColumnLayout,
@@ -259,9 +260,11 @@ export default function PurchaseOrdersPage() {
         handleSaveAsNew,
         handleUpdateActive,
         handleRenameView,
-        handleSetDefault,
+        handleToggleDefault,
+        defaultViewId,
         handleDeleteView,
         handleToggleShowHistory,
+        handleToggleShowAsTab,
         allOrdersShowHistoryIndicators,
         viewTabs,
       }}

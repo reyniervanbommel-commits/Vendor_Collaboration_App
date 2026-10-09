@@ -24,6 +24,11 @@ export const FORMULA_FUNCTIONS_HELP = [
     description: 'True when at least one condition is true; stops at the first true one. Also: (a)>5 OR (b)<10.',
   },
   {
+    name: 'ISBLANK(value)',
+    snippet: 'ISBLANK()',
+    description: 'True when a column is empty (nothing filled in). Unlike (a)=\'\', a 0 does not count as empty. E.g. IF(ISBLANK((deliverydate));\'Missing\';\'OK\').',
+  },
+  {
     name: 'TRUE() / FALSE()',
     snippet: 'TRUE()',
     description: 'A fixed yes or no, useful as a default inside IF, AND or OR.',

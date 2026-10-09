@@ -12,7 +12,7 @@ import {
 import PurchaseOrderColumnColorFilterSection from './PurchaseOrderColumnColorFilterSection';
 import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
-import { getDraftFromFilter, isDateColumn, isNumberColumn, REMARKS_FILTER_OPERATORS } from './purchaseOrderColumnFilterMenuConstants';
+import { getDraftFromFilter, getDraftsFromFilter, isDateColumn, isNumberColumn, REMARKS_FILTER_OPERATORS } from './purchaseOrderColumnFilterMenuConstants';
 import { usePurchaseOrderColorFilter } from '../../hooks/usePurchaseOrderColorFilter';
 import { getUniqueColumnValues } from '../../utils/columnUniqueValues';
 import { formatColumnUniqueValue, serializePurchStatusFilterValue } from '../../utils/purchStatusDisplay';
@@ -149,10 +149,17 @@ export default function PurchaseOrdersActiveFilterEditor({
       value: isHasComment ? '' : serializePurchStatusFilterValue(column, draft.value),
       secondaryValue: isHasComment ? '' : draft.secondaryValue,
     };
+    const otherRules = getDraftsFromFilter(column, item?.filter, datePeriodDisplayModes)
+      .slice(1)
+      .map((entry) => ({
+        operator: entry.operator,
+        value: entry.value,
+        secondaryValue: entry.secondaryValue,
+      }));
     startTransition(() => {
-      applyColumnFilter(columnKey, patch);
+      applyColumnFilter(columnKey, otherRules.length ? { rules: [patch, ...otherRules] } : patch);
     });
-  }, [applyColumnFilter, column, columnKey, draft, isRemarks]);
+  }, [applyColumnFilter, column, columnKey, datePeriodDisplayModes, draft, isRemarks, item?.filter]);
 
   const showBetween = (isDate || isNumber) && draft.operator === 'between';
   const isHasComment = isRemarks && draft.operator === 'hasComment';

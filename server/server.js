@@ -27,7 +27,7 @@ const { restrictSupplierDataAccess } = require('./middleware/dataAccess');
 const refreshRunService = require('./services/RefreshRunService');
 const internalNightRefreshRouter = require('./routes/internalNightRefresh');
 const errorHandler = require('./middleware/errorHandler');
-const { ROLES } = require('./constants/roles');
+const { ROLES, STAFF_ROLES } = require('./constants/roles');
 const { logger } = require('./utils/logger');
 const {
   DEFAULT_LOCAL_APP_ORIGIN,
@@ -153,8 +153,8 @@ app.use((req, res, next) => {
 app.use('/api/internal/night-refresh', internalNightRefreshRouter);
 
 app.use('/api/auth', authRouter);
-app.use('/api/admin', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), adminRouter);
-app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, 'user']), supplierRouter);
+app.use('/api/admin', requireSession, requireAnyRole(STAFF_ROLES), adminRouter);
+app.use('/api/supplier', requireSession, requireAnyRole([ROLES.SUPPLIER, ROLES.EMPLOYEE, ROLES.SUPPLY_CHAIN, 'user']), supplierRouter);
 // Generieke Table Builder-data-API — het PO-board draait hier volledig op (po_*-laag verwijderd, #AB:177).
 // Staff (admin/employee) heeft volledige toegang; suppliers mogen uitsluitend hun eigen
 // purchase-orders lezen (rij-filter op leveranciersaccount in TableDataService.read).
@@ -162,10 +162,10 @@ app.use('/api/data', requireSession, restrictSupplierDataAccess, dataRouter);
 // BI-grafieken (#AB:218/#AB:219). Staff (admin/employee) zien alle vendors. Suppliers hebben
 // read-only toegang en zien uitsluitend hun eigen data: de board-read in bi.js wordt op het
 // leveranciersaccount gescoped en schrijf-routes worden voor suppliers geweigerd.
-app.use('/api/bi', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), biRouter);
+app.use('/api/bi', requireSession, requireAnyRole([...STAFF_ROLES, ROLES.SUPPLIER]), biRouter);
 // Excel-koppelingen naar hoofdtabellen (#AB:162) — admin-only (upload + fk_join-lookup publiceren).
-app.use('/api/data-links', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE]), dataLinksRouter);
-app.use('/api/rccp', requireSession, requireAnyRole([ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]), rccpAccess, rccpRouter);
+app.use('/api/data-links', requireSession, requireAnyRole(STAFF_ROLES), dataLinksRouter);
+app.use('/api/rccp', requireSession, requireAnyRole([...STAFF_ROLES, ROLES.SUPPLIER]), rccpAccess, rccpRouter);
 app.use('/api/media', createMediaRouter());
 
 if (process.env.NODE_ENV === 'production') {
@@ -216,7 +216,7 @@ async function initSqlPool() {
   logger.info('MSSQL-pool geïnitialiseerd', { max: config.pool.max, min: config.pool.min });
 }
 
-const PORT = process.env.PORT || 3008;
+const PORT = process.env.PORT || 3010;
 let httpServer = null;
 let staleReclaimTimer = null;
 

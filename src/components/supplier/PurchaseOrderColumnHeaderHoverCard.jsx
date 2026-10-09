@@ -20,6 +20,20 @@ const useStyles = makeStyles({
     lineHeight: tokens.lineHeightBase200,
     overflowWrap: 'anywhere',
   },
+  summary: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'baseline',
+    columnGap: tokens.spacingHorizontalXXS,
+    rowGap: tokens.spacingVerticalXXS,
+  },
+  operator: {
+    color: tokens.colorNeutralForeground3,
+  },
+  value: {
+    color: tokens.colorBrandForeground1,
+    fontWeight: tokens.fontWeightBold,
+  },
 });
 
 function clampLeft(left) {
@@ -41,7 +55,16 @@ function PurchaseOrderColumnHeaderHoverCard({ hover, model }) {
         className={styles.card}
         style={{ top: hover.top, left: clampLeft(hover.left) }}
       >
-        {model.text}
+        <span className={styles.summary}>
+          {(model.parts || [{ type: 'operator', text: model.text }]).map((part, index) => (
+            <span
+              key={`${part.type}-${index}`}
+              className={part.type === 'value' ? styles.value : styles.operator}
+            >
+              {index > 0 ? ' ' : ''}{part.text}
+            </span>
+          ))}
+        </span>
       </div>
     </Portal>
   );

@@ -1,10 +1,12 @@
-import React, { useCallback, useState } from 'react';
-import { Button, Input, Text, mergeClasses } from '@fluentui/react-components';
-import { ChevronDownRegular } from '@fluentui/react-icons';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Button, Text } from '@fluentui/react-components';
+import { AddRegular } from '@fluentui/react-icons';
+import { MAX_COLUMN_FILTER_RULES } from '../../utils/columnFilterState';
 import PurchaseOrderColumnFilterMenuButton from './PurchaseOrderColumnFilterMenuButton';
-import PurchaseOrderColumnFilterValuePicker from './PurchaseOrderColumnFilterValuePicker';
-import { usePurchaseOrderColumnMenuFlyoutPlacement } from './usePurchaseOrderColumnMenuFlyoutPlacement';
-import { formatColumnUniqueValue, serializePurchStatusFilterValue } from '../../utils/purchStatusDisplay';
+import PurchaseOrderColumnFilterRuleRow from './PurchaseOrderColumnFilterRuleRow';
+import PurchaseOrderColumnFilterConditionChips, {
+  draftLooksCommitted,
+} from './PurchaseOrderColumnFilterConditionChips';
 
 export default function PurchaseOrderColumnFilterMenuFilterSection({
   styles,
@@ -13,209 +15,90 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
   closeSubmenu,
   isDate,
   isNumber,
+  drafts,
   draft,
   operatorLabels,
   operatorEntries,
-  handleOperatorSelect,
-  handleValueChange,
-  handleDraftValueChange,
-  handleApplyFilterWithValue,
+  handleRuleOperatorSelect,
+  handleRuleValueChange,
+  handleRuleDraftValueChange,
+  handleApplyFilterWithValueAt,
   uniqueColumnValues = [],
-  handleSecondaryValueChange,
+  handleRuleSecondaryValueChange,
+  handleApplyAllFilters,
   handleApplyFilter,
   handleClearFilter,
+  handleAddCondition,
+  handleRemoveCondition,
   onMouseEnter,
   searchHint = '',
 }) {
-  const [operatorFlyoutOpen, setOperatorFlyoutOpen] = useState(false);
-  const canPickOperator = operatorEntries.length > 1;
-  const operatorFlyout = usePurchaseOrderColumnMenuFlyoutPlacement({
-    active: operatorFlyoutOpen,
-  });
+  const rules = Array.isArray(drafts) && drafts.length ? drafts : (draft ? [draft] : []);
+  const canAdd = Boolean(handleAddCondition) && rules.length < MAX_COLUMN_FILTER_RULES;
+  const applyHandler = handleApplyAllFilters || handleApplyFilter;
+  const [editingIndex, setEditingIndex] = useState(0);
+  const [chipsVisible, setChipsVisible] = useState(() => rules.some(draftLooksCommitted));
+  const previousCount = useRef(rules.length);
+
+  useEffect(() => {
+    if (rules.length > previousCount.current) {
+      setEditingIndex(rules.length - 1);
+    } else if (editingIndex >= rules.length) {
+      setEditingIndex(Math.max(0, rules.length - 1));
+    }
+    previousCount.current = rules.length;
+  }, [editingIndex, rules.length]);
 
   const handleFilterRowMouseEnter = useCallback(() => {
-    setOperatorFlyoutOpen(false);
     onMouseEnter?.();
   }, [onMouseEnter]);
 
-  const formatUniqueValue = useCallback((value) => (
-    column ? formatColumnUniqueValue(column, value) : String(value ?? '')
-  ), [column]);
+  const handleApplyClick = useCallback(() => {
+    applyHandler?.();
+    setChipsVisible(true);
+    setEditingIndex(0);
+  }, [applyHandler]);
 
-  const handleMappedDraftValueChange = useCallback((nextValue) => {
-    handleDraftValueChange(serializePurchStatusFilterValue(column, nextValue));
-  }, [column, handleDraftValueChange]);
+  const handleClearClick = useCallback(() => {
+    handleClearFilter?.();
+    setChipsVisible(false);
+    setEditingIndex(0);
+  }, [handleClearFilter]);
 
-  const handleMappedApplyWithValue = useCallback((nextValue) => {
-    handleApplyFilterWithValue(serializePurchStatusFilterValue(column, nextValue));
-  }, [column, handleApplyFilterWithValue]);
-
-  const handleOperatorToggle = useCallback(() => {
-    if (operatorEntries.length <= 1) return;
-    setOperatorFlyoutOpen((prev) => !prev);
-  }, [operatorEntries.length]);
-
-  const handleOperatorPick = useCallback((operatorKey) => {
-    handleOperatorSelect(null, { optionValue: operatorKey });
-    setOperatorFlyoutOpen(false);
-  }, [handleOperatorSelect]);
-
-  const showSingleValue = !(
-    (isDate && draft.operator === 'between')
-    || (isNumber && draft.operator === 'between')
-    || (isDate && draft.operator === 'nextWeek')
-    || draft.operator === 'hasComment'
-  );
-
-  const usesValuePicker = draft.operator === 'equals' || draft.operator === 'oneOf';
+  const activeDraft = rules[editingIndex] || rules[0];
+  const showRemove = rules.length > 1;
 
   return (
     <div className={styles.filterBlock} onMouseEnter={handleFilterRowMouseEnter}>
       <Text className={styles.filterSectionLabel}>Filter</Text>
-      <div className={styles.filterValueStack}>
-        <div className={styles.filterOperatorWrap}>
-          <Button
-            className={styles.filterOperatorLink}
-            appearance="transparent"
-            size="small"
-            aria-label={`Filter operator for ${columnLabel}`}
-            aria-expanded={operatorFlyoutOpen}
-            onClick={handleOperatorToggle}
-          >
-            <span className={styles.filterOperatorLinkContent}>
-              {operatorLabels[draft.operator]}
-              {canPickOperator ? (
-                <ChevronDownRegular className={styles.filterOperatorChevron} aria-hidden="true" />
-              ) : null}
-            </span>
-          </Button>
-          {operatorFlyoutOpen && canPickOperator ? (
-            <div
-              ref={operatorFlyout.ref}
-              className={mergeClasses(
-                styles.filterOperatorFlyout,
-                operatorFlyout.alignLeft && styles.filterOperatorFlyoutAlignLeft
-              )}
-              role="listbox"
-              aria-label="Filter operators"
-              data-flyout-side={operatorFlyout.alignLeft ? 'left' : 'right'}
-            >
-              {operatorEntries.map(([key, label]) => (
-                <Button
-                  key={key}
-                  className={styles.filterOperatorOption}
-                  appearance="transparent"
-                  size="small"
-                  role="option"
-                  aria-selected={draft.operator === key}
-                  onClick={() => handleOperatorPick(key)}
-                >
-                  {label}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        {usesValuePicker ? (
-          <PurchaseOrderColumnFilterValuePicker
-            mode={draft.operator === 'oneOf' ? 'multi' : 'single'}
-            value={draft.value}
-            onChange={handleMappedDraftValueChange}
-            onAutoApply={handleMappedApplyWithValue}
-            uniqueValues={uniqueColumnValues}
-            isNumber={isNumber}
-            columnLabel={columnLabel}
-            formatDisplay={formatUniqueValue}
-          />
-        ) : null}
-        {!usesValuePicker && showSingleValue && isDate && (draft.operator === 'before' || draft.operator === 'after') ? (
-          <Input
-            className={styles.filterValueField}
-            type="date"
-            size="small"
-            value={draft.value}
-            onChange={handleValueChange}
-            aria-label={`Filter value for ${columnLabel}`}
-          />
-        ) : null}
-        {!usesValuePicker && showSingleValue && isDate && (draft.operator === 'inNextWeeks' || draft.operator === 'inNextDays') ? (
-          <Input
-            className={styles.filterValueField}
-            type="number"
-            size="small"
-            min={1}
-            value={draft.value}
-            onChange={handleValueChange}
-            placeholder="Amount"
-            aria-label={`Filter amount for ${columnLabel}`}
-          />
-        ) : null}
-        {!usesValuePicker && showSingleValue && isNumber && draft.operator !== 'between' ? (
-          <Input
-            className={styles.filterValueField}
-            type="number"
-            size="small"
-            value={draft.value}
-            onChange={handleValueChange}
-            placeholder="Value"
-            aria-label={`Filter value for ${columnLabel}`}
-          />
-        ) : null}
-        {!usesValuePicker && showSingleValue && !isDate && !isNumber ? (
-          <Input
-            className={styles.filterValueField}
-            size="small"
-            value={draft.value}
-            onChange={handleValueChange}
-            placeholder="Value"
-            aria-label={`Filter value for ${columnLabel}`}
-          />
-        ) : null}
-      </div>
-      {isDate && draft.operator === 'between' ? (
-        <div className={styles.filterBetweenRow}>
-          <Input
-            className={styles.filterValueFieldBetween}
-            type="date"
-            size="small"
-            value={draft.value}
-            onChange={handleValueChange}
-            aria-label={`Filter from date for ${columnLabel}`}
-          />
-          <Input
-            className={styles.filterValueFieldBetween}
-            type="date"
-            size="small"
-            value={draft.secondaryValue}
-            onChange={handleSecondaryValueChange}
-            aria-label={`Filter to date for ${columnLabel}`}
-          />
-        </div>
-      ) : null}
-      {isNumber && draft.operator === 'between' ? (
-        <div className={styles.filterBetweenRow}>
-          <Input
-            className={styles.filterValueFieldBetween}
-            type="number"
-            size="small"
-            value={draft.value}
-            onChange={handleValueChange}
-            placeholder="From"
-            aria-label={`Filter from value for ${columnLabel}`}
-          />
-          <Input
-            className={styles.filterValueFieldBetween}
-            type="number"
-            size="small"
-            value={draft.secondaryValue}
-            onChange={handleSecondaryValueChange}
-            placeholder="To"
-            aria-label={`Filter to value for ${columnLabel}`}
-          />
-        </div>
-      ) : null}
-      {isDate && draft.operator === 'nextWeek' ? (
-        <Text className={styles.filterHint}>Matches records in the next calendar week.</Text>
+      <PurchaseOrderColumnFilterConditionChips
+        styles={styles}
+        drafts={rules}
+        editingIndex={editingIndex}
+        operatorLabels={operatorLabels}
+        onSelect={setEditingIndex}
+        visible={chipsVisible}
+      />
+      {activeDraft ? (
+        <PurchaseOrderColumnFilterRuleRow
+          styles={styles}
+          column={column}
+          columnLabel={columnLabel}
+          isDate={isDate}
+          isNumber={isNumber}
+          draft={activeDraft}
+          ruleIndex={editingIndex}
+          canRemove={showRemove}
+          operatorLabels={operatorLabels}
+          operatorEntries={operatorEntries}
+          onOperatorSelect={handleRuleOperatorSelect}
+          onValueChange={handleRuleValueChange}
+          onDraftValueChange={handleRuleDraftValueChange}
+          onApplyFilterWithValue={handleApplyFilterWithValueAt}
+          uniqueColumnValues={uniqueColumnValues}
+          onSecondaryValueChange={handleRuleSecondaryValueChange}
+          onRemove={handleRemoveCondition}
+        />
       ) : null}
       {searchHint ? (
         <Text className={styles.filterHint}>{searchHint}</Text>
@@ -226,7 +109,7 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
           size="extra-small"
           appearance="primary"
           closeSubmenu={closeSubmenu}
-          onClick={handleApplyFilter}
+          onClick={handleApplyClick}
         >
           Apply
         </PurchaseOrderColumnFilterMenuButton>
@@ -235,11 +118,22 @@ export default function PurchaseOrderColumnFilterMenuFilterSection({
           size="extra-small"
           appearance="outline"
           closeSubmenu={closeSubmenu}
-          onClick={handleClearFilter}
+          onClick={handleClearClick}
         >
           Clear
         </PurchaseOrderColumnFilterMenuButton>
       </div>
+      {canAdd ? (
+        <Button
+          className={styles.filterAddConditionButton}
+          appearance="transparent"
+          size="small"
+          icon={<AddRegular className={styles.filterAddConditionIcon} />}
+          onClick={handleAddCondition}
+        >
+          Add condition
+        </Button>
+      ) : null}
     </div>
   );
 }

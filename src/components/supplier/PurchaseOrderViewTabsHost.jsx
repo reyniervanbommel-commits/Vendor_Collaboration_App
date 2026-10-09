@@ -32,6 +32,7 @@ export default function PurchaseOrderViewTabsHost({
         onSelectTab={viewTabs.selectTab}
         onRemoveTab={viewTabs.removeTab}
         onSetGroupColor={viewTabs.setGroupColor}
+        onReorderTabs={canManage ? viewTabs.reorderTabs : null}
         columns={columns}
         viewBaseFilters={viewTabs.viewBaseFilters}
       />

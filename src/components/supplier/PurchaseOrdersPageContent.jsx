@@ -8,7 +8,7 @@ import { usePurchaseOrdersActiveRulesFlyout } from './usePurchaseOrdersActiveRul
 import { RemarksPanel } from './remarks';
 import BoardSplitView from '../bi/BoardSplitView';
 import { useAuth } from '../../context/AuthContext';
-import { ROLES } from '../../constants/roles';
+import { ROLES, isStaffRole } from '../../constants/roles';
 import { TrackChangesContext } from './trackChangesContext';
 import { LineDetailsContext } from './lineDetailsContext';
 import { savePoRccpHandoff } from '../../utils/poVendorFilterHandoff';
@@ -59,7 +59,7 @@ const useStyles = makeStyles({
 function PurchaseOrdersPageContent({ status, tableContext }) {
   const styles = useStyles();
   const { user } = useAuth();
-  const isStaff = user?.role === ROLES.ADMIN || user?.role === ROLES.EMPLOYEE;
+  const isStaff = isStaffRole(user?.role);
   const isSupplier = user?.role === ROLES.SUPPLIER;
   const { pageModel, boardView, bulkEdit } = tableContext;
   const trackChangesMeta = pageModel.trackChangesMeta || null;

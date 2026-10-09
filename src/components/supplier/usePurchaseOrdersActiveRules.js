@@ -30,7 +30,7 @@ function stringifyFilterValue(value) {
   return String(value ?? '');
 }
 
-export function summarizeColumnFilter(column, filter) {
+function summarizeOneRule(filter) {
   if (filter?.operator === COLOR_FILTER_OPERATOR) {
     return `${Array.isArray(filter.colors) ? filter.colors.length : 0} colors`;
   }
@@ -38,6 +38,58 @@ export function summarizeColumnFilter(column, filter) {
     return `${filter.operator} ${stringifyFilterValue(filter.value)} and ${stringifyFilterValue(filter.secondaryValue)}`;
   }
   return `${filter?.operator || ''} ${stringifyFilterValue(filter?.value)}`.trim();
+}
+
+function listValueRules(filter) {
+  const rules = Array.isArray(filter?.rules) ? filter.rules : [];
+  if (rules.length) return rules;
+  if (filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR) return [filter];
+  return [];
+}
+
+function partsForRule(filter) {
+  if (filter?.operator === COLOR_FILTER_OPERATOR) {
+    const count = Array.isArray(filter.colors) ? filter.colors.length : 0;
+    return [
+      { type: 'operator', text: 'color is' },
+      { type: 'value', text: `${count} ${count === 1 ? 'color' : 'colors'}` },
+    ];
+  }
+  if (filter?.operator === 'between') {
+    return [
+      { type: 'operator', text: filter.operator },
+      { type: 'value', text: stringifyFilterValue(filter.value) },
+      { type: 'and', text: 'and' },
+      { type: 'value', text: stringifyFilterValue(filter.secondaryValue) },
+    ].filter((part) => part.text);
+  }
+  const value = stringifyFilterValue(filter?.value);
+  return [
+    { type: 'operator', text: filter?.operator || '' },
+    value ? { type: 'value', text: value } : null,
+  ].filter((part) => part?.text);
+}
+
+export function columnFilterSummaryParts(column, filter) {
+  const parts = [];
+  listValueRules(filter).forEach((rule, index) => {
+    if (index > 0) parts.push({ type: 'and', text: 'and' });
+    parts.push(...partsForRule(rule));
+  });
+  if (Array.isArray(filter?.colors) && filter.colors.length && filter.operator !== COLOR_FILTER_OPERATOR) {
+    if (parts.length) parts.push({ type: 'and', text: 'and' });
+    parts.push(...partsForRule({ operator: COLOR_FILTER_OPERATOR, colors: filter.colors }));
+  }
+  if (!parts.length && filter) return partsForRule(filter);
+  return parts;
+}
+
+export function summarizeColumnFilter(column, filter) {
+  return columnFilterSummaryParts(column, filter)
+    .map((part) => part.text)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim() || summarizeOneRule(filter);
 }
 
 export function summarizeFormatRuleSet(ruleSet) {
@@ -68,6 +120,7 @@ function buildActiveItems({
       scope,
       column,
       summary: summarize(column, source),
+      summaryParts: payloadKey === 'filter' ? columnFilterSummaryParts(column, source) : undefined,
       [payloadKey]: source,
     });
     return items;

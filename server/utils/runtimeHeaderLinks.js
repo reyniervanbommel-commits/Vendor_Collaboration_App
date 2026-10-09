@@ -113,12 +113,13 @@ async function loadStaffRuntimeHeaderLinks(pool, boardKey) {
     .input('boardKey', sql.NVarChar(64), boardKey)
     .input('adminRole', sql.NVarChar(32), ROLES.ADMIN)
     .input('employeeRole', sql.NVarChar(32), ROLES.EMPLOYEE)
+    .input('supplyChainRole', sql.NVarChar(32), ROLES.SUPPLY_CHAIN)
     .query(`
       SELECT s.settings_json
       FROM dbo.user_board_settings s WITH (NOLOCK)
       INNER JOIN dbo.users u WITH (NOLOCK) ON u.id = s.user_id
       WHERE s.board_key = @boardKey
-        AND LOWER(LTRIM(RTRIM(u.role))) IN (LOWER(@adminRole), LOWER(@employeeRole))
+        AND LOWER(LTRIM(RTRIM(u.role))) IN (LOWER(@adminRole), LOWER(@employeeRole), LOWER(@supplyChainRole))
       ORDER BY s.updated_at ASC
     `);
   let merged = emptyRuntimeHeaderLinks();

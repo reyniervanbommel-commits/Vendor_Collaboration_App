@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import { Button, Popover, PopoverTrigger } from '@fluentui/react-components';
 import { DATE_FILTER_OPERATORS, NUMBER_FILTER_OPERATORS, TEXT_FILTER_OPERATORS } from '../../hooks/usePurchaseOrderTableView';
 import { usePurchaseOrderColumnFilterMenuStyles } from './purchaseOrderColumnFilterMenuStyles';
@@ -6,6 +6,7 @@ import { useColumnFormatRulesMenuDraft } from '../../hooks/useColumnFormatRulesM
 import { useColumnFormatRulesMenuActions } from '../../hooks/useColumnFormatRulesMenuActions';
 import { useColumnTextStyleActions } from '../../hooks/useColumnTextStyleActions';
 import { usePurchaseOrderColumnMutationActions } from '../../hooks/usePurchaseOrderColumnMutationActions';
+import { useColumnFilterMenuDrafts } from '../../hooks/useColumnFilterMenuDrafts';
 import { usePurchaseOrderSortFilterActions } from '../../hooks/usePurchaseOrderSortFilterActions';
 import { usePurchaseOrderColumnMenuFlags } from '../../hooks/usePurchaseOrderColumnMenuFlags';
 import { usePurchaseOrderColumnMenuQuickActions } from '../../hooks/usePurchaseOrderColumnMenuQuickActions';
@@ -14,7 +15,6 @@ import { useAppToast } from '../../hooks/useAppToast';
 import PurchaseOrderColumnMutationDialogs from './PurchaseOrderColumnMutationDialogs';
 import PurchaseOrderColumnFilterMenuPopoverContent from './PurchaseOrderColumnFilterMenuPopoverContent';
 import {
-  getDraftFromFilter,
   isColumnFilterActive,
   isDateColumn,
   isNumberColumn,
@@ -80,11 +80,12 @@ function PurchaseOrderColumnFilterMenu({
     () => ({ [column.key]: datePeriodDisplayMode }),
     [column.key, datePeriodDisplayMode]
   );
-  const [draft, setDraft] = useState(() => getDraftFromFilter(
+  const { drafts, setDrafts, emptyDraft } = useColumnFilterMenuDrafts(
     column,
     filter,
-    { [column.key]: datePeriodDisplayMode }
-  ));
+    datePeriodFilterModes,
+    open
+  );
   const isDate = isDateColumn(column);
   const isNumber = isNumberColumn(column, datePeriodFilterModes);
   const groupingColumnKeys = useMemo(
@@ -152,11 +153,6 @@ function PurchaseOrderColumnFilterMenu({
     () => referenceColumns.some((refColumn) => refColumn?.dataType === 'remarks'),
     [referenceColumns]
   );
-  useEffect(() => {
-    if (open) {
-      setDraft(getDraftFromFilter(column, filter, datePeriodFilterModes));
-    }
-  }, [open, column, filter, datePeriodFilterModes]);
   const handleOpenChange = useCallback((_, data) => {
     setOpen(data.open);
     if (!data.open) {
@@ -187,16 +183,22 @@ function PurchaseOrderColumnFilterMenu({
     onSetDatePeriodDisplayMode(column.key, displayMode);
     setActiveSubmenu('none');
   }, [canConfigureDatePeriodDisplay, column.key, onSetDatePeriodDisplayMode]);
-  const { setSortAsc, setSortDesc, clearSort, handleOperatorSelect, handleValueChange, handleDraftValueChange, handleSecondaryValueChange, handleApplyFilter, handleApplyFilterWithValue, handleClearFilter } = usePurchaseOrderSortFilterActions({
+  const {
+    setSortAsc, setSortDesc, clearSort, handleClearFilter,
+    handleRuleOperatorSelect, handleRuleValueChange, handleRuleDraftValueChange,
+    handleRuleSecondaryValueChange, handleApplyAllFilters, handleApplyFilterWithValueAt,
+    handleAddCondition, handleRemoveCondition,
+  } = usePurchaseOrderSortFilterActions({
     columnKey: column.key, columnDataType: column.dataType,
-    draft,
+    drafts,
+    setDrafts,
+    emptyDraft,
     onSetSortDirection,
     onSetOperator,
     onSetValue,
     onSetSecondaryValue,
     onApplyFilter,
     onClearFilter,
-    setDraft,
     setOpen,
   });
   const { handleClearFormatRules } = useColumnFormatRulesMenuActions({
@@ -260,11 +262,13 @@ function PurchaseOrderColumnFilterMenu({
         canMakeColumnSticky={canMakeColumnSticky} isStickyColumn={isStickyColumn} canPromoteToSticky={canPromoteToSticky} canUnstickSticky={canUnstickSticky}
         stickyColumnCount={stickyColumnCount} handleMakeColumnSticky={handleMakeColumnSticky} canHideColumn={canHideColumn} handleHideColumn={handleHideColumn}
         setSortAsc={setSortAsc} setSortDesc={setSortDesc} clearSort={clearSort}
-        isDate={isDate} isNumber={isNumber} draft={draft} operatorLabels={operatorLabels} operatorEntries={operatorEntries} handleOperatorSelect={handleOperatorSelect} handleValueChange={handleValueChange}
-        handleDraftValueChange={handleDraftValueChange}
-        handleApplyFilterWithValue={handleApplyFilterWithValue}
+        isDate={isDate} isNumber={isNumber} drafts={drafts} operatorLabels={operatorLabels} operatorEntries={operatorEntries}
+        handleRuleOperatorSelect={handleRuleOperatorSelect} handleRuleValueChange={handleRuleValueChange}
+        handleRuleDraftValueChange={handleRuleDraftValueChange} handleApplyFilterWithValueAt={handleApplyFilterWithValueAt}
         uniqueColumnValues={uniqueColumnValues}
-        handleSecondaryValueChange={handleSecondaryValueChange} handleApplyFilter={handleApplyFilter} handleClearFilter={handleClearFilter} colorFilter={colorFilter} handleAddType={handleAddType}
+        handleRuleSecondaryValueChange={handleRuleSecondaryValueChange} handleApplyAllFilters={handleApplyAllFilters}
+        handleClearFilter={handleClearFilter} handleAddCondition={handleAddCondition} handleRemoveCondition={handleRemoveCondition}
+        colorFilter={colorFilter} handleAddType={handleAddType}
         remarksAlreadyAdded={remarksAlreadyAdded}
         textStyleDraft={textStyleDraft} handleTextColorChange={handleTextColorChange} handleToggleBold={handleToggleBold} handleToggleItalic={handleToggleItalic}
         handleToggleUnderline={handleToggleUnderline} handleClearTextStyle={handleClearTextStyle}

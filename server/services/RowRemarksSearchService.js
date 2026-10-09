@@ -3,13 +3,14 @@
 const sql = require('mssql');
 const { getSqlPool } = require('../utils/sqlPool');
 const { time } = require('../utils/timing');
-const { ROLES } = require('../constants/roles');
+const { ROLES, isStaffRole } = require('../constants/roles');
 const { getSupplierAccount } = require('../utils/supplierScope');
 const {
   filterRowsForSupplier,
   getSupplierFilterColumnKey,
   loadSupplierVisibleRowKeys,
 } = require('../utils/supplierRowAccess');
+const { readVisibilityFilter, visibilitySql } = require('../utils/remarkVisibility');
 const { getTableByKey } = require('./TableRegistryService');
 const {
   normalizePositiveId,
@@ -33,13 +34,17 @@ function httpError(status, message) {
 
 function normalizeActor(actor) {
   const id = normalizePositiveId(actor?.id, 'actor');
-  if (actor?.role === ROLES.SUPPLIER) {
-    return { id, role: ROLES.SUPPLIER, isAdmin: false, isSupplier: true };
-  }
-  if (![ROLES.ADMIN, ROLES.EMPLOYEE].includes(actor?.role)) {
+  const role = actor?.role;
+  if (role !== ROLES.SUPPLIER && !isStaffRole(role)) {
     throw httpError(403, 'Insufficient permissions');
   }
-  return { id, role: actor.role, isAdmin: actor.role === ROLES.ADMIN, isSupplier: false };
+  return {
+    id,
+    role,
+    isAdmin: role === ROLES.ADMIN,
+    isSupplier: role === ROLES.SUPPLIER,
+    visibilityFilter: readVisibilityFilter(role),
+  };
 }
 
 // Voert de gedeelde remarks-rowkey-query uit (base where-clause: actieve remark op de masterrij)
@@ -50,6 +55,9 @@ async function queryRemarkRowKeys(tableKey, actor, { extraCondition = '', applyI
   const table = await dependencies.getTable(normalizeTableKey(tableKey));
   const pool = await dependencies.getPool();
   const request = pool.request().input('tableId', sql.BigInt, table.id);
+  if (normalizedActor.visibilityFilter) {
+    request.input('visibility', sql.NVarChar(16), normalizedActor.visibilityFilter);
+  }
   applyInputs(request);
   const result = await request.query(`
     SELECT DISTINCT r.partition_key, r.record_key
@@ -57,6 +65,7 @@ async function queryRemarkRowKeys(tableKey, actor, { extraCondition = '', applyI
     WHERE r.table_id = @tableId
       AND r.detail_key = -1
       AND r.is_deleted = 0
+      ${visibilitySql('r', normalizedActor.visibilityFilter)}
       ${extraCondition};
   `);
   let rows = result.recordset;

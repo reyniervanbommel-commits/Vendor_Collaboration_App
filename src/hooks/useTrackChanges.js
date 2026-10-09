@@ -19,7 +19,7 @@ import { apiRequest } from '../utils/api';
  *   activeColumnIds: string[],
  * }}
  */
-const DEFAULT_CONFIG = { mode: 'session', sessionRoles: ['admin', 'employee'], columns: {} };
+const DEFAULT_CONFIG = { mode: 'session', sessionRoles: ['admin', 'employee', 'supply_chain'], columns: {} };
 
 export function useTrackChanges({ autoLoad = true } = {}) {
   const [config, setConfig] = useState(DEFAULT_CONFIG);

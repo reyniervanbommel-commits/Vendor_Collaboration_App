@@ -87,6 +87,33 @@ describe('usePurchaseOrderSortFilterActions — handleApplyFilter', () => {
       value: '',
       secondaryValue: '',
     });
-    expect(setOpen).toHaveBeenCalledWith(false);
+    expect(setOpen).not.toHaveBeenCalled();
+  });
+
+  it('houdt het menu open na Apply van meerdere voorwaarden', () => {
+    const setOpen = vi.fn();
+    const onApplyFilter = vi.fn();
+    const { result } = renderHook(() => usePurchaseOrderSortFilterActions({
+      columnKey: 'vendor',
+      drafts: [
+        { operator: 'contains', value: 'c', secondaryValue: '' },
+        { operator: 'contains', value: 'g', secondaryValue: '' },
+      ],
+      setDrafts: vi.fn(),
+      onSetSortDirection: vi.fn(),
+      onSetOperator: vi.fn(),
+      onSetValue: vi.fn(),
+      onSetSecondaryValue: vi.fn(),
+      onApplyFilter,
+      onClearFilter: vi.fn(),
+      setOpen,
+    }));
+
+    act(() => {
+      result.current.handleApplyAllFilters();
+    });
+
+    expect(onApplyFilter).toHaveBeenCalled();
+    expect(setOpen).not.toHaveBeenCalled();
   });
 });

@@ -19,12 +19,11 @@ import {
   EditRegular,
   EyeRegular,
   SaveRegular,
-  StarRegular,
 } from '@fluentui/react-icons';
 import PurchaseOrderSavedViewDialog from './PurchaseOrderSavedViewDialog';
 import PurchaseOrderExportMenu from './PurchaseOrderExportMenu';
-import UnsavedYellowDot from './UnsavedYellowDot';
 import PurchaseOrderUpdateCurrentViewItem from './PurchaseOrderUpdateCurrentViewItem';
+import PurchaseOrderSavedViewTitleTrigger from './PurchaseOrderSavedViewTitleTrigger';
 import { SavedViewMenuItem, SavedViewScopeGroup } from './PurchaseOrderSavedViewMenuItems';
 
 const useStyles = makeStyles({
@@ -36,38 +35,9 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  titleTrigger: {
-    maxWidth: '100%',
-    minWidth: 0,
-    width: 'max-content',
-    height: 'auto',
-    minHeight: 'unset',
-    overflow: 'visible',
-    lineHeight: '1.35',
-    ...shorthands.padding('2px', '0', '4px'),
-    ...shorthands.border('none'),
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    ...shorthands.gap('6px'),
-    color: tokens.colorNeutralForeground1,
-    backgroundColor: 'transparent',
-  },
-  titleName: {
-    fontSize: tokens.fontSizeHero700,
-    fontWeight: tokens.fontWeightSemibold,
-    lineHeight: '1.35',
-    minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  titleChevron: {
-    fontSize: '20px',
-    flexShrink: 0,
-  },
   menuPopover: {
-    minWidth: '240px',
-    maxWidth: '360px',
+    minWidth: '280px',
+    maxWidth: '380px',
     overflowX: 'hidden',
     ...shorthands.border('1px', 'solid', tokens.colorNeutralStroke2),
   },
@@ -84,7 +54,7 @@ const useStyles = makeStyles({
 const NO_VIEW_LABEL = 'All orders (no view)';
 
 /**
- * View picker: All orders, then saved views, then manage/create, then tabs, then export.
+ * View picker: All orders, then saved views, then manage/create, then export.
  */
 export default function PurchaseOrderSavedViewsControl({
   views,
@@ -100,12 +70,13 @@ export default function PurchaseOrderSavedViewsControl({
   onSaveAsNew,
   onUpdateActive,
   onRenameView,
-  onSetDefault,
+  defaultViewId = null,
+  onToggleDefault = () => {},
   onDeleteView,
   onToggleShowHistory = () => {},
+  onToggleShowAsTab = () => {},
   onExportExcel = null,
   allOrdersShowHistoryIndicators = true,
-  tabMenu = null,
 }) {
   const styles = useStyles();
   const [dialogMode, setDialogMode] = useState(null);
@@ -150,19 +121,11 @@ export default function PurchaseOrderSavedViewsControl({
       <Menu positioning="below-start">
         <MenuTrigger disableButtonEnhancement>
           {titleMode ? (
-            <Button
-              appearance="subtle"
-              className={styles.titleTrigger}
-              disabled={saving}
-              title={triggerLabel}
-              data-tour="po-view-title"
-            >
-              <span className={styles.titleName}>{triggerLabel}</span>
-              {hasUnsavedChanges ? (
-                <UnsavedYellowDot testId="view-unsaved-dot" />
-              ) : null}
-              <ChevronDownRegular className={styles.titleChevron} />
-            </Button>
+            <PurchaseOrderSavedViewTitleTrigger
+              name={triggerLabel}
+              hasUnsavedChanges={hasUnsavedChanges}
+              saving={saving}
+            />
           ) : (
             <Button
               appearance="secondary"
@@ -177,38 +140,27 @@ export default function PurchaseOrderSavedViewsControl({
             </Button>
           )}
         </MenuTrigger>
-        <MenuPopover className={styles.menuPopover}>
+        <MenuPopover className={styles.menuPopover} data-tour="po-view-menu">
           <MenuList>
             <SavedViewMenuItem
               view={allOrdersView}
               activeViewId={activeViewId}
               onApplyView={onResetView}
               onToggleShowHistory={onToggleShowHistory}
+              onToggleShowAsTab={onToggleShowAsTab}
+              defaultViewId={defaultViewId}
+              onToggleDefault={onToggleDefault}
               canManageGlobal
             />
             <MenuDivider />
             <SavedViewScopeGroup
-              title="Vendor"
-              views={vendorViews}
+              views={[...vendorViews, ...globalViews, ...personalViews]}
               activeViewId={activeViewId}
               onApplyView={onApplyView}
               onToggleShowHistory={onToggleShowHistory}
-              canManageGlobal={canManageGlobal}
-            />
-            <SavedViewScopeGroup
-              title="Shared"
-              views={globalViews}
-              activeViewId={activeViewId}
-              onApplyView={onApplyView}
-              onToggleShowHistory={onToggleShowHistory}
-              canManageGlobal={canManageGlobal}
-            />
-            <SavedViewScopeGroup
-              title="Personal"
-              views={personalViews}
-              activeViewId={activeViewId}
-              onApplyView={onApplyView}
-              onToggleShowHistory={onToggleShowHistory}
+              onToggleShowAsTab={onToggleShowAsTab}
+              defaultViewId={defaultViewId}
+              onToggleDefault={onToggleDefault}
               canManageGlobal={canManageGlobal}
             />
             {!hasSavedViews ? (
@@ -232,14 +184,6 @@ export default function PurchaseOrderSavedViewsControl({
                   >
                     Rename…
                   </MenuItem>
-                  {!activeView.isDefault ? (
-                    <MenuItem
-                      icon={<StarRegular />}
-                      onClick={() => onSetDefault(activeView)}
-                    >
-                      Set as default
-                    </MenuItem>
-                  ) : null}
                   <MenuItem
                     icon={<DeleteRegular className={styles.deleteAction} />}
                     className={styles.deleteAction}
@@ -259,8 +203,6 @@ export default function PurchaseOrderSavedViewsControl({
                 </MenuItem>
               </>
             ) : null}
-
-            {tabMenu}
 
             {onExportExcel ? (
               <>

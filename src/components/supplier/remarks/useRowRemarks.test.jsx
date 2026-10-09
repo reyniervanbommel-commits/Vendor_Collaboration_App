@@ -169,4 +169,77 @@ describe('useRowRemarks', () => {
     expect(result.current.items.map((item) => item.id)).toEqual([1, 0]);
     unmount();
   });
+
+  it('stuurt visibility alleen mee als die gekozen is', async () => {
+    apiRequest.mockResolvedValue({ items: [], total: 0, nextCursor: null, remark: { id: 7, body: 'x' } });
+    const { result, unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.createRemark('With choice', null, 'internal');
+      await result.current.createRemark('Without choice');
+    });
+
+    const posts = apiRequest.mock.calls.filter(([, init]) => init?.method === 'POST');
+    expect(posts[0][1].body).toMatchObject({ body: 'With choice', visibility: 'internal' });
+    expect(posts[1][1].body).not.toHaveProperty('visibility');
+    unmount();
+  });
+
+  it('plaatst een reply in het juiste gesprek', async () => {
+    apiRequest.mockImplementation(async (path, init) => {
+      if (init?.method === 'POST') return { remark: { id: 9, parentId: 1, body: 'Re', createdAt: '2026-10-07T10:00:00Z' } };
+      if (path.includes('/remarks?')) return { items: [{ id: 2, parentId: null, replies: [] }, { id: 1, parentId: null, replies: [] }], total: 2, nextCursor: null };
+      return { items: [], totals: { remarks: 2 }, newestCursor: 'c1' };
+    });
+    const { result, unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await result.current.createRemark('Re', null, null, 1); });
+    const post = apiRequest.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(post[1].body).toMatchObject({ body: 'Re', parentId: 1 });
+    expect(result.current.items.map((i) => i.id)).toEqual([1, 2]);
+    expect(result.current.items[0].replies.map((r) => r.id)).toEqual([9]);
+    unmount();
+  });
+
+  it('herlaadt bij een polling-reply op een niet-geladen gesprek', async () => {
+    let remarksCalls = 0;
+    apiRequest.mockImplementation(async (path) => {
+      if (path.includes('/remarks?')) { remarksCalls += 1; return { items: [{ id: 1, parentId: null, replies: [] }], total: 1, nextCursor: null }; }
+      if (path.includes('afterCursor')) return { items: [{ type: 'remark', sourceId: '9', parentId: 77, body: 'x', createdAt: '2026-10-07T10:00:00Z' }], totals: { remarks: 2 }, newestCursor: 'c2' };
+      return { items: [], totals: { remarks: 1 }, newestCursor: 'c1' };
+    });
+    const { unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    await act(async () => { await Promise.resolve(); });
+    expect(remarksCalls).toBe(2);
+    unmount();
+  });
+
+  it('stuurt mentions mee bij een nieuwe opmerking', async () => {
+    apiRequest.mockResolvedValue({ items: [], total: 0, nextCursor: null, remark: { id: 7, body: 'x', parentId: null } });
+    const { result, unmount } = renderHook(() => useRowRemarks(OPTIONS));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await result.current.createRemark('Late @A-1', null, 'vendor', null, [{ columnId: 11, value: 'A-1' }]);
+    });
+    const post = apiRequest.mock.calls.find(([, init]) => init?.method === 'POST');
+    expect(post[1].body).toMatchObject({ mentions: [{ columnId: 11, value: 'A-1' }], visibility: 'vendor' });
+    unmount();
+  });
+
+  it('meldt een groepsopmerking aan de summary zodat alle rijen ververst worden', async () => {
+    const onSummaryChange = vi.fn();
+    apiRequest.mockResolvedValue({ items: [], total: 0, nextCursor: null, remark: { id: 7, body: 'x', parentId: null, broadcastId: 'b1' } });
+    const { result, unmount } = renderHook(() => useRowRemarks({ ...OPTIONS, onSummaryChange }));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await result.current.createRemark('x @A-1', null, 'internal', null, [{ columnId: 11, value: 'A-1' }]);
+    });
+    expect(onSummaryChange).toHaveBeenCalledWith(expect.objectContaining({ refreshAll: true }));
+    unmount();
+  });
 });

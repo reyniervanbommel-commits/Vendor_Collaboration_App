@@ -1,16 +1,15 @@
 import { applyOpacity } from './hexColor';
 import { STATUS_COLOR_PALETTE } from './statusColumnUtils';
-import { itemColumnMatchesFilter } from './itemColumnFilterMatch';
+import { extractColorFilter, listRawValueRules } from './columnFilterState';
 import {
   buildFilterFromCellValue,
   COLOR_FILTER_OPERATOR,
   DATE_FILTER_OPERATORS,
-  hasActiveFilter,
+  filterItemsByColumnFilters,
   isDateColumn,
   isNumberColumn,
   NUMBER_FILTER_OPERATORS,
   REMARKS_FILTER_OPERATORS,
-  resolveFilterModel,
   TEXT_FILTER_OPERATORS,
 } from './tableViewFilterUtils';
 
@@ -24,14 +23,27 @@ function normalizeText(value) {
   return String(value).trim();
 }
 
-function cloneFilter(filter) {
+function cloneRule(filter) {
   if (!filter || typeof filter !== 'object') return null;
   return {
     operator: String(filter.operator || '').slice(0, 32),
     value: Array.isArray(filter.value) ? filter.value.map((entry) => String(entry)) : String(filter.value ?? ''),
     secondaryValue: String(filter.secondaryValue ?? ''),
-    colors: Array.isArray(filter.colors) ? filter.colors.filter(Boolean) : undefined,
   };
+}
+
+function cloneFilter(filter) {
+  if (!filter || typeof filter !== 'object') return null;
+  const colors = Array.isArray(filter.colors) ? filter.colors.filter(Boolean) : undefined;
+  const rules = listRawValueRules(filter).map(cloneRule).filter(Boolean);
+  if (rules.length > 1 || (rules.length && colors?.length)) {
+    return { rules, colors };
+  }
+  if (rules[0]) return { ...rules[0], colors };
+  if (colors?.length) {
+    return { operator: COLOR_FILTER_OPERATOR, value: '', secondaryValue: '', colors };
+  }
+  return filter.operator ? { ...cloneRule(filter), colors } : null;
 }
 
 export function filtersEqual(left, right) {
@@ -149,15 +161,12 @@ export function normalizeTabsState(rawTabs) {
 }
 
 export function filterRowsByFilters(rows, columns, filterByColumn, datePeriodDisplayModes = {}) {
-  const list = Array.isArray(rows) ? rows : [];
-  const cols = Array.isArray(columns) ? columns : [];
-  const active = cols
-    .map((column) => [column, resolveFilterModel(column, filterByColumn?.[column.key], datePeriodDisplayModes)])
-    .filter(([column, filter]) => hasActiveFilter(column, filter, datePeriodDisplayModes));
-  if (!active.length) return list;
-  return list.filter((row) => active.every(([column, filter]) => (
-    itemColumnMatchesFilter(row, column, filter, datePeriodDisplayModes)
-  )));
+  return filterItemsByColumnFilters(
+    Array.isArray(rows) ? rows : [],
+    Array.isArray(columns) ? columns : [],
+    filterByColumn,
+    datePeriodDisplayModes
+  );
 }
 
 export function uniqueColumnValues(rows, columnKey) {
@@ -180,8 +189,9 @@ export function existingEqualsValues(extraTabs, columnKey) {
   const seen = new Set();
   (extraTabs || []).forEach((tab) => {
     const filter = tab?.extraFilters?.[columnKey];
-    if (!filter || filter.operator !== 'equals') return;
-    const value = normalizeText(filter.value).toLowerCase();
+    const equalsRule = listRawValueRules(filter).find((rule) => rule.operator === 'equals');
+    if (!equalsRule) return;
+    const value = normalizeText(equalsRule.value).toLowerCase();
     if (value) seen.add(value);
   });
   return seen;
@@ -316,11 +326,17 @@ export function describeTabExtraFilters(tab, columns = []) {
     const column = columns.find((entry) => entry.key === key);
     const label = column?.label || key;
     const filter = extra[key];
-    const phrase = operatorPhrase(column, filter.operator);
-    const value = formatFilterDisplayValue(filter);
+    const rules = listRawValueRules(filter);
+    const colorCount = extractColorFilter(filter).length;
+    const parts = rules.map((rule) => {
+      const phrase = operatorPhrase(column, rule.operator);
+      const value = formatFilterDisplayValue(rule);
+      return value ? `${phrase} ${value}` : phrase;
+    });
+    if (colorCount) parts.push(`color is ${colorCount} ${colorCount === 1 ? 'color' : 'colors'}`);
     return {
       label: `${label}:`,
-      detail: value ? `${phrase} ${value}` : phrase,
+      detail: parts.join(' and ') || operatorPhrase(column, filter.operator),
     };
   });
 }
@@ -346,6 +362,17 @@ export function normalizeVendorAccount(value) {
 export function viewVendorAccount(view) {
   if (!view || view.scope !== 'vendor') return '';
   return normalizeVendorAccount(view.vendorAccount || view.viewState?.vendorAccount);
+}
+
+const VIEW_SCOPE_LABELS = {
+  global: 'shared',
+  personal: 'personal',
+  vendor: 'vendor',
+};
+
+export function viewScopeLabel(view) {
+  if (!view?.id) return '';
+  return VIEW_SCOPE_LABELS[view.scope] || '';
 }
 
 export function vendorCanSeeView(view, supplierAccount) {

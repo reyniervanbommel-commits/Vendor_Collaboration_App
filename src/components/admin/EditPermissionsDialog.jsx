@@ -15,7 +15,7 @@ import {
 } from '@fluentui/react-components';
 import { Shield24Regular } from '@fluentui/react-icons';
 import { apiRequest } from '../../utils/api';
-import { ROLES } from '../../constants/roles';
+import { ROLES, hasEmployeeAccess } from '../../constants/roles';
 import { applyCommentPermissionToggle, isCommentPermissionId } from '../../constants/commentPermissions';
 import PermissionsChecklist from './PermissionsChecklist';
 
@@ -86,9 +86,9 @@ export default function EditPermissionsDialog({ user, open, onOpenChange, onSave
 
   if (!user) return null;
 
-  // Instellingen-permissies alleen voor employees (#AB:326). Comments voor employee en vendor (#AB:328).
+  // Instellingen-permissies alleen voor employees en Supply Chain (#AB:326). Comments voor employee en vendor (#AB:328).
   // Admin heeft comments altijd en krijgt geen vinkjes.
-  const isEmployee = user.role === ROLES.EMPLOYEE;
+  const isEmployee = hasEmployeeAccess(user.role);
   const isSupplier = user.role === ROLES.SUPPLIER;
   const canEdit = isEmployee || isSupplier;
 

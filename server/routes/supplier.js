@@ -202,6 +202,14 @@ function normalizeLastVendorAccount(value) {
   return value.trim().slice(0, 64);
 }
 
+// Per-user default view: a view id, 'none' (All orders) or null (no choice → scope defaults).
+function normalizeDefaultViewId(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim().slice(0, 64);
+  return trimmed || null;
+}
+
 function normalizeBoardSettings(rawSettings, boardKey) {
   const input = rawSettings && typeof rawSettings === 'object' ? rawSettings : {};
   const settings = {
@@ -209,6 +217,7 @@ function normalizeBoardSettings(rawSettings, boardKey) {
     isoWindow: normalizeIsoWindow(input.isoWindow),
     lastVendorAccount: normalizeLastVendorAccount(input.lastVendorAccount),
     allOrdersShowHistoryIndicators: input.allOrdersShowHistoryIndicators !== false,
+    defaultViewId: normalizeDefaultViewId(input.defaultViewId),
     visibleColumns: normalizeStringArray(input.visibleColumns),
     columnOrder: normalizeStringArray(input.columnOrder),
     lineColumnOrder: normalizeStringArray(input.lineColumnOrder),
@@ -225,6 +234,8 @@ function normalizeBoardSettings(rawSettings, boardKey) {
     collapsedLineColumnKeys: normalizeStringArray(input.collapsedLineColumnKeys),
     productImageColumnVisible: input.productImageColumnVisible !== false,
     viewTabSelection: normalizeViewTabSelection(input.viewTabSelection),
+    // Per-user order of pinned saved views (view ids); pinning itself lives on the view.
+    pinnedViewOrder: normalizeStringArray(input.pinnedViewOrder),
     kpiCardStyles: normalizeKpiCardStyles(input.kpiCardStyles),
   };
   // Onboarding-voortgang hoort alleen bij de eigen board key; andere boards dragen de sleutel niet.
@@ -236,7 +247,7 @@ function normalizeBoardSettings(rawSettings, boardKey) {
 
 const VIEW_SCOPES = new Set(['personal', 'global', 'vendor']);
 const VIEW_SORT_DIRECTIONS = new Set(['asc', 'desc', 'none']);
-const MAX_VIEW_NAME = 120;
+const MAX_VIEW_NAME = 25;
 const MAX_VIEW_STATE_LENGTH = 100000;
 
 function normalizeViewName(value) {
@@ -258,15 +269,35 @@ function normalizeViewState(rawState) {
     const filter = filterByColumn[rawKey];
     if (!filter || typeof filter !== 'object') return;
     const key = String(rawKey).slice(0, 64);
+    const colors = Array.isArray(filter.colors)
+      ? filter.colors.map((color) => String(color || '').slice(0, 32)).filter(Boolean).slice(0, 20)
+      : undefined;
+    const normalizeRule = (rule) => {
+      if (!rule || typeof rule !== 'object') return null;
+      return {
+        operator: String(rule.operator || '').slice(0, 32),
+        value: Array.isArray(rule.value)
+          ? rule.value.map((entry) => String(entry).slice(0, 200)).slice(0, 50)
+          : String(rule.value === null || rule.value === undefined ? '' : rule.value).slice(0, 200),
+        secondaryValue: String(rule.secondaryValue === null || rule.secondaryValue === undefined ? '' : rule.secondaryValue).slice(0, 200),
+      };
+    };
+    if (Array.isArray(filter.rules)) {
+      normalizedFilters[key] = {
+        rules: filter.rules.slice(0, 5).map(normalizeRule).filter(Boolean),
+        colors,
+      };
+      return;
+    }
     normalizedFilters[key] = {
-      operator: String(filter.operator || '').slice(0, 32),
-      value: String(filter.value === null || filter.value === undefined ? '' : filter.value).slice(0, 200),
-      secondaryValue: String(filter.secondaryValue === null || filter.secondaryValue === undefined ? '' : filter.secondaryValue).slice(0, 200),
+      ...normalizeRule(filter),
+      colors,
     };
   });
 
   return {
     showHistoryIndicators: input.showHistoryIndicators !== false,
+    showAsTab: input.showAsTab === true,
     columns: {
       visibleColumns: normalizeStringArray(columns.visibleColumns),
       columnOrder: normalizeStringArray(columns.columnOrder),

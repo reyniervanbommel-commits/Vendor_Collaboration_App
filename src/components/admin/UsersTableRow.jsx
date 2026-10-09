@@ -10,7 +10,7 @@ import {
 } from '@fluentui/react-components';
 import { CheckmarkCircle24Regular, Circle24Regular } from '@fluentui/react-icons';
 import { UserSecurityActions } from './UserSecurityActions';
-import { ROLES } from '../../constants/roles';
+import { ROLES, ROLE_LABELS } from '../../constants/roles';
 
 const useStyles = makeStyles({
   permBadge: { cursor: 'default' },
@@ -48,7 +48,7 @@ function UsersTableRow({ user, access, isUpdated, isAdmin, currentUserId, action
     <TableRow>
       <TableCell>{user.email}</TableCell>
       <TableCell>
-        <Badge appearance={user.role === ROLES.ADMIN ? 'filled' : 'outline'}>{user.role}</Badge>
+        <Badge appearance={user.role === ROLES.ADMIN ? 'filled' : 'outline'}>{ROLE_LABELS[user.role] || user.role}</Badge>
       </TableCell>
       <TableCell>
         {user.role === ROLES.SUPPLIER ? (

@@ -5,6 +5,7 @@
 
 import { columnUsesNumberSemantics } from './datePeriodColumnUtils';
 import { dateMatchesFilter } from './dateFilterUtils';
+import { extractColorFilter, listRawValueRules } from './columnFilterState';
 import { matchTextFilterWithPurchStatusAlias, shouldMatchPurchStatusAlias } from './purchStatusDisplay';
 
 // Kleurfilter (client-only): matcht op de getoonde celkleur (status/conditional
@@ -135,7 +136,7 @@ export function resolveFilterModel(column, filter, datePeriodDisplayModes = {}) 
   };
 }
 
-export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
+export function hasActiveRule(column, filter, datePeriodDisplayModes = {}) {
   if (!filter) return false;
   if (filter.operator === COLOR_FILTER_OPERATOR) {
     return Array.isArray(filter.colors) && filter.colors.length > 0;
@@ -156,6 +157,14 @@ export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
   if (column?.dataType === 'remarks' && filter.operator === 'hasComment') return true;
   if (filter.operator === 'equals' && filter.value === '') return true;
   return Boolean(filter.value);
+}
+
+export function hasActiveFilter(column, filter, datePeriodDisplayModes = {}) {
+  if (!filter) return false;
+  if (extractColorFilter(filter).length) return true;
+  return listRawValueRules(filter).some((rule) => (
+    hasActiveRule(column, resolveFilterModel(column, rule, datePeriodDisplayModes), datePeriodDisplayModes)
+  ));
 }
 
 export function textMatchesFilter(rawValue, filter) {
@@ -248,13 +257,31 @@ export function itemColumnMatchesFilter(item, column, filter, datePeriodDisplayM
  * `excludeColumnKey` en van kleurfilters (colorIs — die hebben de volledige rij + format-regels
  * nodig, niet alleen de ruwe celwaarde, en vallen buiten deze cascading-berekening).
  */
+export function partitionColumnFilters(columns, filterByColumn, datePeriodDisplayModes = {}) {
+  const valueFilters = [];
+  const colorFilters = [];
+  (Array.isArray(columns) ? columns : []).forEach((column) => {
+    const raw = filterByColumn?.[column.key];
+    listRawValueRules(raw).forEach((rule) => {
+      const resolved = resolveFilterModel(column, rule, datePeriodDisplayModes);
+      if (hasActiveRule(column, resolved, datePeriodDisplayModes)) {
+        valueFilters.push([column, resolved]);
+      }
+    });
+    const colors = extractColorFilter(raw);
+    if (colors.length) {
+      colorFilters.push([column, { operator: COLOR_FILTER_OPERATOR, colors }]);
+    }
+  });
+  return { valueFilters, colorFilters };
+}
+
 export function filterItemsByColumnFilters(items, columns, filterByColumn, datePeriodDisplayModes = {}, excludeColumnKey = null) {
   const activeFilters = columns
     .filter((column) => column.key !== excludeColumnKey)
-    .map((column) => [column, resolveFilterModel(column, filterByColumn?.[column.key], datePeriodDisplayModes)])
-    .filter(([column, filter]) => (
-      filter.operator !== COLOR_FILTER_OPERATOR && hasActiveFilter(column, filter, datePeriodDisplayModes)
-    ));
+    .flatMap((column) => listRawValueRules(filterByColumn?.[column.key])
+      .map((rule) => [column, resolveFilterModel(column, rule, datePeriodDisplayModes)])
+      .filter(([, filter]) => hasActiveRule(column, filter, datePeriodDisplayModes)));
   if (!activeFilters.length) return items;
   return items.filter((item) => activeFilters.every(([column, filter]) => (
     itemColumnMatchesFilter(item, column, filter, datePeriodDisplayModes)

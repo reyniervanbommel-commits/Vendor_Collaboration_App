@@ -147,6 +147,33 @@
   outline: none;
 }
 
+/* Zichtbaarheidskeuze (admin/supply_chain). */
+.remark-visibility-picker {
+  margin-left: -8px;
+}
+
+.remark-visibility-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.remarks-composer textarea.remarks-composer-input--vendor {
+  border-color: var(--colorBrandStroke1);
+}
+
+.remarks-composer textarea.remarks-composer-input--internal {
+  border-color: var(--colorPaletteMarigoldBorderActive);
+}
+
+.remarks-composer-internal-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--colorNeutralForeground3);
+  font-size: 12px;
+}
+
 .remarks-composer-actions,
 .remark-card-header,
 .reaction-bar,
@@ -204,6 +231,14 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* Naam met datum/tijd eronder. */
+.remark-author-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
 }
 
 .remark-body {
@@ -565,4 +600,241 @@
 
 .remarks-feed--loading .remarks-skeleton {
   margin-bottom: 8px;
+}
+
+.remarks-latest-lock {
+  margin-right: 4px;
+  vertical-align: -2px;
+  color: var(--colorPaletteMarigoldForeground2);
+}
+
+/* Zichtbaarheidsaccent (alleen admin/supply_chain krijgen visibility). */
+.remark-card--internal {
+  border-left: 3px solid var(--colorPaletteMarigoldBorderActive);
+}
+
+.remark-card--vendor {
+  border-left: 3px solid var(--colorBrandStroke1);
+}
+
+/* Gesprekken: replies ingesprongen met lijn in de visibility-kleur van de root. */
+.remark-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.remark-thread-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 24px;
+  padding-left: 12px;
+  border-left: 2px solid var(--colorNeutralStroke2);
+}
+
+.remark-thread--internal .remark-thread-replies {
+  border-left-color: var(--colorPaletteMarigoldBorderActive);
+}
+
+.remark-thread--vendor .remark-thread-replies {
+  border-left-color: var(--colorBrandStroke1);
+}
+
+.remark-thread-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remark-card--compact {
+  padding: 8px 10px;
+}
+
+.remark-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.remark-reply-to {
+  display: block;
+}
+
+.remark-reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--colorNeutralBackground2);
+}
+
+.remark-reply-composer-header,
+.remark-reply-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remark-reply-composer-actions {
+  justify-content: flex-end;
+}
+
+.remark-reply-composer textarea {
+  resize: vertical;
+  padding: 6px 8px;
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  color: var(--colorNeutralForeground1);
+  font: inherit;
+}
+
+.remark-reply--new > .remark-card {
+  animation: remark-reply-highlight 1.6s ease-out;
+}
+
+@keyframes remark-reply-highlight {
+  from { background: var(--colorBrandBackground2); }
+  to { background: var(--colorNeutralBackground1); }
+}
+
+@media (max-width: 480px) {
+  .remark-thread-replies {
+    margin-left: 16px;
+    padding-left: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remark-reply--new > .remark-card {
+    animation: none;
+  }
+}
+
+/* @mentions: suggestielijst onder het tekstvak, bereik en chips. */
+.remarks-composer-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.remarks-mention-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--colorNeutralStroke1);
+  border-radius: 6px;
+  background: var(--colorNeutralBackground1);
+  box-shadow: var(--shadow16);
+}
+
+.remarks-mention-option {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.remarks-mention-option.is-active,
+.remarks-mention-option:hover {
+  background: var(--colorNeutralBackground1Hover);
+}
+
+.remarks-mention-option > .remarks-muted {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.remarks-mention-value {
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.remarks-mention-empty {
+  padding: 6px 10px;
+}
+
+.remarks-mention-reach {
+  font-size: 12px;
+  color: var(--colorNeutralForeground2);
+}
+
+.remarks-mention-reach--warning {
+  color: var(--colorPaletteMarigoldForeground2);
+  font-weight: 600;
+}
+
+.remark-mention-chip {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--colorBrandBackground2);
+  color: var(--colorBrandForeground2);
+  font-weight: 600;
+}
+
+.remark-broadcast-note {
+  display: block;
+}
+
+/* Tekstvak en markeringslaag delen exact dezelfde tekstmaten, anders schuiven de chips op. */
+.remarks-composer textarea,
+.remarks-composer-highlight {
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* Markeringslaag onder het tekstvak: zelfde box als de textarea, tekst onzichtbaar, alleen chips zichtbaar. */
+.remarks-composer-highlight {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--colorNeutralBackground1);
+  color: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+/* In de laag geen padding op de chip (zou de tekst verschuiven); box-shadow geeft de ruimte. */
+.remarks-composer-highlight .remark-mention-chip {
+  padding: 0;
+  color: transparent;
+  box-shadow: 0 0 0 2px var(--colorBrandBackground2);
+}
+
+.remarks-composer textarea.remarks-composer-input--highlighted {
+  position: relative;
+  background: transparent;
+}
+
+/* Zichtbaarheidsbadge rechtsboven, op één lijn met Delete. */
+.remark-card-header {
+  align-items: flex-start;
+}
+
+.remark-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-top: -2px;
 }

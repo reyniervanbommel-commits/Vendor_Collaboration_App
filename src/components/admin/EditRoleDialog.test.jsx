@@ -67,4 +67,22 @@ describe('EditRoleDialog', () => {
 
     expect(await screen.findByText('You cannot change your own role')).toBeTruthy();
   });
+
+  it('offers Supply Chain as a role', () => {
+    renderDialog(EMPLOYEE);
+    expect(screen.getByRole('option', { name: /^Supply Chain/ })).toBeTruthy();
+  });
+
+  it('does not warn when an employee becomes Supply Chain (permissions are kept)', async () => {
+    renderDialog(EMPLOYEE);
+    selectRole('supply_chain');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save/i }).hasAttribute('disabled')).toBe(false));
+    expect(screen.queryByText(/permissions of this user will be cleared/i)).toBeNull();
+  });
+
+  it('warns when a Supply Chain user becomes a vendor', async () => {
+    renderDialog({ id: 5, email: 'sc@vanbommel.nl', role: 'supply_chain' });
+    selectRole('supplier');
+    expect(await screen.findByText(/permissions of this user will be cleared/i)).toBeTruthy();
+  });
 });

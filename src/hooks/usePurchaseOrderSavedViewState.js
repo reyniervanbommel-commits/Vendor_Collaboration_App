@@ -8,7 +8,7 @@ import {
 import { usePurchaseOrderSavedViews } from './usePurchaseOrderSavedViews';
 import { usePurchaseOrderViewTabs } from './usePurchaseOrderViewTabs';
 import { ALL_TAB_ID, normalizeTabsState } from '../utils/viewTabs';
-import { pickStartupView } from '../utils/purchaseOrderStartupView';
+import { NO_DEFAULT_VIEW, pickStartupView } from '../utils/purchaseOrderStartupView';
 import { readPoTableSession } from '../utils/poTableSessionState';
 import { usePurchaseOrderTableSession } from './usePurchaseOrderTableSession';
 import { describeViewStateDiff, stableSerializeViewState } from '../utils/viewStateDiff';
@@ -34,9 +34,12 @@ export function usePurchaseOrderSavedViewState({
   const [stickyColumnKeys, setStickyColumnKeys] = useState([]);
   const [showHistoryIndicators, setShowHistoryIndicators] = useState(true);
   const [allOrdersShowHistoryIndicators, setAllOrdersShowHistoryIndicators] = useState(true);
+  const [defaultViewPreference, setDefaultViewPreference] = useState(null);
+  const [userSettingsLoaded, setUserSettingsLoaded] = useState(false);
   const autoAppliedRef = useRef(false);
   const activeViewIdRef = useRef(activeViewId);
   const allOrdersDirtyRef = useRef(false);
+  const defaultViewDirtyRef = useRef(false);
   const savedViewStateRef = useRef(null);
   activeViewIdRef.current = activeViewId;
   const viewTabs = usePurchaseOrderViewTabs({
@@ -51,9 +54,11 @@ export function usePurchaseOrderSavedViewState({
   const buildCurrentViewState = useCallback(() => {
     const peek = viewTabs.peekTabsState();
     const table = boardView.exportFilterSortGrouping();
+    const activeSaved = savedViews.views.find((view) => view.id === activeViewId);
     return {
       showHistoryIndicators,
-      vendorAccount: savedViews.views.find((view) => view.id === activeViewId)?.viewState?.vendorAccount || '',
+      showAsTab: Boolean(activeSaved?.viewState?.showAsTab),
+      vendorAccount: activeSaved?.viewState?.vendorAccount || '',
       columns: {
         ...exportColumnLayout(),
         stickyColumnKeys,
@@ -101,6 +106,7 @@ export function usePurchaseOrderSavedViewState({
         viewTabs.loadFromViewState({ ...state, viewId: view.id });
         const nextSaved = {
           ...state,
+          showAsTab: Boolean(state.showAsTab),
           vendorAccount: state.vendorAccount || '',
           tabs: normalizeTabsState(state.tabs),
         };
@@ -119,6 +125,15 @@ export function usePurchaseOrderSavedViewState({
     void apiRequest(`/supplier/board-settings/${ALL_ORDERS_SETTINGS_BOARD_KEY}`, {
       method: 'PATCH',
       body: { settings: { allOrdersShowHistoryIndicators: Boolean(enabled) } },
+    }).catch(() => {});
+  }, []);
+
+  const persistDefaultView = useCallback((next) => {
+    defaultViewDirtyRef.current = true;
+    setDefaultViewPreference(next);
+    void apiRequest(`/supplier/board-settings/${ALL_ORDERS_SETTINGS_BOARD_KEY}`, {
+      method: 'PATCH',
+      body: { settings: { defaultViewId: next } },
     }).catch(() => {});
   }, []);
 
@@ -154,8 +169,8 @@ export function usePurchaseOrderSavedViewState({
       name,
       scope,
       viewState: currentState,
-      isDefault,
     });
+    if (created?.id && isDefault) persistDefaultView(String(created.id));
     if (created?.id) {
       tableSession.suppressNextPersist();
       tableSession.clear(created.id);
@@ -165,7 +180,7 @@ export function usePurchaseOrderSavedViewState({
       viewTabs.loadFromViewState({ ...currentState, viewId: created.id });
     }
     return created;
-  }, [savedViews, buildCurrentViewState, tableSession, viewTabs]);
+  }, [savedViews, buildCurrentViewState, tableSession, viewTabs, persistDefaultView]);
 
   const handleUpdateActive = useCallback(async (view, saveScope = 'all') => {
     let extraTabs = viewTabs.peekTabsState().extraTabs;
@@ -190,9 +205,23 @@ export function usePurchaseOrderSavedViewState({
     await savedViews.updateView(view.id, { name });
   }, [savedViews]);
 
-  const handleSetDefault = useCallback(async (view) => {
-    await savedViews.updateView(view.id, { isDefault: true });
-  }, [savedViews]);
+  // The view the board opens with for this user — exactly one (null = All orders).
+  const defaultView = useMemo(
+    () => pickStartupView(savedViews.views, isSupplier, defaultViewPreference),
+    [savedViews.views, isSupplier, defaultViewPreference]
+  );
+  const defaultViewId = defaultView?.id ?? null;
+
+  // Star click: make this view the default; clicking the current default falls back to All orders.
+  const handleToggleDefault = useCallback((view) => {
+    const viewId = view?.id ?? null;
+    if (viewId == null || viewId === defaultViewId) {
+      if (defaultViewId == null) return;
+      persistDefaultView(NO_DEFAULT_VIEW);
+      return;
+    }
+    persistDefaultView(String(viewId));
+  }, [defaultViewId, persistDefaultView]);
 
   const handleDeleteView = useCallback(async (view) => {
     await savedViews.deleteView(view.id);
@@ -205,6 +234,19 @@ export function usePurchaseOrderSavedViewState({
       viewTabs.resetTabs();
     }
   }, [savedViews, activeViewId, allOrdersShowHistoryIndicators, tableSession, viewTabs]);
+
+  const handleToggleShowAsTab = useCallback(async (view, enabled) => {
+    if (!view?.id) return;
+    const nextViewState = {
+      ...(view.viewState || {}),
+      showAsTab: Boolean(enabled),
+    };
+    await savedViews.updateView(view.id, { viewState: nextViewState });
+    if (view.id === activeViewId) {
+      savedViewStateRef.current = nextViewState;
+      setSavedStateFingerprint(stableSerializeViewState(nextViewState));
+    }
+  }, [activeViewId, savedViews]);
 
   const handleToggleShowHistory = useCallback(async (view, enabled) => {
     const nextEnabled = Boolean(enabled);
@@ -237,30 +279,34 @@ export function usePurchaseOrderSavedViewState({
     let cancelled = false;
     apiRequest(`/supplier/board-settings/${ALL_ORDERS_SETTINGS_BOARD_KEY}`)
       .then((data) => {
-        if (cancelled || allOrdersDirtyRef.current) return;
+        if (cancelled) return;
+        if (!defaultViewDirtyRef.current) setDefaultViewPreference(data?.settings?.defaultViewId ?? null);
+        if (allOrdersDirtyRef.current) return;
         const next = readAllOrdersHistoryFromSettings(data?.settings);
         setAllOrdersShowHistoryIndicators(next);
         if (activeViewIdRef.current == null) {
           setShowHistoryIndicators(next);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setUserSettingsLoaded(true);
+      });
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     if (autoAppliedRef.current) return;
-    const boardReady = !savedViews.loading && !loading && (isSupplier || orders.length > 0);
+    const boardReady = !savedViews.loading && userSettingsLoaded && !loading && (isSupplier || orders.length > 0);
     if (!boardReady) return;
     autoAppliedRef.current = true;
-    const defaultView = pickStartupView(savedViews.views, isSupplier);
     if (defaultView) {
       applyViewState(defaultView);
     } else {
       tableSession.restore(null);
     }
     tableSession.enablePersist();
-  }, [savedViews.loading, savedViews.views, loading, orders.length, applyViewState, isSupplier, tableSession]);
+  }, [savedViews.loading, userSettingsLoaded, defaultView, loading, orders.length, applyViewState, isSupplier, tableSession]);
 
   return useMemo(() => ({
     savedViews,
@@ -270,9 +316,11 @@ export function usePurchaseOrderSavedViewState({
     handleSaveAsNew,
     handleUpdateActive,
     handleRenameView,
-    handleSetDefault,
+    handleToggleDefault,
+    defaultViewId,
     handleDeleteView,
     handleToggleShowHistory,
+    handleToggleShowAsTab,
     hasUnsavedChanges,
     getUnsavedViewDiff,
     showHistoryIndicators,
@@ -289,9 +337,11 @@ export function usePurchaseOrderSavedViewState({
     handleSaveAsNew,
     handleUpdateActive,
     handleRenameView,
-    handleSetDefault,
+    handleToggleDefault,
+    defaultViewId,
     handleDeleteView,
     handleToggleShowHistory,
+    handleToggleShowAsTab,
     hasUnsavedChanges,
     getUnsavedViewDiff,
     showHistoryIndicators,

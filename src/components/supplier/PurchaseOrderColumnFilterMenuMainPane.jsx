@@ -59,17 +59,19 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   clearSort,
   isDate,
   isNumber,
-  draft,
+  drafts,
   operatorLabels,
   operatorEntries,
-  handleOperatorSelect,
-  handleValueChange,
-  handleDraftValueChange,
-  handleApplyFilterWithValue,
+  handleRuleOperatorSelect,
+  handleRuleValueChange,
+  handleRuleDraftValueChange,
+  handleApplyFilterWithValueAt,
   uniqueColumnValues,
-  handleSecondaryValueChange,
-  handleApplyFilter,
+  handleRuleSecondaryValueChange,
+  handleApplyAllFilters,
   handleClearFilter,
+  handleAddCondition,
+  handleRemoveCondition,
   colorFilter,
 }) {
   const handleFilterRowMouseEnter = useCallback(() => {
@@ -87,8 +89,9 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
   const showFilter = showSortAndFilter;
   const groupingEnabled = showGrouping && !isRemarks;
   const showColorFilter = Boolean(colorFilter?.supported) && !isRemarks;
-  const isHasComment = isRemarks && draft?.operator === 'hasComment';
-  const remarksTermLength = isRemarks && !isHasComment ? String(draft?.value ?? '').trim().length : 0;
+  const firstDraft = Array.isArray(drafts) ? drafts[0] : null;
+  const isHasComment = isRemarks && firstDraft?.operator === 'hasComment';
+  const remarksTermLength = isRemarks && !isHasComment ? String(firstDraft?.value ?? '').trim().length : 0;
   const searchHint = isHasComment
     ? 'Matches rows with at least one comment.'
     : remarksTermLength > 200
@@ -175,17 +178,19 @@ export default function PurchaseOrderColumnFilterMenuMainPane({
               closeSubmenu={closeSubmenu}
               isDate={isDate}
               isNumber={isNumber}
-              draft={draft}
+              drafts={drafts}
               operatorLabels={operatorLabels}
               operatorEntries={operatorEntries}
-              handleOperatorSelect={handleOperatorSelect}
-              handleValueChange={handleValueChange}
-              handleDraftValueChange={handleDraftValueChange}
-              handleApplyFilterWithValue={handleApplyFilterWithValue}
+              handleRuleOperatorSelect={handleRuleOperatorSelect}
+              handleRuleValueChange={handleRuleValueChange}
+              handleRuleDraftValueChange={handleRuleDraftValueChange}
+              handleApplyFilterWithValueAt={handleApplyFilterWithValueAt}
               uniqueColumnValues={uniqueColumnValues}
-              handleSecondaryValueChange={handleSecondaryValueChange}
-              handleApplyFilter={handleApplyFilter}
+              handleRuleSecondaryValueChange={handleRuleSecondaryValueChange}
+              handleApplyAllFilters={handleApplyAllFilters}
               handleClearFilter={handleClearFilter}
+              handleAddCondition={handleAddCondition}
+              handleRemoveCondition={handleRemoveCondition}
               onMouseEnter={handleFilterRowMouseEnter}
               searchHint={searchHint}
             />

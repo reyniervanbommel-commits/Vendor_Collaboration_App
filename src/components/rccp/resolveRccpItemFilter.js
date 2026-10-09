@@ -48,18 +48,21 @@ export function resolveRccpItemsFromFilter(filterByColumn, chartItems = [], colu
   for (const key of keys) {
     const filter = filterByColumn[key];
     if (!filter) continue;
-    if (filter.operator === 'equals') {
-      const value = String(filter.value ?? '').trim();
-      if (value) return { items: [value], active: true };
-    }
-    if (filter.operator === 'oneOf') {
-      const items = oneOfValues(filter);
-      if (items.length) return { items, active: true };
-    }
-    if (filter.operator === 'contains' || filter.operator === 'startsWith') {
-      const term = String(filter.value ?? '').trim().toLowerCase();
-      if (!term) continue;
-      return { items: [], active: true, containsTerm: term };
+    const rules = Array.isArray(filter.rules) ? filter.rules : [filter];
+    for (const rule of rules) {
+      if (rule.operator === 'equals') {
+        const value = String(rule.value ?? '').trim();
+        if (value) return { items: [value], active: true };
+      }
+      if (rule.operator === 'oneOf') {
+        const items = oneOfValues(rule);
+        if (items.length) return { items, active: true };
+      }
+      if (rule.operator === 'contains' || rule.operator === 'startsWith') {
+        const term = String(rule.value ?? '').trim().toLowerCase();
+        if (!term) continue;
+        return { items: [], active: true, containsTerm: term };
+      }
     }
   }
   return { items: [], active: false };

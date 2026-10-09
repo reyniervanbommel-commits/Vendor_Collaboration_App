@@ -13,7 +13,7 @@ import {
   MessageBarBody,
   makeStyles,
 } from '@fluentui/react-components';
-import { ROLES } from '../../constants/roles';
+import { ROLES, hasEmployeeAccess } from '../../constants/roles';
 
 const useStyles = makeStyles({
   notice: { marginBottom: '16px' },
@@ -22,6 +22,7 @@ const useStyles = makeStyles({
 const ROLE_OPTIONS = [
   { value: ROLES.ADMIN, label: 'Admin — full access to every setting' },
   { value: ROLES.EMPLOYEE, label: 'Employee — access per granted settings permission' },
+  { value: ROLES.SUPPLY_CHAIN, label: 'Supply Chain — employee access + can post remarks for the vendor or internal only' },
   { value: ROLES.SUPPLIER, label: 'Vendor — only the purchase orders of their own vendor account' },
 ];
 
@@ -66,7 +67,7 @@ export default function EditRoleDialog({ user, open, onOpenChange, onSave }) {
     }
   }, [user, role, onSave, onOpenChange]);
 
-  const losesPermissions = user?.role === ROLES.EMPLOYEE && role !== ROLES.EMPLOYEE;
+  const losesPermissions = hasEmployeeAccess(user?.role) && !hasEmployeeAccess(role);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>

@@ -20,7 +20,13 @@ describe('buildPoHeaderHoverModel', () => {
     expect(buildPoHeaderHoverModel({
       column: vendorColumn,
       filter: { operator: 'contains', value: 'Acme' },
-    })).toEqual({ text: 'contains: Acme' });
+    })).toEqual({
+      text: 'contains: Acme',
+      parts: [
+        { type: 'operator', text: 'contains:' },
+        { type: 'value', text: 'Acme' },
+      ],
+    });
   });
 
   it('summarizes oneOf and between filters', () => {

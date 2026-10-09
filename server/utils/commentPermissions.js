@@ -4,7 +4,7 @@
 // Admin heeft ze altijd, zonder rijen. Eén list-query per request, gememoïseerd op req.
 
 const sql = require('mssql');
-const { ROLES } = require('../constants/roles');
+const { ROLES, isAllowedRole, hasEmployeeAccess } = require('../constants/roles');
 const pagePermissions = require('./pagePermissions');
 const { time } = require('./timing');
 
@@ -36,7 +36,7 @@ function isCommentPermissionId(id) {
 }
 
 /**
- * PATCH-whitelist. Employee: instellingen + comments. Vendor: alleen comments.
+ * PATCH-whitelist. Employee/Supply Chain: instellingen + comments. Vendor: alleen comments.
  * Admin: comment-ids weigeren.
  * @returns {{ ok: true, pageNames: string[] } | { ok: false, error: string }}
  */
@@ -54,14 +54,14 @@ function classifyPermissionPatch(role, pageNames) {
   if (role === ROLES.SUPPLIER && names.some((name) => SETTINGS_SET.has(name))) {
     return { ok: false, error: 'Settings permissions can only be granted to employees' };
   }
-  if (role !== ROLES.ADMIN && role !== ROLES.EMPLOYEE && role !== ROLES.SUPPLIER) {
+  if (!isAllowedRole(role)) {
     return { ok: false, error: 'Invalid role' };
   }
   return { ok: true, pageNames: names };
 }
 
 function grantsCommentPermissionsByDefault(role) {
-  return role === ROLES.EMPLOYEE || role === ROLES.SUPPLIER;
+  return hasEmployeeAccess(role) || role === ROLES.SUPPLIER;
 }
 
 async function deleteAllPermissions(pool, userId) {
@@ -102,7 +102,7 @@ async function replaceUserPermissions(pool, userId, pageNames) {
 
 /**
  * Rolwissel (#AB:328 §4a). Admin: alles weg. Vendor: alleen instellingen weg, comments aan.
- * Employee: niets weg, ontbrekende comments aan.
+ * Employee/Supply Chain: niets weg, ontbrekende comments aan.
  */
 async function applyRoleChangePermissions(pool, userId, newRole) {
   if (newRole === ROLES.ADMIN) {
@@ -114,7 +114,7 @@ async function applyRoleChangePermissions(pool, userId, newRole) {
     await ensureCommentPermissions(pool, userId);
     return;
   }
-  if (newRole === ROLES.EMPLOYEE) {
+  if (hasEmployeeAccess(newRole)) {
     await ensureCommentPermissions(pool, userId);
   }
 }

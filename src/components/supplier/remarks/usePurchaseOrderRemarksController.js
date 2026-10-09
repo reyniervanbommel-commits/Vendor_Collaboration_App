@@ -42,7 +42,7 @@ export function usePurchaseOrderRemarksController({
     (change) => {
       if (!row) return;
       updateRow(row, change);
-      if (change.latest === null) refreshSummary();
+      if (change.latest === null || change.refreshAll) refreshSummary();
     },
     [refreshSummary, row, updateRow]
   );

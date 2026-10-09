@@ -5,7 +5,7 @@ import { createCustomTheme } from './theme/customTheme';
 import AuthGuard from './components/auth/AuthGuard';
 import IdleSessionGuard from './components/auth/IdleSessionGuard';
 import LoginPage from './components/auth/LoginPage';
-import { ROLES } from './constants/roles';
+import { ROLES, STAFF_ROLES } from './constants/roles';
 import { AppFooter, AppLayout, DevFeatureChecklist, DevPerfOverlay, KeepAliveDataPages } from './components/layout';
 import { TourProvider } from './components/onboarding';
 import AppToaster from './components/shared/AppToaster';
@@ -92,7 +92,7 @@ function AppInner({ isDarkMode, onToggleTheme }) {
             <Route
               path="/admin"
               element={
-                <AuthGuard allowedRoles={[ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER]}>
+                <AuthGuard allowedRoles={[...STAFF_ROLES, ROLES.SUPPLIER]}>
                   <AppLayout isDarkMode={isDarkMode} onToggleTheme={onToggleTheme}>
                     <AdminPage />
                   </AppLayout>

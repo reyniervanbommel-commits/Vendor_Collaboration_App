@@ -2,7 +2,7 @@ import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'rea
 import { Navigate, useLocation } from 'react-router-dom';
 import { makeStyles, mergeClasses, shorthands, Spinner } from '@fluentui/react-components';
 import { useAuth } from '../../context/AuthContext';
-import { ROLES } from '../../constants/roles';
+import { ROLES, STAFF_ROLES } from '../../constants/roles';
 import { PageActiveContext } from '../../hooks/usePageActive';
 import { recordApiTiming } from '../../utils/perf';
 import PurchaseOrdersTableSkeleton from '../supplier/PurchaseOrdersTableSkeleton';
@@ -26,8 +26,8 @@ const BiPage = lazy(() => import('../bi').then((m) => ({ default: m.BiPage })));
 // aan de oorspronkelijke per-route AuthGuards in App.jsx).
 const PAGES = [
   { path: '/', Component: PurchaseOrdersPage, roles: null },
-  { path: '/rccp', Component: RccpPage, roles: [ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER] },
-  { path: '/bi', Component: BiPage, roles: [ROLES.ADMIN, ROLES.EMPLOYEE, ROLES.SUPPLIER] },
+  { path: '/rccp', Component: RccpPage, roles: [...STAFF_ROLES, ROLES.SUPPLIER] },
+  { path: '/bi', Component: BiPage, roles: [...STAFF_ROLES, ROLES.SUPPLIER] },
 ];
 
 const useStyles = makeStyles({

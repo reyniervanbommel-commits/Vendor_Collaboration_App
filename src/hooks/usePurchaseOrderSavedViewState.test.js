@@ -111,6 +111,25 @@ describe('usePurchaseOrderSavedViewState All orders history toggle', () => {
     expect(result.current.allOrdersShowHistoryIndicators).toBe(false);
     expect(result.current.activeViewId).toBe(7);
   });
+
+  it('zet showAsTab op de view-state zonder live filters te overschrijven', async () => {
+    const { result } = renderSavedViewState();
+
+    await act(async () => {
+      await result.current.handleToggleShowAsTab(
+        { id: 7, viewState: { showHistoryIndicators: true, columns: { visibleColumns: ['vendor'] } } },
+        true,
+      );
+    });
+
+    expect(updateView).toHaveBeenCalledWith(7, {
+      viewState: expect.objectContaining({
+        showAsTab: true,
+        showHistoryIndicators: true,
+        columns: { visibleColumns: ['vendor'] },
+      }),
+    });
+  });
 });
 
 describe('usePurchaseOrderSavedViewState columnSumKeys', () => {

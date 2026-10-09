@@ -25,20 +25,46 @@ function getOperatorLabel(column, operator, datePeriodDisplayModes) {
   return TEXT_FILTER_OPERATORS[operator] || operator;
 }
 
-function formatHoverFilterSummary(column, filter, datePeriodDisplayModes) {
-  if (!isColumnFilterActive(column, filter, datePeriodDisplayModes)) return '';
+function partsForOneRule(column, filter, datePeriodDisplayModes) {
   if (filter.operator === COLOR_FILTER_OPERATOR) {
     const count = Array.isArray(filter.colors) ? filter.colors.length : 0;
-    return `color is: ${count} ${count === 1 ? 'color' : 'colors'}`;
+    return [
+      { type: 'operator', text: 'color is:' },
+      { type: 'value', text: `${count} ${count === 1 ? 'color' : 'colors'}` },
+    ];
   }
   const operatorLabel = getOperatorLabel(column, filter.operator, datePeriodDisplayModes);
   if (filter.operator === 'between') {
-    return `${operatorLabel}: ${stringifyFilterValue(filter.value)} and ${stringifyFilterValue(filter.secondaryValue)}`;
+    return [
+      { type: 'operator', text: operatorLabel ? `${operatorLabel}:` : '' },
+      { type: 'value', text: stringifyFilterValue(filter.value) },
+      { type: 'and', text: 'and' },
+      { type: 'value', text: stringifyFilterValue(filter.secondaryValue) },
+    ].filter((part) => part.text);
   }
   const value = stringifyFilterValue(filter.value).trim();
-  if (!operatorLabel) return value;
-  if (!value) return operatorLabel;
-  return `${operatorLabel}: ${value}`;
+  return [
+    operatorLabel ? { type: 'operator', text: value ? `${operatorLabel}:` : operatorLabel } : null,
+    value ? { type: 'value', text: value } : null,
+  ].filter(Boolean);
+}
+
+function formatHoverFilterParts(column, filter, datePeriodDisplayModes) {
+  if (!isColumnFilterActive(column, filter, datePeriodDisplayModes)) return [];
+  const rules = Array.isArray(filter?.rules) ? filter.rules : [];
+  const valueRules = rules.length
+    ? rules
+    : (filter?.operator && filter.operator !== COLOR_FILTER_OPERATOR ? [filter] : []);
+  const parts = [];
+  valueRules.forEach((rule, index) => {
+    if (index > 0) parts.push({ type: 'and', text: 'and' });
+    parts.push(...partsForOneRule(column, rule, datePeriodDisplayModes));
+  });
+  if (Array.isArray(filter?.colors) && filter.colors.length) {
+    if (parts.length) parts.push({ type: 'and', text: 'and' });
+    parts.push(...partsForOneRule(column, { operator: COLOR_FILTER_OPERATOR, colors: filter.colors }, datePeriodDisplayModes));
+  }
+  return parts;
 }
 
 function lineColumnLabel(lineColumns, columnKey) {
@@ -80,7 +106,7 @@ export function getPoHeaderConnectionTargets({
  * Builds the PO header hover card model from the active column filter.
  * Returns null when the column has no filter. No row scans and no extra IO.
  *
- * @returns {{ text: string } | null}
+ * @returns {{ text: string, parts: Array<{ type: string, text: string }> } | null}
  */
 export function buildPoHeaderHoverModel({
   column,
@@ -91,6 +117,7 @@ export function buildPoHeaderHoverModel({
   const datePeriodDisplayModes = column.key && datePeriodDisplayMode
     ? { [column.key]: datePeriodDisplayMode }
     : {};
-  const text = formatHoverFilterSummary(column, filter, datePeriodDisplayModes);
-  return text ? { text } : null;
+  const parts = formatHoverFilterParts(column, filter, datePeriodDisplayModes);
+  const text = parts.map((part) => part.text).join(' ');
+  return text ? { text, parts } : null;
 }

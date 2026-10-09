@@ -137,3 +137,36 @@ describe('hasRemarks', () => {
     });
   });
 });
+
+describe('zichtbaarheid', () => {
+  const lastQuery = () => mocks.queries.at(-1);
+
+  it('searchRemarks filtert employee op internal', async () => {
+    await searchRemarks('purchase-orders', 'abc', employee);
+    expect(lastQuery().inputs.visibility).toBe('internal');
+    expect(lastQuery().text).toContain('r.visibility = @visibility');
+  });
+
+  it('searchRemarks filtert supplier op vendor', async () => {
+    settingsService.getAsync = vi.fn().mockResolvedValue('vendorAccount');
+    rememberSupplierVisibleRowKeys('V000583', 'vendorAccount', [{ partitionKey: 'whsl', recordKey: 'PO-1' }]);
+    await searchRemarks('purchase-orders', 'abc', supplier);
+    const search = mocks.queries.find(({ text }) => text.includes('CHARINDEX'));
+    expect(search.inputs.visibility).toBe('vendor');
+    expect(search.text).toContain('r.visibility = @visibility');
+  });
+
+  it.each([
+    ['admin', { id: 1, role: 'admin' }],
+    ['supply_chain', { id: 3, role: 'supply_chain' }],
+  ])('hasRemarks zonder filter voor %s', async (_label, actor) => {
+    await hasRemarks('purchase-orders', actor);
+    expect(lastQuery().text).not.toContain('@visibility');
+    expect(lastQuery().inputs).not.toHaveProperty('visibility');
+  });
+
+  it('hasRemarks filtert employee op internal', async () => {
+    await hasRemarks('purchase-orders', employee);
+    expect(lastQuery().inputs.visibility).toBe('internal');
+  });
+});

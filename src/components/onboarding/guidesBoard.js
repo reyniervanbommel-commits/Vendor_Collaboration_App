@@ -34,6 +34,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideAddColumn',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -82,6 +83,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideFormula',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -128,6 +130,7 @@ export const BOARD_GUIDES = [
           ['(columnKey)', 'value of a column'],
           ['IF(test; then; else)', 'condition'],
           ['a AND b · a OR b', 'combine conditions'],
+          ['ISBLANK(value)', 'nothing filled in'],
           ['ROUND(n; decimals)', 'round a number'],
           ['ABS(n)', 'absolute value'],
           ['MIN(a; b) · MAX(a; b)', 'smallest · largest'],
@@ -168,6 +171,7 @@ export const BOARD_GUIDES = [
   {
     id: 'guideDatePeriod',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,

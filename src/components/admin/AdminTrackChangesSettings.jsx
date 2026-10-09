@@ -48,6 +48,7 @@ const useStyles = makeStyles({
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin' },
   { value: 'employee', label: 'Employee' },
+  { value: 'supply_chain', label: 'Supply Chain' },
   { value: 'supplier', label: 'Supplier' },
 ];
 
@@ -63,7 +64,7 @@ export default function AdminTrackChangesSettings() {
   const { config, loading, error, save } = useTrackChanges({ autoLoad: true });
 
   const [mode, setMode] = useState('session');
-  const [sessionRoles, setSessionRoles] = useState(['admin', 'employee']);
+  const [sessionRoles, setSessionRoles] = useState(['admin', 'employee', 'supply_chain']);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [columns, setColumns] = useState([]);
   const [columnsLoading, setColumnsLoading] = useState(true);

@@ -5,6 +5,7 @@ export const INSIGHT_GUIDES = [
   {
     id: 'guideConditionalFormatting',
     kind: 'guide',
+    group: 'columns',
     version: 1,
     route: '/',
     roles: STAFF,
@@ -93,6 +94,7 @@ export const INSIGHT_GUIDES = [
   {
     id: 'guideBoardInsights',
     kind: 'guide',
+    group: 'table',
     version: 1,
     route: '/',
     icon: 'kpi',

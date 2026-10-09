@@ -333,7 +333,7 @@ describe('PurchaseOrderColumnFilterMenu — value picker wiring', () => {
       filter: { operator: 'oneOf', value: ['Acme'] },
     });
     openColumnMenu();
-    expect(await screen.findByText('Acme')).toBeTruthy();
+    expect((await screen.findAllByText('Acme')).length).toBeGreaterThan(0);
     expect(await screen.findByRole('button', { name: /Remove Acme/i })).toBeTruthy();
   });
 

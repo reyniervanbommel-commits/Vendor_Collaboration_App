@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { apiRequest } from '../utils/api';
+import { STAFF_ROLES } from '../constants/roles';
 
-const ANALYTICS_ROLES = new Set(['admin', 'employee']);
+const ANALYTICS_ROLES = new Set(STAFF_ROLES);
 
 function getOrCreateSessionId() {
   const storageKey = 'analytics.session.id';

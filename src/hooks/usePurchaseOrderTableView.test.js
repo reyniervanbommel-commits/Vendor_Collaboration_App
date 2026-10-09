@@ -118,3 +118,44 @@ describe('usePurchaseOrderTableView session hydrate', () => {
     expect(result.current.processedItems[0].values.status).toBe('Open');
   });
 });
+
+describe('usePurchaseOrderTableView meerdere voorwaarden', () => {
+  const columns = [{ key: 'status', dataType: 'text' }];
+  const items = [
+    { values: { status: 'Open' } },
+    { values: { status: 'Opened' } },
+    { values: { status: 'Closed' } },
+  ];
+
+  it('voegt een cel-filter toe aan een bestaand kolomfilter', () => {
+    const { result } = renderHook(() => usePurchaseOrderTableView({ items, columns }));
+
+    act(() => {
+      result.current.applyColumnFilter('status', { operator: 'startsWith', value: 'O', secondaryValue: '' });
+    });
+    act(() => {
+      result.current.applyFilterFromCellValue('status', 'Open');
+    });
+
+    expect(result.current.filterByColumn.status.rules).toEqual([
+      { operator: 'startsWith', value: 'O', secondaryValue: '' },
+      { operator: 'equals', value: 'Open', secondaryValue: '' },
+    ]);
+    expect(result.current.processedItems.map((item) => item.values.status)).toEqual(['Open']);
+  });
+
+  it('past AND toe op een regels-envelope', () => {
+    const { result } = renderHook(() => usePurchaseOrderTableView({ items, columns }));
+
+    act(() => {
+      result.current.applyColumnFilter('status', {
+        rules: [
+          { operator: 'startsWith', value: 'O', secondaryValue: '' },
+          { operator: 'notContains', value: 'ed', secondaryValue: '' },
+        ],
+      });
+    });
+
+    expect(result.current.processedItems.map((item) => item.values.status)).toEqual(['Open']);
+  });
+});

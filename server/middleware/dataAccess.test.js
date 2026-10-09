@@ -28,6 +28,11 @@ describe('restrictSupplierDataAccess', () => {
     expect(next.calls).toHaveLength(1);
   });
 
+  it('laat supply_chain altijd door, net als employee', () => {
+    const { next } = callMiddleware({ user: { role: 'supply_chain' }, path: '/anything', method: 'DELETE' });
+    expect(next.calls).toHaveLength(1);
+  });
+
   it('laat supplier GET op /purchase-orders door', () => {
     const { next } = callMiddleware({ user: { role: 'supplier' }, path: '/purchase-orders', method: 'GET' });
     expect(next.calls).toHaveLength(1);
