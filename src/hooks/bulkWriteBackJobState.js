@@ -6,8 +6,17 @@ export const JOB_SUCCESS = 'success';
 export const LARGE_BULK_SELECTION = 25;
 export const SUCCESS_HOLD_MS = 5000;
 
-export function buildCorrectSummaryMessage({ updated, skipped, failedCount }) {
-  return `Bulk edit finished. Updated: ${updated}. Skipped: ${skipped}. Failed: ${failedCount}.`;
+export function countAttentionRows(failedRows) {
+  const list = Array.isArray(failedRows) ? failedRows : [];
+  const partialCount = list.filter((row) => row?.partial).length;
+  return { partialCount, failedCount: list.length - partialCount };
+}
+
+export function buildCorrectSummaryMessage({
+  updated, skipped, failedCount, partialCount = 0,
+}) {
+  const partialPart = partialCount > 0 ? ` Partially updated: ${partialCount}.` : '';
+  return `Bulk edit finished. Updated: ${updated}.${partialPart} Skipped: ${skipped}. Failed: ${failedCount}.`;
 }
 
 export function orderKeysFromCandidates(candidates) {
@@ -70,9 +79,11 @@ export function jobBadgeLabel(job) {
   if (job.status === JOB_SUCCESS) {
     return 'Write-back complete';
   }
-  const failedCount = job.failedRows?.length || 0;
-  if (job.status === JOB_NEEDS_ATTENTION && failedCount) {
-    return failedCount === 1 ? 'Write-back: 1 failed' : `Write-back: ${failedCount} failed`;
+  const attentionCount = job.failedRows?.length || 0;
+  if (job.status === JOB_NEEDS_ATTENTION && attentionCount) {
+    return attentionCount === 1
+      ? 'Write-back: 1 needs attention'
+      : `Write-back: ${attentionCount} need attention`;
   }
   return '';
 }
