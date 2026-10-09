@@ -44,4 +44,16 @@ describe('PurchaseOrderWriteBackCell', () => {
     });
     expect(onCorrect).toHaveBeenCalled();
   });
+  it('herstelt de oude waarde zonder fout als de bevestiging geannuleerd wordt', async () => {
+    const onCorrect = vi.fn().mockResolvedValue({ cancelled: true });
+    renderCell({ onCorrect });
+    const input = screen.getByLabelText('Color (write back to D365)');
+    fireEvent.change(input, { target: { value: 'Green' } });
+    fireEvent.blur(input);
+    await waitFor(() => {
+      expect(input.value).toBe('Red');
+    });
+    expect(onCorrect).toHaveBeenCalled();
+    expect(screen.queryByText(/failed/i)).toBeNull();
+  });
 });

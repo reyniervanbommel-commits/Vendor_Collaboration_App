@@ -367,6 +367,11 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
     let pending;
     act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
     act(() => result.current.dialogActions.onChooseBulk());
+    await waitFor(() => expect(result.current.mixedConfirm.state.open).toBe(true));
+    expect(result.current.dialogState.open).toBe(false);
+    expect(result.current.mixedConfirm.state.message)
+      .toBe('1 of 3 selected orders have different line values. All their lines will be set to "Green" in D365.');
+    act(() => result.current.mixedConfirm.actions.onConfirm());
     const returned = await act(async () => pending);
 
     expect(returned).toEqual({ background: true });
@@ -388,6 +393,49 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
     await act(async () => { await pending; });
 
     expect(correctAllLines).not.toHaveBeenCalled();
+  });
+
+  it('vraagt bevestiging bij één order met afwijkende regelwaarden; Cancel stuurt niets', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO3'] });
+    const payload = { ...PUSHED_PAYLOAD, orderNumber: 'PO3', value: 'Red' };
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(payload); });
+    await waitFor(() => expect(result.current.mixedConfirm.state.open).toBe(true));
+    expect(result.current.mixedConfirm.state.message)
+      .toBe('Lines on order PO3 currently have 2 different values ("Blue", "Green"). All lines will be set to "Red" in D365.');
+
+    act(() => result.current.mixedConfirm.actions.onCancel());
+    const returned = await act(async () => pending);
+
+    expect(returned).toEqual({ cancelled: true });
+    expect(result.current.mixedConfirm.state.open).toBe(false);
+    expect(correctAllLines).not.toHaveBeenCalled();
+    expect(result.current.job).toBeNull();
+  });
+
+  it('"Update all lines" start de achtergrondjob voor de order', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO3'] });
+    const payload = { ...PUSHED_PAYLOAD, orderNumber: 'PO3', value: 'Red' };
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(payload); });
+    await waitFor(() => expect(result.current.mixedConfirm.state.open).toBe(true));
+    act(() => result.current.mixedConfirm.actions.onConfirm());
+    const returned = await act(async () => pending);
+
+    expect(returned).toEqual({ background: true });
+    await waitFor(() => expect(correctAllLines).toHaveBeenCalledWith(expect.objectContaining({ orderNumber: 'PO3', value: 'Red' })));
+  });
+
+  it('geen bevestiging als de order één unieke regelwaarde heeft', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1'] });
+
+    const returned = await act(async () => result.current.handleCorrectAllLines(PUSHED_PAYLOAD));
+
+    expect(returned).toEqual({ background: true });
+    expect(result.current.mixedConfirm.state.open).toBe(false);
+    await waitFor(() => expect(correctAllLines).toHaveBeenCalledTimes(1));
   });
 
   it('één PO zonder multi-select start ook een achtergrondjob', async () => {

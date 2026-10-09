@@ -135,6 +135,11 @@ export default function PurchaseOrderWriteBackCell({
     setError('');
     try {
       const result = await onCorrect({ value: resolvedValue, basedOnValue: value });
+      if (result?.cancelled) {
+        setLocal(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
+        setStatus('idle');
+        return;
+      }
       setLocal(toInputValue(resolvedValue, column.dataType, treatAsDate));
       if (result?.background) {
         setStatus('idle');

@@ -2,6 +2,7 @@ import React from 'react';
 import PurchaseOrderFormulaColumnDialog from './PurchaseOrderFormulaColumnDialog';
 import PurchaseOrderDatePeriodColumnDialog from './PurchaseOrderDatePeriodColumnDialog';
 import PurchaseOrderBulkEditDialog from './PurchaseOrderBulkEditDialog';
+import MixedLineValuesConfirmDialog from './MixedLineValuesConfirmDialog';
 
 export default function PurchaseOrdersPageDialogs({ formula, datePeriod, bulkEdit }) {
   return (
@@ -23,6 +24,7 @@ export default function PurchaseOrdersPageDialogs({ formula, datePeriod, bulkEdi
         dateSourceColumns={datePeriod.dateSourceColumns}
       />
       <PurchaseOrderBulkEditDialog dialogState={bulkEdit.dialogState} dialogActions={bulkEdit.dialogActions} />
+      <MixedLineValuesConfirmDialog state={bulkEdit.mixedConfirm?.state} actions={bulkEdit.mixedConfirm?.actions} />
     </>
   );
 }
