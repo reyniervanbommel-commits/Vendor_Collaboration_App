@@ -383,6 +383,23 @@ describe('usePurchaseOrderBulkEdit — gepushte header write-back', () => {
     await waitFor(() => expect(result.current.job?.status).toBe('success'));
   });
 
+  it('"bulk" met afwijkende regelwaarden: Cancel in de bevestiging stuurt niets en start geen job', async () => {
+    const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1', 'USMF|PO2', 'USMF|PO3'] });
+
+    let pending;
+    act(() => { pending = result.current.handleCorrectAllLines(PUSHED_PAYLOAD); });
+    act(() => result.current.dialogActions.onChooseBulk());
+    await waitFor(() => expect(result.current.mixedConfirm.state.open).toBe(true));
+
+    act(() => result.current.mixedConfirm.actions.onCancel());
+    const returned = await act(async () => pending);
+
+    expect(returned).toEqual({ cancelled: true });
+    expect(correctAllLines).not.toHaveBeenCalled();
+    expect(result.current.job).toBeNull();
+    expect(result.current.dialogState.open).toBe(false);
+  });
+
   it('"bulk" slaat een order over waarvan de unieke linked waarde al gelijk is', async () => {
     const { result, correctAllLines } = setupLinked({ selectedKeys: ['USMF|PO1', 'USMF|PO2'] });
     const payload = { ...PUSHED_PAYLOAD, value: 'Red' };
