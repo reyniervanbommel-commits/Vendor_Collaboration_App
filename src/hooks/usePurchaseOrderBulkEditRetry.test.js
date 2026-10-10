@@ -64,6 +64,28 @@ describe('usePurchaseOrderBulkEditRetry', () => {
     ]);
   });
 
+  it('partial-rij die opnieuw faalt (err.partial=false) blijft partial met nieuwe errorMessage', async () => {
+    const err = Object.assign(new Error('Line 20: still locked'), { partial: false });
+    const runSingleUpdate = vi.fn().mockRejectedValue(err);
+    const { result, getFailedRows } = setup([{ ...ROW_PO1, partial: true }], runSingleUpdate);
+
+    await act(async () => { await result.current.retryRow('USMF|PO1'); });
+
+    expect(getFailedRows()).toEqual([
+      expect.objectContaining({ key: 'USMF|PO1', partial: true, errorMessage: 'Line 20: still locked' }),
+    ]);
+  });
+
+  it('niet-partial rij die opnieuw faalt blijft partial=false', async () => {
+    const err = Object.assign(new Error('still locked'), { partial: false });
+    const runSingleUpdate = vi.fn().mockRejectedValue(err);
+    const { result, getFailedRows } = setup([{ ...ROW_PO1, partial: false }], runSingleUpdate);
+
+    await act(async () => { await result.current.retryRow('USMF|PO1'); });
+
+    expect(getFailedRows()[0].partial).toBe(false);
+  });
+
   it('retry van een correctAll-rij roept runSingleUpdate met correctAll aan', async () => {
     const runSingleUpdate = vi.fn().mockResolvedValue();
     const { result } = setup([{

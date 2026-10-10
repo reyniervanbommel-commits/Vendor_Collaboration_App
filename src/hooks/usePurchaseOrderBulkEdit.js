@@ -2,62 +2,16 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useBulkWriteBackJob } from '../context/BulkWriteBackJobContext';
 import { LARGE_BULK_SELECTION, isJobRunning } from './bulkWriteBackJobState';
 import { resolveOrderSelectionKey, rowSelectionKey } from './usePurchaseOrderRowSelection';
-import { valuesEqual } from './purchaseOrderBulkEditRun';
 import { usePurchaseOrderCorrectAllLines } from './usePurchaseOrderCorrectAllLines';
-
-const EMPTY_DIALOG_STATE = {
-  open: false,
-  mode: 'confirm',
-  columnLabel: '',
-  selectedCount: 0,
-  processedCount: 0,
-  busy: false,
-  summaryMessage: '',
-  failedRows: [],
-  updated: 0,
-  skipped: 0,
-};
-
-function isHeaderCellUpdate(payload) {
-  return payload?.lineNumber === null || payload?.lineNumber === undefined;
-}
-
-function linkedLineValuesEqual(row, headerColumnKey, value) {
-  const vals = row?.linkedLineValues?.[headerColumnKey];
-  if (!Array.isArray(vals) || vals.length !== 1) return false;
-  return valuesEqual(vals[0], value);
-}
-
-function shouldSkipBulkRow(mode, row, payload) {
-  if (mode === 'correctAll') {
-    return linkedLineValuesEqual(row, payload.headerColumnKey, payload.value);
-  }
-  return valuesEqual(row?.values?.[payload.columnKey], payload.value);
-}
-
-function createBulkErrorMessage({ updated, skipped, notTried }) {
-  return `Bulk edit stopped due to an error. Updated: ${updated}. Skipped (already equal): ${skipped}. Not attempted (after error): ${notTried}.`;
-}
-
-function findVisibleOrder(visibleOrders, payload) {
-  const match = (Array.isArray(visibleOrders) ? visibleOrders : []).find((order) => (
-    order.dataAreaId === payload.dataAreaId && order.orderNumber === payload.orderNumber
-  ));
-  return match || { dataAreaId: payload.dataAreaId, orderNumber: payload.orderNumber };
-}
-
-function startBackgroundCorrectJob({
-  startCorrectJob, closeDialog, columnLabelByKey, runSingleUpdate, payload, rows, mode,
-}) {
-  const columnKey = payload.columnKey || payload.headerColumnKey;
-  const columnLabel = columnLabelByKey.get(columnKey) || columnKey || 'this column';
-  const started = startCorrectJob({ payload, rows, columnLabel, runSingleUpdate, mode });
-  closeDialog();
-  if (!started) {
-    throw new Error('A write-back is already running. Wait until it finishes.');
-  }
-  return { background: true };
-}
+import {
+  EMPTY_DIALOG_STATE,
+  createBulkErrorMessage,
+  findVisibleOrder,
+  isHeaderCellUpdate,
+  shouldSkipBulkRow,
+  startBackgroundCorrectJob,
+} from './purchaseOrderBulkEditHelpers';
+import { useMixedLineValuesConfirm } from './useMixedLineValuesConfirm';
 
 /**
  * Regelt bulk-bewerken van header-cellen voor zichtbare geselecteerde orderrijen.
@@ -81,6 +35,7 @@ export function usePurchaseOrderBulkEdit({
   const decisionResolverRef = useRef(null);
   const [dialogState, setDialogState] = useState(EMPTY_DIALOG_STATE);
   const { startCorrectJob, job } = useBulkWriteBackJob();
+  const { confirmMixedLineValues, mixedConfirmState, mixedConfirmActions } = useMixedLineValuesConfirm();
 
   const columnLabelByKey = useMemo(
     () => new Map((Array.isArray(visibleHeaderColumns) ? visibleHeaderColumns : []).map((column) => [column.key, column.label || column.key])),
@@ -200,40 +155,43 @@ export function usePurchaseOrderBulkEdit({
     const backgroundArgs = {
       startCorrectJob, closeDialog, columnLabelByKey, runSingleUpdate, payload, mode,
     };
+    // Header-fan-out: eerst bevestigen als regels afwijkende waarden hebben (nooit twee dialogen tegelijk).
+    const startCorrectAll = async (rows) => {
+      closeDialog();
+      const confirmed = await confirmMixedLineValues({
+        rows,
+        headerColumnKey: payload.headerColumnKey || payload.columnKey,
+        value: payload.value,
+      });
+      if (!confirmed) return { cancelled: true };
+      return startBackgroundCorrectJob({ ...backgroundArgs, rows });
+    };
+    const activeOrderRows = () => [findVisibleOrder(visibleOrders, payload)];
+
     if (visibleSelectionCount <= 1 || !selectedVisibleKeys.has(activeOrderKey)) {
-      if (mode === 'correctAll') {
-        return startBackgroundCorrectJob({
-          ...backgroundArgs,
-          rows: [findVisibleOrder(visibleOrders, payload)],
-        });
-      }
+      if (mode === 'correctAll') return startCorrectAll(activeOrderRows());
       await runSingleUpdate(mode, payload);
-      return;
+      return undefined;
     }
 
     const columnKey = payload.columnKey || payload.headerColumnKey;
     const columnLabel = columnLabelByKey.get(columnKey) || columnKey || 'this column';
     const decision = await showDecisionDialog({ columnLabel, selectedCount: visibleSelectionCount });
     if (decision !== 'bulk') {
-      if (mode === 'correctAll') {
-        return startBackgroundCorrectJob({
-          ...backgroundArgs,
-          rows: [findVisibleOrder(visibleOrders, payload)],
-        });
-      }
+      if (mode === 'correctAll') return startCorrectAll(activeOrderRows());
       await runSingleUpdate(mode, payload);
-      return;
+      return undefined;
     }
-    if (mode === 'correct' || mode === 'correctAll') {
-      return startBackgroundCorrectJob({
-        ...backgroundArgs,
-        rows: selectedVisibleOrders,
-      });
+    if (mode === 'correctAll') return startCorrectAll(selectedVisibleOrders);
+    if (mode === 'correct') {
+      return startBackgroundCorrectJob({ ...backgroundArgs, rows: selectedVisibleOrders });
     }
     await runBulkUpdate({ mode, payload, rows: selectedVisibleOrders });
+    return undefined;
   }, [
     closeDialog,
     columnLabelByKey,
+    confirmMixedLineValues,
     runBulkUpdate,
     runSingleUpdate,
     selectedVisibleKeys,
@@ -278,6 +236,7 @@ export function usePurchaseOrderBulkEdit({
     handleCorrectField,
     handleCorrectAllLines,
     dialogState: exposedDialogState,
+    mixedConfirm: { state: mixedConfirmState, actions: mixedConfirmActions },
     dialogActions: {
       onOpenChange: handleDialogOpenChange,
       onChooseSingleCell: () => resolveDialogDecision('single'),
@@ -291,6 +250,8 @@ export function usePurchaseOrderBulkEdit({
     handleCorrectField,
     handleDialogOpenChange,
     handleSaveValue,
+    mixedConfirmActions,
+    mixedConfirmState,
     resolveDialogDecision,
   ]);
 }

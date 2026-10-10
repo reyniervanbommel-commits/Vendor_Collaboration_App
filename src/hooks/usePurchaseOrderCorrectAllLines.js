@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { apiRequest } from '../utils/api';
+import { formatCorrectAllFailure } from '../utils/lineWriteBackFailureText';
 import { withHistoryFlag } from '../utils/withHistoryFlag';
 
 /**
@@ -31,8 +32,13 @@ export function usePurchaseOrderCorrectAllLines({
         : line
     ));
     if (response.failed > 0) {
-      const err = new Error(`Write-back failed on ${response.failed} of ${response.attempted} lines.`);
+      const updatedCount = Number(response.updated) || 0;
+      const err = new Error(formatCorrectAllFailure(response));
       err.remainingDisplayValue = remaining[0] ?? '';
+      err.failures = Array.isArray(response.failures) ? response.failures : [];
+      err.updated = updatedCount;
+      err.attempted = Number(response.attempted) || 0;
+      err.partial = updatedCount > 0;
       throw err;
     }
     return response;

@@ -221,6 +221,44 @@ describe('POST /:tableKey/correct — D365-foutdetail (#AB:295)', () => {
   });
 });
 
+describe('POST /:tableKey/correct-all-details — foutdetail in productie', () => {
+  const originalCorrectAll = dataService.correctAllDetailFields;
+  const originalAppEnv = process.env.APP_ENV;
+
+  afterEach(() => {
+    dataService.correctAllDetailFields = originalCorrectAll;
+    process.env.APP_ENV = originalAppEnv;
+  });
+
+  it('geeft err.message door met err.status, ook als errorHandler in productie draait', async () => {
+    process.env.APP_ENV = 'production';
+    const err = Object.assign(new Error('Header write-back requires a writable line column'), { status: 400 });
+    dataService.correctAllDetailFields = vi.fn().mockRejectedValue(err);
+
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.user = { id: 1, role: 'employee' }; next(); });
+    app.use('/api/data', dataRouter);
+    app.use(errorHandler);
+
+    const server = await new Promise((resolve) => {
+      const instance = app.listen(0, () => resolve(instance));
+    });
+    try {
+      const res = await fetch(`http://127.0.0.1:${server.address().port}/api/data/purchase-orders/correct-all-details`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columnId: 1, partitionKey: 'WHSL', recordKey: 'PO-1', value: 'x' }),
+      });
+      const body = await res.json();
+      expect(res.status).toBe(400);
+      expect(body.error).toBe('Header write-back requires a writable line column');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
 describe('POST /:tableKey/remarks — zichtbaarheid', () => {
   const post = (baseUrl, body) => fetch(`${baseUrl}/api/data/purchase-orders/remarks`, {
     method: 'POST',

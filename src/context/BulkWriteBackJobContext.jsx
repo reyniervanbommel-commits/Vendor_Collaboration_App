@@ -16,6 +16,7 @@ import {
   JOB_SUCCESS,
   SUCCESS_HOLD_MS,
   buildCorrectSummaryMessage,
+  countAttentionRows,
   isJobRunning,
   jobCandidateCurrentValue,
   jobLockColumnKeys,
@@ -137,7 +138,7 @@ export function BulkWriteBackJobProvider({ children }) {
               processed: prev.processed + 1,
               updated: prev.updated + (outcome === 'updated' ? 1 : 0),
               skipped: prev.skipped + (outcome === 'skipped' ? 1 : 0),
-              doneKeys: outcome === 'failed' ? prev.doneKeys : [...prev.doneKeys, key],
+              doneKeys: outcome === 'failed' || outcome === 'partial' ? prev.doneKeys : [...prev.doneKeys, key],
               failedRows: failedRow ? [...prev.failedRows, failedRow] : prev.failedRows,
             };
           });
@@ -148,7 +149,7 @@ export function BulkWriteBackJobProvider({ children }) {
       const summaryMessage = buildCorrectSummaryMessage({
         updated,
         skipped,
-        failedCount: failedRows.length,
+        ...countAttentionRows(failedRows),
       });
       if (failedRows.length === 0) {
         showSuccess(jobRef.current || { updated, skipped }, summaryMessage);
@@ -175,7 +176,7 @@ export function BulkWriteBackJobProvider({ children }) {
       showSuccess(prev, buildCorrectSummaryMessage({
         updated: prev.updated,
         skipped: prev.skipped,
-        failedCount: 0,
+        ...countAttentionRows([]),
       }));
       return;
     }
@@ -187,7 +188,7 @@ export function BulkWriteBackJobProvider({ children }) {
         summaryMessage: buildCorrectSummaryMessage({
           updated: current.updated,
           skipped: current.skipped,
-          failedCount: failedRows.length,
+          ...countAttentionRows(failedRows),
         }),
       };
     });

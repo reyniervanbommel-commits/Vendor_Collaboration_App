@@ -63,6 +63,7 @@ const {
   parseCollapsedRollupRows,
 } = require('../utils/collapsedDetailRollup');
 const { valuesEqualForConcurrency } = require('../utils/odataValueEquals');
+const { summarizeD365WriteError } = require('../utils/d365ErrorSummary');
 const {
   planFanout,
   remainingValuesAfterPass,
@@ -5342,7 +5343,8 @@ async function correctAllDetailFields(
         if (isBusinessWriteBackError(err)) {
           failures.push({
             detailKey: line.detailKey,
-            message: err.message || GENERIC_DETAIL_WRITEBACK_FAIL,
+            message: summarizeD365WriteError(err.message) || GENERIC_DETAIL_WRITEBACK_FAIL,
+            rawMessage: err.message,
           });
           continue;
         }

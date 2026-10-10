@@ -6,6 +6,7 @@ import {
   JOB_SUCCESS,
   buildCorrectSummaryMessage,
   cellLockStatus,
+  countAttentionRows,
   jobBadgeLabel,
   jobCandidateCurrentValue,
   jobLockColumnKeys,
@@ -92,11 +93,15 @@ describe('jobBadgeLabel', () => {
     expect(jobBadgeLabel(job)).toBe('Write-back 1/3');
   });
 
-  it('toont failed-teller als aandacht nodig is', () => {
+  it('toont aandacht-teller als er mislukte of partial rijen zijn', () => {
     expect(jobBadgeLabel({
       status: JOB_NEEDS_ATTENTION,
-      failedRows: [{ key: 'a' }, { key: 'b' }],
-    })).toBe('Write-back: 2 failed');
+      failedRows: [{ key: 'a' }, { key: 'b', partial: true }],
+    })).toBe('Write-back: 2 need attention');
+    expect(jobBadgeLabel({
+      status: JOB_NEEDS_ATTENTION,
+      failedRows: [{ key: 'a', partial: true }],
+    })).toBe('Write-back: 1 needs attention');
   });
 
   it('toont gelukt in dezelfde badge-slot', () => {
@@ -112,5 +117,20 @@ describe('helpers', () => {
     expect(buildCorrectSummaryMessage({ updated: 2, skipped: 0, failedCount: 1 }))
       .toBe('Bulk edit finished. Updated: 2. Skipped: 0. Failed: 1.');
     expect(LARGE_BULK_SELECTION).toBe(25);
+  });
+});
+
+describe('partial-telling', () => {
+  it('splitst failedRows in partial en failed', () => {
+    expect(countAttentionRows([{ partial: true }, { partial: false }, {}]))
+      .toEqual({ partialCount: 1, failedCount: 2 });
+    expect(countAttentionRows(undefined)).toEqual({ partialCount: 0, failedCount: 0 });
+  });
+
+  it('toont "Partially updated" alleen als er partial rijen zijn', () => {
+    expect(buildCorrectSummaryMessage({ updated: 0, skipped: 0, failedCount: 0, partialCount: 1 }))
+      .toBe('Bulk edit finished. Updated: 0. Partially updated: 1. Skipped: 0. Failed: 0.');
+    expect(buildCorrectSummaryMessage({ updated: 2, skipped: 0, failedCount: 1 }))
+      .toBe('Bulk edit finished. Updated: 2. Skipped: 0. Failed: 1.');
   });
 });

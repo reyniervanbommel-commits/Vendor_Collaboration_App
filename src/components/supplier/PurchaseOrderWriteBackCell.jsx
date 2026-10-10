@@ -135,6 +135,11 @@ export default function PurchaseOrderWriteBackCell({
     setError('');
     try {
       const result = await onCorrect({ value: resolvedValue, basedOnValue: value });
+      if (result?.cancelled) {
+        setLocal(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
+        setStatus('idle');
+        return;
+      }
       setLocal(toInputValue(resolvedValue, column.dataType, treatAsDate));
       if (result?.background) {
         setStatus('idle');
@@ -167,7 +172,10 @@ export default function PurchaseOrderWriteBackCell({
   }, [commit]);
 
   const onKeyDown = useCallback((e) => {
-    if (e.key === 'Enter') e.currentTarget.blur();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.currentTarget.blur();
+    }
     if (e.key === 'Escape') {
       setLocal(toInputValue(value, column.dataType, isDateLikeColumn(column, value)));
       e.currentTarget.blur();

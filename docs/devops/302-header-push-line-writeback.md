@@ -34,19 +34,19 @@
 | BRD/FRD/TD + team-review 🟢 | `docs/specs/2026-09-02-header-push-line-writeback-design.md` |
 | Implementatieplan (taken 1–7, TDD) | `.cursor/plans/dev_2026-09-02-header-push-line-writeback.plan.md` |
 
-Nog geen applicatiecode. `review-plan-for-devops` is 🟢; blockers (`remainingValues` van de server, hook alleen in `PurchaseOrdersPageContent.jsx`, 8-prop header-contract) zijn in plan en spec doorgevoerd.
+Gebouwd en gemerged (PR #112, #116). Vervolg: #404 (bevestiging bij afwijkende waarden + D365-redenen). `review-plan-for-devops` is 🟢; blockers (`remainingValues` van de server, hook alleen in `PurchaseOrdersPageContent.jsx`, 8-prop header-contract) zijn in plan en spec doorgevoerd.
 
 ---
 
 ## Backlog — tasks
 
-- [ ] Task 1: Comparator + fan-out-util (`odataValueEquals`, `detailCorrectionFanout`, cap 200)
-- [ ] Task 2: `POST /api/data/purchase-orders/correct-all-details` + supplier 403
-- [ ] Task 3: WriteBackCell datum-extractie + `remainingDisplayValue`
-- [ ] Task 4: Linked-value meta builder (drie hooks, `writableToD365`)
-- [ ] Task 5: `patchLinkedLineValues` + `applyLineValuesBatch` + `usePurchaseOrderCorrectAllLines`
-- [ ] Task 6: Header UI `PurchaseOrderLinkedHeaderValue` (8 props, geen 14e HeaderCell-prop)
-- [ ] Task 7: Versie PATCH +1 + kwaliteitspoort
+- [x] Task 1: Comparator + fan-out-util (`odataValueEquals`, `detailCorrectionFanout`, cap 200)
+- [x] Task 2: `POST /api/data/purchase-orders/correct-all-details` + supplier 403
+- [x] Task 3: WriteBackCell datum-extractie + `remainingDisplayValue`
+- [x] Task 4: Linked-value meta builder (drie hooks, `writableToD365`)
+- [x] Task 5: `patchLinkedLineValues` + `applyLineValuesBatch` + `usePurchaseOrderCorrectAllLines`
+- [x] Task 6: Header UI `PurchaseOrderLinkedHeaderValue` (8 props, geen 14e HeaderCell-prop)
+- [x] Task 7: Versie PATCH +1 + kwaliteitspoort
 
 ---
 
